@@ -1,0 +1,57 @@
+{
+  "session_id": "861f958a-3cff-4b25-a57f-92500b8b9394",
+  "pid": 9143,
+  "started": 1791146254.5102007,
+  "case": "B16_T128_H1_D64",
+  "cell": "lstm",
+  "mode": "L1",
+  "device_uuid": "84c4d7e9-b1c7-5d12-e7c2-6ec2a136044d",
+  "gpu": "NVIDIA GeForce RTX 5090",
+  "torch": "2.12.1+cu130",
+  "cuda": "13.0",
+  "cudnn": 92000,
+  "baseline_sha": "2.12.1+cu130:029a72b034fc47e61099ee6fb96644d428caafd2a04ce02f9aa1067a7fc3b5c6",
+  "candidate_sha": "f9529edd029ec7d0c1de716ea6055f4473c189d929a15e687f7e0c5de7a03838",
+  "source_sha256": {
+    "triton_persistent.py": "9738e3654e309b892b8044bf02ecd0e3fffbfddd633238c66bc2154313c7d842",
+    "reference.py": "9c31b34dbe12acf2a8d2ba5fa1d76b2e4814303db6e17953fa00f3d41d7b1ce6",
+    "bench.py": "76d2c8bdf53b3bf0810cda598b79542d2af026984a91260e89f370473813df23",
+    "torch_layer.py": "029a72b034fc47e61099ee6fb96644d428caafd2a04ce02f9aa1067a7fc3b5c6"
+  },
+  "dtype_contract_id": "bf16-layer-input-weights-hidden-final-v1",
+  "reference_cast_path": "FP32 projection rounded to BF16; FP32 local states; recurrent h rounded to BF16; BF16 snapshots",
+  "candidate_local_states": "FP32",
+  "baseline_internal_casts": "cuDNN opaque; not inferred from candidate implementation",
+  "contract": {
+    "atol": 0.002,
+    "rtol": 0.02,
+    "max_error_limit": 0.003
+  },
+  "baseline": "torch_nn",
+  "candidate": "triton_persistent",
+  "scope": "LAYER_FORWARD_ONLY",
+  "torch_nn_setup_ms": 14.198366,
+  "original_cuda_fused": "NOT_RUN_MISSING_EXISTING_DEPENDENCIES",
+  "statistical_scope": "within-process paired blocks; independent startup validation pending",
+  "status": "PASS",
+  "correctness_max_errors": {
+    "baseline": [
+      0.00048828125,
+      0.0009765625
+    ],
+    "candidate": [
+      0.000244140625,
+      3.0517578125e-05
+    ]
+  },
+  "cudnn_operators": [
+    "aten::_cudnn_rnn",
+    "aten::cudnn_is_acceptable"
+  ],
+  "first_call_ms": {
+    "baseline": 177.574763,
+    "candidate": 769.296923
+  },
+  "compilation_cache": "existing task cache; not clean-build timing",
+  "finished": 1791146256.2289996
+}
