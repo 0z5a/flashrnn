@@ -9,18 +9,38 @@ not silently reported as the stock public entry point.
 | --- | --- | --- |
 | GPU-info CUDA 13 build/import | Successful in the earlier build report | Device query |
 | Original alternating CUDA, seven translation units | Source/config/flags prepared | Compile/import, then forward and all four gradients |
-| Original Triton LSTM/sLSTM kernels | Hash-pinned AST and Torch layout adapter prepared | Five finite GPU cases; stock einops-wrapper parity |
+| Original Triton LSTM/sLSTM kernels | All five finite GPU cases executed: four PASS, one retained sLSTM zero-state failure | Failure localization, broader numerical calibration, stock einops-wrapper parity |
 | Alternating LSTM cast reference | FP32 CPU T1/T17/T128 output and all-input gradient parity | BF16 native GPU error characterization |
 | Explicit per-element sLSTM reference option | Nine CPU tests pass, including mixed-normalizer counterexample | Native GPU comparison |
 
 `upstream_triton.py` selects the unchanged upstream kernel, helper and
 one-configuration autotuner definitions after checking both complete source
 hashes. Only the wrapper's padding and layout transforms use Torch instead
-of einops. It exposes forward only. The queued five-case gate includes
+of einops. It exposes forward only. The completed five-case gate includes
 nonzero/zero LSTM states and nonzero/zero/mixed sLSTM states, at B3/T17/H2/D64.
 It retains the predeclared 0.002 absolute / 0.02 relative check plus 0.003
 maximum absolute error. This is exploratory qualification, not the full
 independently calibrated numerical budget.
+
+On RTX 5090 GPU1, Torch 2.12.1+cu130 and Triton 3.7.1, controller 13085 and
+child 13088 naturally exit 1 after all five cases. All public inputs remain
+unchanged. The original source hashes and measured adapter/reference hashes
+match the archived bundle. The processes are gone, GPU1 memory is zero and
+the original GPU1 lock was independently acquired/released before handoff.
+
+| Cell / initialization | History max error | Final max error | Result |
+| --- | ---: | ---: | --- |
+| LSTM / nonzero | 3.81e-6 | 3.81e-6 | PASS |
+| LSTM / zero | 0.00012207 | 0 | PASS |
+| sLSTM / nonzero | 0.00097656 | 0.00048828 | PASS |
+| sLSTM / zero | **0.0078125** | 5.96e-8 | **CORRECTNESS_FAILED** |
+| sLSTM / mixed | 0.00097656 | 0 | PASS |
+
+The failure exceeds the original 0.003 maximum-error limit. It is retained
+without changing the budget. Specific state/timestep localization and FP32
+snapshot diagnostics are pending; no cause is inferred from the maximum
+alone. This failed exploratory case does not qualify the whole upstream
+baseline for timing or revise the earlier candidate's failure.
 
 `qualify_baseline_build.py --target cuda` builds the original alternating
 seven-file source list and flags with the already qualified distutils
