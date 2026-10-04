@@ -17,4 +17,9 @@ Upstream: `0b84fc30120ecccbde97976bc5b086f3215572d2`.
 
 The actual Triton backend key is `triton_fused`; the README's `triton` label is not accepted by this pinned dispatcher. Gradient configuration fields are `gradient_recurrent_cut`, `gradient_recurrent_clipval`, and `forward_clipval`. CPU reference tests use the vanilla mathematical/autograd path, with no clipping or recurrent cut.
 
+The backend dtypes and sLSTM initialization rules differ. See the
+[resolved numerical contracts](numerical-contracts.md) before interpreting
+cross-backend correctness or timing. In particular, the default BF16 CUDA
+path does not retain FP32 pointwise/local states.
+
 The new model campaign lists intended families and baseline categories only. It does not claim that FlashRNN implements Mamba, RWKV, mLSTM, GLA or DeltaNet, or that their state equations are interchangeable. Each requires its own official model and backend adapter.
