@@ -17,6 +17,17 @@ from setuptools import Distribution
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 
 
+def import_artifact(name: str, artifact: Path, checksum: str) -> ModuleType:
+    if hashlib.sha256(artifact.read_bytes()).hexdigest() != checksum:
+        raise ValueError("compiled baseline artifact hash mismatch")
+    spec = importlib.util.spec_from_file_location(name, artifact)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 class TaskBuilder:
     def __init__(self, root: Path, source_root: Path) -> None:
         self.root = root.resolve()
@@ -62,9 +73,14 @@ class TaskBuilder:
             return sys.modules[module_name]
         directory = self.root / digest
         directory.mkdir(parents=True, exist_ok=True)
-        (directory / "build-manifest.json").write_text(
-            json.dumps(manifest, indent=2) + "\n"
-        )
+        manifest_path = directory / "build-manifest.json"
+        if manifest_path.is_file():
+            cached = json.loads(manifest_path.read_text())
+            if "artifact" in cached:
+                return import_artifact(
+                    module_name, Path(cached["artifact"]), cached["artifact_sha256"]
+                )
+        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
         # Distutils otherwise maps gpu_info.cc and gpu_info.cu to the same .o.
         staged_sources = []
         for index, source in enumerate(sources):
@@ -98,12 +114,5 @@ class TaskBuilder:
             artifact=str(artifact),
             artifact_sha256=hashlib.sha256(artifact.read_bytes()).hexdigest(),
         )
-        (directory / "build-manifest.json").write_text(
-            json.dumps(manifest, indent=2) + "\n"
-        )
-        spec = importlib.util.spec_from_file_location(module_name, artifact)
-        assert spec is not None and spec.loader is not None
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[module_name] = module
-        spec.loader.exec_module(module)
-        return module
+        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+        return import_artifact(module_name, artifact, manifest["artifact_sha256"])
