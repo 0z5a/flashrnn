@@ -26,6 +26,8 @@ def main() -> None:
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--batches", type=int, nargs="+", default=[1, 2, 4])
     parser.add_argument("--tokens", type=int, default=4)
+    parser.add_argument("--family", choices=("mamba", "mamba2"), default="mamba")
+    parser.add_argument("--tokenizer", type=Path)
     parser.add_argument("--official-fixture-only", action="store_true")
     args = parser.parse_args()
     torch.set_num_threads(1)
@@ -35,7 +37,7 @@ def main() -> None:
     for entry in manifest["files"]:
         path = args.model / entry["file"]
         assert path.stat().st_size == entry["size"], path
-        if path.suffix == ".safetensors":
+        if path.suffix in {".safetensors", ".bin"}:
             with path.open("rb") as handle:
                 digest = hashlib.file_digest(handle, "sha256").hexdigest()
         else:
@@ -44,22 +46,39 @@ def main() -> None:
                 f"blob {len(payload)}\0".encode() + payload
             ).hexdigest()
         assert digest == entry["checksum"], path
-    model, loading = MambaForCausalLM.from_pretrained(
-        args.model,
-        local_files_only=True,
-        torch_dtype=torch.float32,
-        output_loading_info=True,
-    )
+    adapter_hash = None
+    if args.family == "mamba2":
+        from mamba2_checkpoint import load_mamba2
+
+        assert not args.official_fixture_only, "the fixed upstream fixture is Mamba1"
+        model = load_mamba2(args.model)
+        loading = {
+            "missing_keys": [],
+            "unexpected_keys": [],
+            "mismatched_keys": [],
+            "error_msgs": [],
+        }
+        adapter_hash = hashlib.sha256(
+            Path(inspect.getfile(load_mamba2)).read_bytes()
+        ).hexdigest()
+    else:
+        model, loading = MambaForCausalLM.from_pretrained(
+            args.model,
+            local_files_only=True,
+            torch_dtype=torch.float32,
+            output_loading_info=True,
+        )
     assert not loading["missing_keys"], loading
     assert not loading["unexpected_keys"], loading
     assert not loading["mismatched_keys"], loading
     assert not loading["error_msgs"], loading
     model.eval()
     assert len(model.backbone.layers) == 24 and model.config.hidden_size == 768
-    tokenizer = AutoTokenizer.from_pretrained(args.model, local_files_only=True)
-    source = Path(inspect.getfile(MambaForCausalLM))
+    tokenizer_path = args.tokenizer or args.model
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, local_files_only=True)
+    source = Path(inspect.getfile(type(model)))
     metadata = {
-        "scope": "FULL_MAMBA130M_CPU_CACHE_CORRECTNESS",
+        "scope": f"FULL_{args.family.upper()}130M_CPU_CACHE_CORRECTNESS",
         "torch": torch.__version__,
         "transformers": transformers.__version__,
         "platform": platform.platform(),
@@ -69,9 +88,15 @@ def main() -> None:
         "implementation_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
         "harness_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "checkpoint_manifest": manifest,
+        "checkpoint_adapter_sha256": adapter_hash,
+        "tokenizer_sha256": {
+            name: hashlib.sha256((tokenizer_path / name).read_bytes()).hexdigest()
+            for name in ("tokenizer.json", "tokenizer_config.json")
+        },
         "dtype": "float32",
         "device": "cpu",
-        "path": "Transformers built-in slow_forward",
+        "path": "Transformers built-in "
+        + ("torch_forward" if args.family == "mamba2" else "slow_forward"),
         "atol": 0.0001,
         "rtol": 0.00001,
         "started": started,
