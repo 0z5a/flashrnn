@@ -1,0 +1,99 @@
+{
+  "status": "NATIVE_CPU_ORACLES_COMPLETE",
+  "started": 1791152879.021104,
+  "finished": 1791152890.713683,
+  "batch": 2,
+  "prompt_length": 128,
+  "generated_tokens": 32,
+  "cases": [
+    {
+      "case": 0,
+      "dataset_rows": [
+        3,
+        7
+      ],
+      "input_ids_sha256": "95c15310643a5b66b75c2d3dc0ec3f6786a2117c19f6ea9d876575ea470ca904",
+      "generated_ids_sha256": "df644f5f823e2853ad1d5d64ad390d2a9040556d9152d9304b49132e93f48955"
+    },
+    {
+      "case": 1,
+      "dataset_rows": [
+        42,
+        49
+      ],
+      "input_ids_sha256": "bd88bf2482ceda18b70d2ee815a576cc3f6125a91ad3df2e20a4cf416cf31291",
+      "generated_ids_sha256": "0d2149c57dcf63e9d8a282da4d8c263e5d85439e63a38a6fc5313cf1cde87e12"
+    },
+    {
+      "case": 2,
+      "dataset_rows": [
+        56,
+        61
+      ],
+      "input_ids_sha256": "cc7053295a9b856fc219477b4f0fc3b538dec36746ee012f26e02ab7c336582d",
+      "generated_ids_sha256": "d0f9ee509dcabf5c397d8b1e986ad3b52f95717f2d21f5461bc8166e4ef8f0ad"
+    }
+  ],
+  "generation_contract": "Fixed token count; no EOS stop. Prefill emits token 1; G-1 decode calls emit tokens 2..G. Final caches contain prompt plus first G-1 generated tokens.",
+  "logits_scope": "Complete vocabulary at each emitted token; earlier prefill positions excluded",
+  "cache_scope": "All layers, prefill and final snapshots; intermediate caches not saved",
+  "source": "native Transformers MambaForCausalLM CPU FP32",
+  "torch": "2.13.0",
+  "parameters": 129135360,
+  "layers": 24,
+  "artifact_sha256": "965569b30094048154e5b77e445dc4c00111796b5e7b5565db80d876a0606d7e",
+  "artifact_bytes": 74019449,
+  "harness_sha256": "f0c04aebc7e1166a55e66a2dafd0fa92e656184d1de07665c0ef5745a4302277",
+  "wrapper_sha256": "044dfa1811fe83b3852590a15fe5852ac6802476857d33d48504a4b17a04abc8",
+  "implementation_sha256": "ad28b5f1a464a64d1eabf96b42394f41ef322dbe5f4276e85d4f27368b61a796",
+  "tokenizer_sha256": "b074ad869d4f45d1265ca5c9814f78604f3d7e187acc063b15dd232b27585fcf",
+  "dataset": {
+    "id": "Salesforce/wikitext",
+    "revision": "b08601e04326c79dfdd32d625aee71d232d685c3",
+    "file": "wikitext-2-raw-v1/validation-00000-of-00001.parquet",
+    "sha256": "204929b7ff9d6184953f867dedb860e40aa69c078fc1e54b3baaa8fb28511c4c",
+    "selection": "First cases*max(batches) rows having at least P tokens; no special tokens; first P tokens; B uses the first B rows of each max(B) group"
+  },
+  "checkpoint": {
+    "model": "state-spaces/mamba-130m-hf",
+    "revision": "1e76775f628fbf1350fbe4dbb3d971ba64af25a1",
+    "metadata_origin": "hf-mirror.com immutable repository API; official endpoint currently unavailable",
+    "files": [
+      {
+        "file": "config.json",
+        "size": 895,
+        "checksum": "65cacc293f83d920b3a79690ce835426950f8b4d"
+      },
+      {
+        "file": "generation_config.json",
+        "size": 137,
+        "checksum": "7711d625ad3a8016f08d55aa9c64171dae37a12c"
+      },
+      {
+        "file": "model.safetensors",
+        "size": 516567560,
+        "checksum": "1a5ed29c492ef4d485df3b7c2c8109771696589855b2162ad1ba618b6067cbea"
+      },
+      {
+        "file": "tokenizer.json",
+        "size": 2113837,
+        "checksum": "f4b9ef760738eaa3ff5a29eb338b4da006fe1761"
+      },
+      {
+        "file": "tokenizer_config.json",
+        "size": 4793,
+        "checksum": "0f8da8f0bf3fbd3b8d570f77d7206b6089d4fdda"
+      }
+    ]
+  },
+  "logits_contract": {
+    "atol": 0.001,
+    "rtol": 0.001
+  },
+  "cache_contract": {
+    "atol": 1e-05,
+    "rtol": 1e-05
+  },
+  "tolerance_source": "Same budgets as the pre-existing one-step script gate; frozen before long-generation execution, without revising cached/full-prefix failures",
+  "gpu_executed": false
+}
