@@ -1,0 +1,39 @@
+The fast path is not available because one of `(selective_state_update, selective_scan_fn, causal_conv1d_fn, causal_conv1d_update, mamba_inner_fn)` is None. Falling back to the sequential implementation of Mamba, as use_mambapy is set to False. To install follow https://github.com/state-spaces/mamba/#installation and https://github.com/Dao-AILab/causal-conv1d. For the mamba.py backend, follow https://github.com/alxndrTL/mamba.py.
+`loss_type=None` was set in the config but it is unrecognised.Using the default loss: `ForCausalLMLoss`.
+/Users/0z5a/Documents/infra/looped-grpo-integration-20261003/.venv/lib/python3.12/site-packages/transformers/models/mamba/modeling_mamba.py:353: TracerWarning: Converting a tensor to a Python boolean might cause the trace to be incorrect. We can't record the data flow of Python values, so this value will be treated as a constant in the future. This means that the trace might not generalize to other inputs!
+  if cache_position.shape[0] == self.conv_kernel_size:
+{"batch": 1, "prefill_max_errors": [0.0, 0.0, 0.0], "decode_max_errors": [0.0, 0.0, 0.0], "status": "PASS"}
+Traceback (most recent call last):
+  File "/Users/0z5a/Documents/infra/flashrnn2-20261005/source/tools/flashrnn2/export_mamba.py", line 163, in <module>
+    main()
+  File "/Users/0z5a/Documents/infra/flashrnn2-20261005/source/tools/flashrnn2/export_mamba.py", line 112, in main
+    actual = traced.prefill(*(x.clone() for x in prefix))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: The following operation failed in the TorchScript interpreter.
+Traceback of TorchScript (most recent call last):
+/Users/0z5a/Documents/infra/looped-grpo-integration-20261003/.venv/lib/python3.12/site-packages/transformers/models/mamba/modeling_mamba.py(143): update_conv_state
+/Users/0z5a/Documents/infra/looped-grpo-integration-20261003/.venv/lib/python3.12/site-packages/transformers/models/mamba/modeling_mamba.py(359): slow_forward
+/Users/0z5a/Documents/infra/looped-grpo-integration-20261003/.venv/lib/python3.12/site-packages/transformers/models/mamba/modeling_mamba.py(430): forward
+/Users/0z5a/Documents/infra/looped-grpo-integration-20261003/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py(1768): _slow_forward
+/Users/0z5a/Documents/infra/looped-grpo-integration-20261003/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py(1789): _call_impl
+/Users/0z5a/Documents/infra/looped-grpo-integration-20261003/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py(1778): _wrapped_call_impl
+/Users/0z5a/Documents/infra/looped-grpo-integration-20261003/.venv/lib/python3.12/site-packages/transformers/models/mamba/modeling_mamba.py(474): forward
+/Users/0z5a/Documents/infra/looped-grpo-integration-20261003/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py(1768): _slow_forward
+/Users/0z5a/Documents/infra/looped-grpo-integration-20261003/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py(1789): _call_impl
+/Users/0z5a/Documents/infra/looped-grpo-integration-20261003/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py(1778): _wrapped_call_impl
+/Users/0z5a/Documents/infra/looped-grpo-integration-20261003/.venv/lib/python3.12/site-packages/transformers/modeling_layers.py(94): __call__
+/Users/0z5a/Documents/infra/looped-grpo-integration-20261003/.venv/lib/python3.12/site-packages/transformers/models/mamba/modeling_mamba.py(676): forward
+/Users/0z5a/Documents/infra/looped-grpo-integration-20261003/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py(1768): _slow_forward
+/Users/0z5a/Documents/infra/looped-grpo-integration-20261003/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py(1789): _call_impl
+/Users/0z5a/Documents/infra/looped-grpo-integration-20261003/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py(1778): _wrapped_call_impl
+/Users/0z5a/Documents/infra/looped-grpo-integration-20261003/.venv/lib/python3.12/site-packages/transformers/models/mamba/modeling_mamba.py(811): forward
+/Users/0z5a/Documents/infra/looped-grpo-integration-20261003/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py(1768): _slow_forward
+/Users/0z5a/Documents/infra/looped-grpo-integration-20261003/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py(1789): _call_impl
+/Users/0z5a/Documents/infra/looped-grpo-integration-20261003/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py(1778): _wrapped_call_impl
+/Users/0z5a/Documents/infra/flashrnn2-20261005/source/tools/flashrnn2/export_mamba.py(44): _run
+/Users/0z5a/Documents/infra/flashrnn2-20261005/source/tools/flashrnn2/export_mamba.py(59): prefill
+/Users/0z5a/Documents/infra/looped-grpo-integration-20261003/.venv/lib/python3.12/site-packages/torch/jit/_trace.py(1216): trace_module
+/Users/0z5a/Documents/infra/flashrnn2-20261005/source/tools/flashrnn2/export_mamba.py(107): main
+/Users/0z5a/Documents/infra/flashrnn2-20261005/source/tools/flashrnn2/export_mamba.py(163): <module>
+RuntimeError: shape '[1536, 4]' is invalid for input of size 12288
+
