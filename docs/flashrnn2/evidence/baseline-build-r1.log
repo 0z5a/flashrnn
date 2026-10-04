@@ -1,0 +1,46 @@
+W1005 04:14:24.878000 7176 site-packages/torch/utils/cpp_extension.py:140] No CUDA runtime is found, using CUDA_HOME='/usr/local/cuda'
+W1005 04:14:24.895000 7176 site-packages/torch/utils/cpp_extension.py:140] No CUDA runtime is found, using CUDA_HOME='/usr/local/cuda'
+/root/miniconda3/compiler_compat/ld: /root/autodl-tmp/0z5a/flashrnn2-20261005/cuda-build/56d5f2736f143ba9cc02a1589bc0da6f63aad86b5af10daaf8854b06edfdedee/objects/root/autodl-tmp/0z5a/flashrnn2-20261005/source/flashrnn/flashrnn/gpu_info/gpu_info.o: in function `xlstm::get_gpu_info(cudaDeviceProp&, int)':
+tmpxft_00001c26_00000000-6_gpu_info.cudafe1.cpp:(.text+0x10): multiple definition of `xlstm::get_gpu_info(cudaDeviceProp&, int)'; /root/autodl-tmp/0z5a/flashrnn2-20261005/cuda-build/56d5f2736f143ba9cc02a1589bc0da6f63aad86b5af10daaf8854b06edfdedee/objects/root/autodl-tmp/0z5a/flashrnn2-20261005/source/flashrnn/flashrnn/gpu_info/gpu_info.o:tmpxft_00001c26_00000000-6_gpu_info.cudafe1.cpp:(.text+0x10): first defined here
+collect2: error: ld returned 1 exit status
+Traceback (most recent call last):
+  File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/unixccompiler.py", line 269, in link
+    self.spawn(linker + ld_args)
+  File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/ccompiler.py", line 1041, in spawn
+    spawn(cmd, dry_run=self.dry_run, **kwargs)
+  File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/spawn.py", line 68, in spawn
+    raise DistutilsExecError(f"command {cmd!r} failed with exit code {exitcode}")
+distutils.errors.DistutilsExecError: command '/usr/bin/g++' failed with exit code 1
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/root/autodl-tmp/0z5a/flashrnn2-20261005/source/tools/flashrnn2/qualify_baseline_build.py", line 38, in <module>
+    main()
+  File "/root/autodl-tmp/0z5a/flashrnn2-20261005/source/tools/flashrnn2/qualify_baseline_build.py", line 21, in main
+    module = cuda_init.load(
+             ^^^^^^^^^^^^^^^
+  File "/root/autodl-tmp/0z5a/flashrnn2-20261005/source/flashrnn/flashrnn/cuda_init.py", line 168, in load
+    mod = _load(name + suffix, sources, **myargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/autodl-tmp/0z5a/flashrnn2-20261005/source/tools/flashrnn2/build_without_ninja.py", line 77, in load
+    command.run()
+  File "/root/miniconda3/lib/python3.12/site-packages/setuptools/command/build_ext.py", line 91, in run
+    _build_ext.run(self)
+  File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/command/build_ext.py", line 359, in run
+    self.build_extensions()
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/utils/cpp_extension.py", line 1184, in build_extensions
+    build_ext.build_extensions(self)
+  File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/command/build_ext.py", line 479, in build_extensions
+    self._build_extensions_serial()
+  File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/command/build_ext.py", line 505, in _build_extensions_serial
+    self.build_extension(ext)
+  File "/root/miniconda3/lib/python3.12/site-packages/setuptools/command/build_ext.py", line 252, in build_extension
+    _build_ext.build_extension(self, ext)
+  File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/command/build_ext.py", line 584, in build_extension
+    self.compiler.link_shared_object(
+  File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/ccompiler.py", line 752, in link_shared_object
+    self.link(
+  File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/unixccompiler.py", line 271, in link
+    raise LinkError(msg)
+distutils.errors.LinkError: command '/usr/bin/g++' failed with exit code 1

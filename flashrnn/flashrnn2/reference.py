@@ -1,8 +1,9 @@
 """Differentiable reference in the public FlashRNN tensor layout.
 
-No implicit casts: float64 inputs define the mathematical reference; lower
-precision inputs define a separate eager arithmetic path. Neither emulates
-the fused kernels' internal FP32 state retention.
+Float64 inputs define the mathematical reference. FP32 inputs with mma_dtype
+set define FP32 local states with a rounded recurrent hidden operand. This is
+not an emulator of the upstream CUDA backend's default BF16 pointwise/state
+arithmetic. sLSTM follows vanilla's global zero-normalizer initialization.
 """
 
 from typing import Literal

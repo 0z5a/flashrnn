@@ -23,6 +23,7 @@
 
 #include <ATen/ATen.h>
 #include <c10/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAException.h>
 #include <driver_types.h>
 #include <iostream>
 #include <memory>
@@ -47,6 +48,11 @@ public:
 
     cudaDeviceProp prop;
     xlstm::get_gpu_info(prop, device);
+    const auto attribute = [device](cudaDeviceAttr attr) {
+      int value;
+      C10_CUDA_CHECK(cudaDeviceGetAttribute(&value, attr, device));
+      return value;
+    };
 
     dict["name"] = prop.name; //*< ASCII string identifying device */
     dict["luid"] =
@@ -71,7 +77,7 @@ public:
         prop.maxThreadsDim; //*< Maximum size of each dimension of a block */
     dict["maxGridSize"] =
         prop.maxGridSize; //*< Maximum size of each dimension of a grid */
-    dict["clockRate"] = prop.clockRate; //*< Clock frequency in kilohertz */
+    dict["clockRate"] = attribute(cudaDevAttrClockRate);
     dict["totalConstMem"] =
         prop.totalConstMem; //*< Constant memory available on device in bytes */
     dict["major"] = prop.major; //*< Major compute capability */
@@ -81,31 +87,27 @@ public:
     dict["texturePitchAlignment"] =
         prop.texturePitchAlignment; //*< Pitch alignment requirement for texture
                                     // references bound to pitched memory */
-    dict["deviceOverlap"] =
-        prop.deviceOverlap; //*< Device can concurrently copy memory and execute
-                            // a                            kernel. Deprecated.
-                            // Use instead asyncEngineCount. */
+    dict["deviceOverlap"] = static_cast<int>(prop.asyncEngineCount > 0);
     dict["multiProcessorCount"] =
         prop.multiProcessorCount; //*< Number of multiprocessors on device */
-    dict["kernelExecTimeoutEnabled"] =
-        prop.kernelExecTimeoutEnabled; //*< Specified whether there is a run
-                                       // time limit on kernels */
+    dict["kernelExecTimeoutEnabled"] = attribute(cudaDevAttrKernelExecTimeout);
     dict["integrated"] =
         prop.integrated; //*< Device is integrated as opposed to discrete */
     dict["canMapHostMemory"] =
         prop.canMapHostMemory; //*< Device can map host memory with
                                // cudaHostAlloc/cudaHostGetDevicePointer */
-    dict["computeMode"] =
-        prop.computeMode; //*< Compute mode (See ::cudaComputeMode) */
+    dict["computeMode"] = attribute(cudaDevAttrComputeMode);
     dict["maxTexture1D"] = prop.maxTexture1D; //*< Maximum 1D texture size */
     dict["maxTexture1DMipmap"] =
         prop.maxTexture1DMipmap; //*< Maximum 1D mipmapped texture size */
+#if CUDART_VERSION < 13000
     dict["maxTexture1DLinear"] =
         prop.maxTexture1DLinear; //*< Deprecated, do not use. Use
                                  // cudaDeviceGetTexture1DLinearMaxWidth() or
                                  // cuDeviceGetTexture1DLinearMaxWidth()
                                  // instead.
                                  //*/
+#endif
     dict["maxTexture2D"] =
         prop.maxTexture2D; //*< Maximum 2D texture dimensions */
     dict["maxTexture2DMipmap"] =
@@ -161,8 +163,7 @@ public:
     dict["unifiedAddressing"] =
         prop.unifiedAddressing; //*< Device shares a unified address space with
                                 // the host                        */
-    dict["memoryClockRate"] =
-        prop.memoryClockRate; //*< Peak memory clock frequency in kilohertz */
+    dict["memoryClockRate"] = attribute(cudaDevAttrMemoryClockRate);
     dict["memoryBusWidth"] =
         prop.memoryBusWidth; //*< Global memory bus width in bits */
     dict["l2CacheSize"] = prop.l2CacheSize; //*< Size of L2 cache in bytes */
@@ -201,11 +202,7 @@ public:
                                         // operations
                                         //*/
     dict["singleToDoublePrecisionPerfRatio"] =
-        prop.singleToDoublePrecisionPerfRatio; //*< Ratio of single precision
-                                               // performance (in floating-point
-                                               // operations per second) to
-                                               // double precision performance
-                                               // */
+        attribute(cudaDevAttrSingleToDoublePrecisionPerfRatio);
     dict["pageableMemoryAccess"] =
         prop.pageableMemoryAccess; //*< Device supports coherently accessing
                                    // pageable memory without calling
@@ -223,11 +220,13 @@ public:
     dict["cooperativeLaunch"] =
         prop.cooperativeLaunch; //*< Device supports launching cooperative
                                 // kernels via ::cudaLaunchCooperativeKernel */
+#if CUDART_VERSION < 13000
     dict["cooperativeMultiDeviceLaunch"] =
         prop.cooperativeMultiDeviceLaunch; //*< Device can participate in
                                            // cooperative kernels launched via
                                            //::cudaLaunchCooperativeKernelMultiDevice
                                            //*/
+#endif
     dict["sharedMemPerBlockOptin"] =
         prop.sharedMemPerBlockOptin; //*< Per device maximum shared memory per
                                      // block usable by special opt in */
