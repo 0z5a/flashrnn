@@ -1,0 +1,1 @@
+The official-r1 launcher omitted --official-fixture-only due to a command-generation error. Its actual workload was the strict B1/B2/B4 cache gate, not the upstream fixture. Natural exit1 and all original files are retained. Official fixture qualification begins at official-r2.
