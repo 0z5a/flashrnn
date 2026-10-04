@@ -9,7 +9,7 @@ not silently reported as the stock public entry point.
 | --- | --- | --- |
 | GPU-info CUDA 13 build/import | Successful in the earlier build report | Device query |
 | Original alternating CUDA, seven translation units | Source/config/flags prepared | Compile/import, then forward and all four gradients |
-| Original Triton LSTM/sLSTM kernels | All five finite GPU cases executed: four PASS, one retained sLSTM zero-state failure | Failure localization, broader numerical calibration, stock einops-wrapper parity |
+| Original Triton LSTM/sLSTM kernels | All five finite GPU cases executed: four PASS, one retained sLSTM zero-state failure; exact failing element localized | FP32 internal-value diagnosis, broader numerical calibration, stock einops-wrapper parity |
 | Alternating LSTM cast reference | FP32 CPU T1/T17/T128 output and all-input gradient parity | BF16 native GPU error characterization |
 | Explicit per-element sLSTM reference option | Nine CPU tests pass, including mixed-normalizer counterexample | Native GPU comparison |
 
@@ -36,11 +36,25 @@ the original GPU1 lock was independently acquired/released before handoff.
 | sLSTM / zero | **0.0078125** | 5.96e-8 | **CORRECTNESS_FAILED** |
 | sLSTM / mixed | 0.00097656 | 0 | PASS |
 
-The failure exceeds the original 0.003 maximum-error limit. It is retained
-without changing the budget. Specific state/timestep localization and FP32
-snapshot diagnostics are pending; no cause is inferred from the maximum
-alone. This failed exploratory case does not qualify the whole upstream
-baseline for timing or revise the earlier candidate's failure.
+The failure exceeds the original 0.003 maximum-error limit and remains
+failed. A separately admitted one-case diagnostic on GPU0 reproduces exactly
+one over-budget coordinate, zero-based `[S=2,B=2,T=5,H=0,D=59]`:
+
+| State | Native BF16 | Reference FP32 | Reference BF16 | Error |
+| --- | ---: | ---: | ---: | ---: |
+| normalizer n | 1.8828125 | 1.87890625 | 1.875 | 0.0078125 |
+
+The reference is exactly the midpoint between the two adjacent BF16 values.
+The native internal FP32 value is not captured, so this does not identify
+which arithmetic operation produces the difference. Setting the original
+kernel's `DTYPE=float32` would also change its recurrent MMA operand cast;
+that is not a snapshot-only diagnostic and has not been done.
+
+The diagnostic retains the unchanged original kernel and threshold. Its
+controller naturally exits 1, with a verified small tensor snapshot and
+resource-return marker. The h/c/m maximum errors are 9.54e-7/6.10e-5/6.10e-5.
+This case does not qualify the whole upstream baseline for timing or revise
+the earlier candidate's failure.
 
 `qualify_baseline_build.py --target cuda` builds the original alternating
 seven-file source list and flags with the already qualified distutils
