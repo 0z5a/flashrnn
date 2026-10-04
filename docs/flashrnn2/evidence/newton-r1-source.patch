@@ -1,0 +1,27 @@
+--- a/flashrnn/flashrnn2/newton_dense.py
++++ b/flashrnn/flashrnn2/newton_dense.py
+@@ -4,7 +4,6 @@
+ It is neither a fused CUDA implementation nor an autoregressive decoder.
+ """
+ 
+-from collections.abc import Callable
+ from dataclasses import dataclass
+ 
+ import torch
+@@ -43,7 +42,6 @@
+     *,
+     max_iterations: int = 16,
+     atol: float = 1e-10,
+-    linear_solver: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = affine_scan,
+ ) -> NewtonResult:
+     """Solve the original mathematical cell with a bounded dense Jacobian scan."""
+     batch, steps, gates, heads, width = wx.shape
+@@ -127,7 +125,7 @@
+             -1
+         )
+         offset = torch.cat((first, offset[:, 1:]), 1)
+-        guess = linear_solver(a, offset).reshape(units, steps, states, width)
++        guess = affine_scan(a, offset).reshape(units, steps, states, width)
+         previous, zero = predecessors(guess)
+         residual = (guess - evaluate(previous, x, r, b, zero)).abs().max().item()
+         residuals.append(residual)
