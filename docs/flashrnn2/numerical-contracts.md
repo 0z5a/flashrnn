@@ -9,6 +9,7 @@ The CUDA 13 GPU-info patch changes device metadata queries only.
 | Reference used by r2/r4 | FP32; recurrent hidden explicitly rounded to BF16 | FP32 | All elements are zero | No |
 | New step / inferred persistent / Gluon persistent | FP32; BF16 recurrent operand | FP32 | Global condition on the first step | No |
 | Original `triton_fused` | FP32 local states after the first update; recurrent hidden rounded to `R.dtype` | FP32 | Per element | No |
+| Original alternating `cuda`, default BF16 config | BF16 after every update; recurrent GEMM output also BF16 | FP32 after explicit `type2float` | Per element | Input/forget gates capped at one |
 | Original `cuda_fused`, default BF16 config | BF16 (`dtype_s=dtype_w`) | BF16 (`dtype_a=dtype_b`) | Per element | Input/forget gates capped at one |
 | Original `cuda_fused`, explicit `dtype_a=dtype_s=float32` | FP32 | FP32 | Per element | Input/forget gates capped at one |
 
@@ -41,3 +42,13 @@ Its BF16 midpoint split is documented in [tiling results](tiling-results.md).
 Before independent baseline calibration, select and record the state,
 pointwise and initialization contract. Do not combine errors from these
 different paths into one tolerance distribution or relabel the old failure.
+
+The alternating `cuda` backend differs from `cuda_fused`: its pointwise
+functions explicitly convert gate operands and states to float, evaluate
+their arithmetic in FP32, and store the resulting states in `dtype_s`.
+The recurrent GEMM stores `Ry` in `dtype_g` before pointwise evaluation.
+`dtype_a` does not select these pointwise intermediates. Its typed cuBLAS
+call uses the recurrent, state and gate pointers with one template dtype;
+the mixed FP32-state/BF16-weight configuration above is therefore reserved
+for fused-backend qualification. Alternating build qualification uses
+homogeneous BF16 or FP32, without silently substituting mixed pointer types.

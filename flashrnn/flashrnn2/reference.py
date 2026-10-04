@@ -26,9 +26,12 @@ def recurrence(
     initial: torch.Tensor,
     cell: Cell = "lstm",
     mma_dtype: torch.dtype | None = None,
+    slstm_init: Literal["global", "elementwise"] = "global",
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Return state history [S,B,T,N,D] and last state [S,B,1,N,D]."""
     batch, steps, gates, heads, width = wx.shape
+    if slstm_init not in ("global", "elementwise"):
+        raise ValueError("sLSTM initialization must be global or elementwise")
     expected_gates, bias_gates, state_count = SIZES[cell]
     if steps < 1 or gates != expected_gates:
         raise ValueError("expected nonempty sequence and matching input gate count")
@@ -61,7 +64,8 @@ def recurrence(
             else:
                 _, old_c, old_n, old_m = state.unbind(0)
                 log_f = torch.nn.functional.logsigmoid(f) + old_m
-                m = torch.where(torch.all(old_n == 0), i, torch.maximum(i, log_f))
+                zero = torch.all(old_n == 0) if slstm_init == "global" else old_n == 0
+                m = torch.where(zero, i, torch.maximum(i, log_f))
                 input_gate = torch.exp(i - m)
                 forget_gate = torch.exp(log_f - m)
                 c = forget_gate * old_c + input_gate * torch.tanh(z)

@@ -42,6 +42,26 @@ def inputs(
 
 
 class ReferenceTest(unittest.TestCase):
+    def test_slstm_initialization_contracts(self) -> None:
+        wx = torch.zeros(1, 1, 4, 1, 2, dtype=torch.float64)
+        recurrent = torch.zeros(4, 1, 2, 2, dtype=torch.float64)
+        bias = torch.zeros(4, 1, 2, dtype=torch.float64)
+        state = torch.zeros(4, 1, 1, 1, 2, dtype=torch.float64)
+        state[2, ..., 1] = 1
+        state[3] = 2
+        global_state = recurrence(wx, recurrent, bias, state, "slstm")[1]
+        element_state = recurrence(
+            wx, recurrent, bias, state, "slstm", slstm_init="elementwise"
+        )[1]
+        stabilized = 2 - torch.log(torch.tensor(2.0, dtype=torch.float64))
+        torch.testing.assert_close(
+            global_state[3], torch.full_like(state[3], stabilized)
+        )
+        torch.testing.assert_close(
+            element_state[3, ..., 0], torch.zeros_like(state[3, ..., 0])
+        )
+        torch.testing.assert_close(element_state[3, ..., 1], global_state[3, ..., 1])
+
     def test_public_forward_and_all_gradients(self) -> None:
         for cell in SIZES:
             for nonzero in (False, True):
