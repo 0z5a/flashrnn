@@ -22,10 +22,12 @@ def flashrnn_torch(
 
     Inputs must be dense floating tensors of one dtype on one device. Strided
     views are supported. The mathematical policy preserves that dtype. The
-    BF16 operand policy requires FP32 inputs and rounds R and each recurrent
-    hidden operand through BF16; state, accumulation and outputs stay FP32.
+    BF16 operand policy requires FP32 inputs and rounds R and the recurrent
+    hidden operand through BF16 each step; state and outputs stay FP32.
     Ambient autocast is disabled so it cannot override this contract.
-    Torch casts define backward; this does not emulate Tensor Core reduction.
+    Torch casts define backward: each step's R cotangent is rounded through
+    BF16 before FP32 accumulation, independent of chunk boundaries. This does
+    not emulate Tensor Core reduction.
 
     Inputs are read-only and gradients remain connected to all four inputs.
     Carry can be reused for chunk continuation without detaching. sLSTM uses
@@ -52,7 +54,14 @@ def flashrnn_torch(
     if numerics == "fp32_state_bf16_mma":
         if wx.dtype != torch.float32:
             raise ValueError("fp32_state_bf16_mma requires FP32 inputs")
-        recurrent = recurrent.to(torch.bfloat16).to(torch.float32)
         mma_dtype = torch.bfloat16
     with torch.autocast(wx.device.type, enabled=False):
-        return recurrence(wx, recurrent, bias, initial, cell=cell, mma_dtype=mma_dtype)
+        return recurrence(
+            wx,
+            recurrent,
+            bias,
+            initial,
+            cell=cell,
+            mma_dtype=mma_dtype,
+            recurrent_mma_dtype=mma_dtype,
+        )

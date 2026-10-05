@@ -10,7 +10,7 @@ CPU functional part of W0/P0/P1 in the Hopper/B200/PyTorch execution plan.
 The installed CPU-wheel qualification also passed independently below. The existing
 `flashrnn` and `FlashRNNConfig` entry points retain their defaults.
 
-## Contract v1
+## Contract v2
 
 Inputs are `wx [B,T,G,H,D]`, `R [G,H,D,D]`, `bias [G_bias,H,D]` and
 `initial [S,B,1,H,D]`. Results are history `[S,B,T,H,D]` and carry
@@ -37,14 +37,24 @@ package, not an implementation in this backend.
 | Policy | Inputs | Recurrent R / hidden | State, accumulation, public outputs |
 |---|---|---|---|
 | `mathematical` | FP16, BF16, FP32 or FP64, one dtype | Input dtype | Input dtype |
-| `fp32_state_bf16_mma` | FP32 | R is cast BF16→FP32 once per call; h is cast BF16→FP32 each step | FP32 |
+| `fp32_state_bf16_mma` | FP32 | R and h are cast BF16→FP32 each step | FP32 |
 
 Ambient autocast is disabled inside this entry point. The BF16 policy uses
-Torch cast derivatives, preserves the original R gradient link and does not
-emulate Tensor Core reduction order. FP64 is the mathematical oracle. Public
+Torch cast derivatives and preserves the original R gradient link. Each step's
+R cotangent passes through BF16 before FP32 accumulation. This placement is
+independent of chunk boundaries. It does not emulate Tensor Core reduction
+order. FP64 is the mathematical oracle. Public
 outputs undergo no additional cast. Calling the next chunk with the returned
 carry preserves the autograd graph. Full history is always returned; no
 final-only memory reduction or dedicated backward kernel is claimed.
+
+Version 1 cast R once per call. Its forward values were unchanged by splitting,
+but separate chunk calls rounded R gradients separately: 14/38 portable cases
+failed the frozen gradient budget. Version 2 moves this cast into each step;
+it intentionally changes R gradients, while retaining forward values and the
+other input gradients. The original failures and cast-placement diagnosis are
+retained in [portable qualification](portable-gate.md). The original 14-method
+results below qualify version 1; version 2 results are recorded separately.
 
 CUDA loaders and their configuration solver are imported only when selecting
 the corresponding legacy CUDA backend. Triton/ninja are in the optional

@@ -25,6 +25,18 @@ jobs:
           "$GITHUB_WORKSPACE/.cpu-test/bin/python" -m unittest discover -s "$GITHUB_WORKSPACE/tests/flashrnn2" -p test_torch_backend.py -v
           "$GITHUB_WORKSPACE/.cpu-test/bin/python" -m unittest discover -s "$GITHUB_WORKSPACE/tests/flashrnn2" -p test_reference.py -v
           "$GITHUB_WORKSPACE/.cpu-test/bin/python" -m unittest discover -s "$GITHUB_WORKSPACE/tests/flashrnn2" -p test_torch_layer.py -v
+      - name: Portable full-state and chunk-gradient matrix
+        env:
+          OMP_NUM_THREADS: '1'
+          MKL_NUM_THREADS: '1'
+        run: |
+          cd "$RUNNER_TEMP"
+          "$GITHUB_WORKSPACE/.cpu-test/bin/python" "$GITHUB_WORKSPACE/tools/flashrnn2/portable_gate.py" --device cpu --config "$GITHUB_WORKSPACE/tools/flashrnn2/portable-small.json" --output "$RUNNER_TEMP/portable-gate/results.jsonl"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: portable-cpu-gate
+          path: ${{ runner.temp }}/portable-gate
       - uses: actions/upload-artifact@v4
         if: always()
         with:
