@@ -22,14 +22,11 @@ def main() -> None:
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--variant", choices=("siso", "mimo"), default="siso")
-    parser.add_argument("--ssm-budget", type=float, default=1e-5)
-    parser.add_argument("--key-budget", type=float, default=1e-5)
     parser.add_argument(
         "--batches", type=int, nargs="+", choices=(1, 2, 4), default=[1, 2, 4]
     )
     args = parser.parse_args()
     assert len(set(args.batches)) == len(args.batches)
-    assert args.ssm_budget > 0 and args.key_budget > 0
     assert not args.output.exists()
     assert not list(args.output.parent.glob(args.output.stem + "-b*-c*.pt"))
     torch.set_num_threads(1)
@@ -47,12 +44,6 @@ def main() -> None:
     sources = [Path(__file__), Path(__file__).with_name("mamba3_torch_reference.py")]
     if args.variant == "mimo":
         sources.append(Path(__file__).with_name("mamba3_mimo_torch_reference.py"))
-    state_budgets = {
-        "angle": 1e-5,
-        "ssm": args.ssm_budget,
-        "key": args.key_budget,
-        "value": 1e-5,
-    }
     metadata = {
         "status": "RUNNING",
         "pid": os.getpid(),
@@ -63,10 +54,7 @@ def main() -> None:
         "performance_claim": False,
         "native_accelerated_mamba_qualified": False,
         "logits_budget": {"atol": 1e-3, "rtol": 1e-3},
-        "state_budget": {
-            name: {"atol": budget, "rtol": budget}
-            for name, budget in state_budgets.items()
-        },
+        "state_budget": {"atol": 1e-5, "rtol": 1e-5},
         "prompts": PROMPTS,
         "input_ids": inputs,
         "tokenizer": tokenizer_receipt,
@@ -99,7 +87,7 @@ def main() -> None:
                         b = full_cache.key_value_memory_dict[layer]
                         layers.append(
                             {
-                                name: compare(x, y, state_budgets[name])
+                                name: compare(x, y, 1e-5)
                                 for name, x, y in zip(STATE_NAMES, a, b, strict=True)
                             }
                         )
