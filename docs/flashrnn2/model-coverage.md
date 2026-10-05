@@ -1,6 +1,6 @@
 # Recurrent-model campaign coverage
 
-The campaign remains incomplete. Thirteen language-model checkpoints and one
+The campaign remains incomplete. Fourteen language-model checkpoints and one
 time-series forecasting checkpoint have CPU reference execution; these results
 do not qualify their native accelerated
 implementations or the requested high-concurrency GPU E2E matrix. The registry
@@ -22,18 +22,19 @@ failures remain visible.
 | TiRex sLSTM 35M, time-series forecast | [Complete checkpoint](tirex-slstm-reference.md): nine forecasts, 21 series, 12,096 quantile values per path and 864 layer-state tensor comparisons bitwise | Native FlashRNN CUDA, ONNX and high-concurrency GPU forecast E2E unfinished; not a language-token baseline |
 | sLSTM language model | Cell-level reference/gradient tests only | Complete checkpoint and model E2E unfinished |
 | Gated DeltaNet 340M | [Complete checkpoint](gdn-reference.md): 36/36 logits, recurrent and convolution checks; 84/84 tokens; independent audit pass | Native FLA and high-concurrency GPU E2E unfinished |
+| Monostich-2-base GDN-2/GQA 149M | [Complete checkpoint](monostich2-reference.md): 36/36 full-model batched/serial logits and 84/84 tokens; independent audit and pinned first GDN-2 layer crosscheck pass | Native FLA, cache, backward and high-concurrency GPU E2E unfinished |
 | HGRN2 1.3B | [Complete checkpoint](hgrn2-reference.md): 36 steps/84 tokens, seven BS=1 state failures; BS=2/4 bitwise | Native FLA and high-concurrency GPU E2E unfinished |
 | HGRN 1.3B | [Complete checkpoint](hgrn-reference.md): 36/36 logits and recurrent-state checks, 84/84 tokens; independent audit pass | Native FLA and high-concurrency GPU E2E unfinished |
 | Mamba3 SISO 187M | [Complete checkpoint](mamba3-siso-reference.md): 36/36 logits, angle/SSM/key/value states; 84/84 tokens; independent audit pass | Native Mamba-3 CUDA and high-concurrency GPU E2E unfinished |
 | Mamba3 MIMO 187M | [Complete checkpoint](mamba3-mimo-reference.md): 36/36 logits, 84/84 tokens; original strict state gate failed, calibrated gate and independent audit pass | Native Mamba-3 CUDA and high-concurrency GPU E2E unfinished |
-| GatedDeltaNet2 | Family registered | Complete pinned model/native baseline unfinished |
+| GatedDeltaNet2 | Hybrid checkpoint above exercises GDN-2; pure native baseline remains registered | Standalone GDN-2 checkpoint/native GPU E2E unfinished |
 | KDA | Family registered | Complete pinned model/native baseline unfinished |
 
 Changed-arithmetic diagnostics do not replace original failures or establish
 training quality. RetNet's local weight was evicted after the completed CPU
 diagnostic to make room for HGRN2 evidence; the pinned public weight needs
 re-download before its GPU run. Gated DeltaNet, GLA, HGRN2, HGRN and Mamba3
-SISO/MIMO, mLSTM 164M and TiRex sLSTM local weights were likewise evicted after completed CPU work and no-reader checks;
+SISO/MIMO, mLSTM 164M, TiRex sLSTM and Monostich-2-base local weights were likewise evicted after completed CPU work and no-reader checks;
 their pinned versions need re-download before GPU use. Other model weights
 remain needed for unfinished native/GPU consumers. Five redundant closed export
 files were losslessly archived locally;
