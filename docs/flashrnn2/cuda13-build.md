@@ -42,3 +42,7 @@ these compile-only checks.
 The separate CPU-only [dtype probe](evidence/resolved-dtype-contracts.json)
 confirms the default and explicitly selected configuration fields. It does
 not establish numerical equivalence; see [contracts](numerical-contracts.md).
+
+The later [runtime diagnosis](cuda-numerical-diagnosis.md) reuses the r5 library:
+its first forward fails, while cuobjdump confirms six SM80 PTX records and no
+ELF device image. This leaves recurrence qualification and timing incomplete.
