@@ -7,7 +7,7 @@ recurrence formula or independent Parameters.
 
 Base revision: `09c0f39a359588c12bd948067f9d472191b5866f`. This implements the
 CPU functional part of W0/P0/P1 in the Hopper/B200/PyTorch execution plan.
-P0's clean installed CPU-wheel qualification remains pending. The existing
+The installed CPU-wheel qualification also passed independently below. The existing
 `flashrnn` and `FlashRNNConfig` entry points retain their defaults.
 
 ## Contract v1
@@ -84,15 +84,25 @@ PYTHONPATH=. OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 python -m unittest discover -s 
 ```
 
 [Controller, source hashes and logs](evidence/torch-backend-r2-manifest.json)
-record the exact executed sources. The proposed CPU CI installs a CPU Torch
-wheel and this package in an isolated environment, tests the installed package
-outside the checkout, blocks GPU dependencies/toolkit and records wheel
-origins. No successful execution of that CI is included in this report.
+record the exact executed sources.
+
+The independent [CPU CI run](https://github.com/0z5a/flashrnn/actions/runs/37338961778)
+completed successfully for implementation commit
+`dca27c4abc56e630c083b9f98ec52dc176cf8071`. A fresh Linux venv installed
+Torch **2.14.1+cpu**, einops 0.8.2 and the built flashrnn 1.0.8 package, then
+ran the same **8 + 5 + 1 methods successfully outside the checkout**. Strict
+guards required CUDA/HIP build fields to be None, no installed Triton/ninja,
+and no nvcc on PATH. The existing-environment 14 and fresh-install 14 are
+separate runs of the same methods, not 28 distinct tests. The run emitted a
+missing-NumPy initialization warning; none of these tensor-only tests needs
+NumPy. [Wheel origins and CI receipt](evidence/torch-backend-cpu-ci-r1.json)
+include the CPU Torch wheel hash. Subsequent changes in this commit only add
+this evidence and report; the tested implementation is unchanged.
 
 | Path | Functional status | Baseline time | Candidate time | Speedup |
 |---|---|---:|---:|---:|
 | Existing local CPU environment | 14 methods passed | — | — | Not measured |
-| Fresh CPU-wheel installation | NOT_RUN; CI added | — | — | Not measured |
+| Fresh Linux CPU-wheel installation | 14 methods passed | — | — | Not measured |
 | H20 / SM90 | NOT_RUN | — | — | Not measured |
 | H100 / B200 / SM120 dedicated paths | NOT_RUN for this change | — | — | Not measured |
 | ROCm / XPU / MPS / compiled Torch | NOT_RUN | — | — | Not measured |
