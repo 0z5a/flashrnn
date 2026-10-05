@@ -8,7 +8,7 @@ implementation is absent.
 | Workstream | Verified evidence | Remaining work |
 | --- | --- | --- |
 | P0 source and capability pinning | Pinned upstream, source map, existing-runtime probes, CUDA13 GPU-info and original seven-unit alternating LSTM BF16 build/import; five native Triton cases executed (four PASS, one retained failure), failed normalizer midpoint localized | Native CUDA first-forward error218 InvalidPtx confirmed; exact driver JIT diagnosis, device query and recurrence qualification; native Triton internal FP32 diagnosis; complete backend support matrix |
-| P0 numerical contracts | FP64 reference and all-input CPU gradients; explicit backend dtype/initialization differences | Independent per-state low-precision budgets, gradient budgets, trained-checkpoint tolerances |
+| P0 numerical contracts | FP64 reference and all-input CPU gradients; explicit backend dtype/initialization differences; full-model Mamba FP64 rounding diagnosis | Independent per-state low-precision budgets, gradient budgets, trained-checkpoint tolerances |
 | P1 single CTA | Inferred Triton and explicit-layout Gluon forward; D64/D128 tested as supported | Broader inputs, long T, graph replay, resource/performance sweeps |
 | P2 output R tiling | Stepwise kernel-boundary synchronization; `persistent=false` recorded | Larger-D campaign and legally synchronized persistent cross-CTA implementation |
 | P3 Hopper overlap | No implementation or hardware measurement | Implement and validate on appropriate hardware |
@@ -31,3 +31,8 @@ dispatch, lifecycle, GPU backward and sanitizer suites.
 The downloaded checkpoints remain task-owned until their GPU and concurrency
 campaigns complete. Current resources are shared with finite peer jobs;
 there is no process termination, package installation or lcpu NFS access.
+
+Full-model [FP64 rounding diagnosis](mamba-fp64-diagnosis.md) finds six original
+local FP32 SSM elements outside the unchanged budget, while saved remote CPU
+and CUDA cases fit it. This additional calculation does not replace the
+original native-oracle failures or complete CUDA qualification.
