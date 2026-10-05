@@ -10,10 +10,6 @@ from typing import Literal, Optional, Sequence, Union
 import torch
 from torch.autograd.function import once_differentiable
 
-from ..autotune.constrint import ValueHeuristic, ValueRefinement
-from .cuda_init import load
-from .cuda_init_parametric import load_parametric_and_test_and_bisect
-from .gpu_info.gpu_info import get_gpu_info
 from .vanilla import (
     flashrnn_forward,
     flashrnn_forward_step,
@@ -389,6 +385,10 @@ class _FlashRNNCUDAFused:
 
     @classmethod
     def instance(cls, config: FlashRNNConfig):
+        from ..autotune.constrint import ValueHeuristic, ValueRefinement
+        from .cuda_init_parametric import load_parametric_and_test_and_bisect
+        from .gpu_info.gpu_info import get_gpu_info
+
         device_id = torch.cuda.current_device()
         cfgdevstr = repr(config) + f"_device{device_id}"
         if cfgdevstr not in cls.mod:
@@ -809,6 +809,8 @@ class _FlashRNNCUDA:
 
     @classmethod
     def instance(cls, config: FlashRNNConfig):
+        from .cuda_init import load
+
         cfgdevstr = repr(config) + f"_{torch.cuda.current_device()}"
         if cfgdevstr not in cls.mod:
             module = load(
