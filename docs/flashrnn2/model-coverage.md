@@ -1,9 +1,9 @@
 # Recurrent-model campaign coverage
 
-The campaign remains incomplete. Eleven complete checkpoint families have CPU
+The campaign remains incomplete. Twelve complete checkpoint families have CPU
 reference execution; these results do not qualify their native accelerated
 implementations or the requested high-concurrency GPU E2E matrix. The registry
-now records completed Mamba3 SISO, RWKV6, DeltaNet, RetNet, HGRN, HGRN2 and
+now records completed Mamba3 SISO/MIMO, RWKV6, DeltaNet, RetNet, HGRN, HGRN2 and
 Gated DeltaNet work rather than leaving stale not-downloaded entries. Original numerical
 failures remain visible.
 
@@ -21,7 +21,8 @@ failures remain visible.
 | Gated DeltaNet 340M | [Complete checkpoint](gdn-reference.md): 36/36 logits, recurrent and convolution checks; 84/84 tokens; independent audit pass | Native FLA and high-concurrency GPU E2E unfinished |
 | HGRN2 1.3B | [Complete checkpoint](hgrn2-reference.md): 36 steps/84 tokens, seven BS=1 state failures; BS=2/4 bitwise | Native FLA and high-concurrency GPU E2E unfinished |
 | HGRN 1.3B | [Complete checkpoint](hgrn-reference.md): 36/36 logits and recurrent-state checks, 84/84 tokens; independent audit pass | Native FLA and high-concurrency GPU E2E unfinished |
-| Mamba3 SISO 187M | [Complete checkpoint](mamba3-siso-reference.md): 36/36 logits, angle/SSM/key/value states; 84/84 tokens; independent audit pass | Native Mamba-3 CUDA, MIMO and high-concurrency GPU E2E unfinished |
+| Mamba3 SISO 187M | [Complete checkpoint](mamba3-siso-reference.md): 36/36 logits, angle/SSM/key/value states; 84/84 tokens; independent audit pass | Native Mamba-3 CUDA and high-concurrency GPU E2E unfinished |
+| Mamba3 MIMO 187M | [Complete checkpoint](mamba3-mimo-reference.md): 36/36 logits, 84/84 tokens; original strict state gate failed, calibrated gate and independent audit pass | Native Mamba-3 CUDA and high-concurrency GPU E2E unfinished |
 | GatedDeltaNet2 | Family registered | Complete pinned model/native baseline unfinished |
 | KDA | Family registered | Complete pinned model/native baseline unfinished |
 
@@ -29,7 +30,7 @@ Changed-arithmetic diagnostics do not replace original failures or establish
 training quality. RetNet's local weight was evicted after the completed CPU
 diagnostic to make room for HGRN2 evidence; the pinned public weight needs
 re-download before its GPU run. Gated DeltaNet, GLA, HGRN2, HGRN and Mamba3
-SISO local weights were likewise evicted after completed CPU work and no-reader checks;
+SISO/MIMO local weights were likewise evicted after completed CPU work and no-reader checks;
 their pinned versions need re-download before GPU use. Other model weights
 remain needed for unfinished native/GPU consumers. Five redundant closed export
 files were losslessly archived locally;
