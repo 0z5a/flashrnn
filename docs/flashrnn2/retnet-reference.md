@@ -69,8 +69,9 @@ python tools/flashrnn2/retnet_reference_gate.py \
 raw JSONL, the process receipt, metadata, independent audit and source/model
 manifests. Binary snapshots remain in the execution workspace with their
 published SHA256 hashes. The initial download timeout and successful resumed
-download remain recorded. Model weights are retained for unfinished native GPU
-and full-baseline consumers.
+download remain recorded. The local weight was evicted after the completed CPU
+diagnostic to make room for HGRN2 evidence. Its pinned public version must be
+re-downloaded and verified before the unfinished native GPU/full-baseline run.
 
 | Required comparison | Baseline tok/s | Candidate tok/s | Speedup |
 |---|---:|---:|---|

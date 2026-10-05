@@ -383,7 +383,7 @@
       "layers": 24,
       "native_accelerated_fla_qualified": false,
       "gpu_e2e_speedup": null,
-      "cleanup": "RETAIN_UNFINISHED_MODEL_CAMPAIGN",
+      "cleanup": "EVICTED_AFTER_CPU_DIAGNOSTIC_REDOWNLOAD_PINNED_WEIGHT_FOR_GPU",
       "cached_vs_full_prefix_cpu": {
         "batches": [
           1,
@@ -423,17 +423,90 @@
         "performance_claim": false,
         "report": "docs/flashrnn2/retnet-numerics.md"
       }
+    },
+    {
+      "model": "fla-hub/hgrn2-1.3B-100B",
+      "revision": "2f413dd9b63591b9b177bbf940942ea7eb70abfe",
+      "weight_bytes": 2728818968,
+      "weight_files": [
+        "model.safetensors"
+      ],
+      "metadata_origin": "Pinned complete verified public model manifest",
+      "status": "FULL_CHECKPOINT_TORCH_REFERENCE_CPU_EXECUTED_B1_SEVEN_STATE_FAILURES_B2_B4_EXACT",
+      "download_files": 8,
+      "download_bytes": 2731110163,
+      "checkpoint_tensors": 244,
+      "parameters": 1364396032,
+      "layers": 24,
+      "cached_vs_full_prefix_cpu": {
+        "batches": [
+          1,
+          2,
+          4
+        ],
+        "prompt_length": 5,
+        "generated_tokens": 4,
+        "batch_steps": 36,
+        "token_choices": 84,
+        "natural_exit": 1,
+        "all_logits_pass": true,
+        "all_greedy_equal": true,
+        "rows": [
+          {
+            "batch": 1,
+            "batch_steps": 12,
+            "token_choices": 12,
+            "failed_steps": 7,
+            "failed_logit_steps": 0,
+            "failed_state_steps": 7,
+            "max_logit_abs": 4.100799560546875e-05,
+            "max_state_abs": 0.00048828125,
+            "worst_state_normalized": 3.0870444774627686
+          },
+          {
+            "batch": 2,
+            "batch_steps": 12,
+            "token_choices": 24,
+            "failed_steps": 0,
+            "failed_logit_steps": 0,
+            "failed_state_steps": 0,
+            "max_logit_abs": 0.0,
+            "max_state_abs": 0.0,
+            "worst_state_normalized": 0.0
+          },
+          {
+            "batch": 4,
+            "batch_steps": 12,
+            "token_choices": 48,
+            "failed_steps": 0,
+            "failed_logit_steps": 0,
+            "failed_state_steps": 0,
+            "max_logit_abs": 0.0,
+            "max_state_abs": 0.0,
+            "worst_state_normalized": 0.0
+          }
+        ],
+        "independent_audit": {
+          "logit_pairs": 36,
+          "token_choices": 84,
+          "final_state_pairs": 72,
+          "status": "PASS"
+        },
+        "source": "docs/flashrnn2/evidence/hgrn2-reference/hgrn2-reference-r1.jsonl"
+      },
+      "native_accelerated_fla_qualified": false,
+      "gpu_e2e_speedup": null,
+      "cleanup": "RETAIN_FOR_UNFINISHED_GPU_CONSUMERS"
     }
   ],
   "additional_required_families": [
     "sLSTM",
     "GatedDeltaNet",
-    "HGRN2",
     "Mamba3",
     "GatedDeltaNet2",
     "KDA"
   ],
   "qualification": "Each family needs a pinned native implementation and complete supported checkpoint; layer tests are not full-model E2E.",
   "model_gpu_e2e_campaign_complete": false,
-  "coverage_note": "Model entries include completed CPU work, not full GPU qualification. Additional families still require pinned complete models and native baselines."
+  "coverage_note": "Eight complete checkpoints have CPU evidence; original failures remain visible. Native and high-concurrency GPU E2E remain incomplete. RetNet local weight was evicted after completed CPU diagnostics and requires pinned re-download before GPU use."
 }
