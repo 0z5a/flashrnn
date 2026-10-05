@@ -1,0 +1,67 @@
+--- a/tools/flashrnn2/mamba_serving.py
++++ b/tools/flashrnn2/mamba_serving.py
+@@ -74,7 +74,6 @@
+     delivered = [[] for _ in selected]
+     stamps = [[] for _ in selected]
+     prefill_start = []
+-    model_batches = {"prefill": [], "decode": []}
+     if device == "cuda":
+         torch.cuda.synchronize()
+         torch.cuda.reset_peak_memory_stats()
+@@ -89,9 +88,6 @@
+     ids = [c["input_ids"].to(device) for c in selected]
+     for step in range(steps):
+         for group in range(groups):
+-            model_batches["prefill" if step == 0 else "decode"].append(
+-                ids[group].shape[0]
+-            )
+             if step == 0:
+                 prefill_start.append((time.perf_counter_ns() - started) / 1e6)
+                 output = model.prefill(ids[group], *states[group])
+@@ -144,26 +140,16 @@
+         "status": "PASS" if passed else "CORRECTNESS_FAILED",
+         "batch": batch,
+         "concurrency": concurrency,
+-        "admission_batches": [case["input_ids"].shape[0] for case in selected],
+-        "model_batches": model_batches,
+-        "peak_active_requests": sum(state[0].shape[1] for state in states),
++        "actual_batches": [batch] * groups,
+         "request_count": len(requests),
+         "output_tokens": concurrency * steps,
+         "elapsed_ms": elapsed_ms,
+         "tokens_per_second": concurrency * steps * 1000 / elapsed_ms,
+         "requests_per_second": concurrency * 1000 / elapsed_ms,
+         "ttft_ms": quantiles([r["token_times_ms"][0] for r in requests]),
+-        "queue_wait_ms": quantiles([r["prefill_start_ms"] for r in requests]),
+         "request_latency_ms": quantiles([r["token_times_ms"][-1] for r in requests]),
+-        "tpot_ms": quantiles(
+-            [
+-                (r["token_times_ms"][-1] - r["token_times_ms"][0]) / (steps - 1)
+-                for r in requests
+-            ]
+-        ),
+-        "itl_ms": quantiles(
+-            [b - a for r in requests for a, b in pairwise(r["token_times_ms"])]
+-        ),
++        "tpot_ms": quantiles([(s[-1] - s[0]) / (steps - 1) for s in stamps]),
++        "itl_ms": quantiles([b - a for s in stamps for a, b in pairwise(s)]),
+         "token_match": token_match,
+         "cache_checks": cache_checks,
+         "requests": requests,
+@@ -197,7 +183,6 @@
+     assert all(
+         c >= contract["batch"] and c % contract["batch"] == 0 for c in args.concurrency
+     )
+-    assert len(set(args.concurrency)) == len(args.concurrency)
+     torch.set_num_threads(1)
+     torch.backends.cuda.matmul.allow_tf32 = False
+     torch.backends.cudnn.allow_tf32 = False
+@@ -215,8 +200,6 @@
+         "model": source,
+         "oracles": contract,
+         "verification_only": args.verify_only,
+-        "concurrency": args.concurrency,
+-        "paired_blocks": 0 if args.verify_only else args.blocks,
+         "source_sha256": {
+             p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+             for p in (

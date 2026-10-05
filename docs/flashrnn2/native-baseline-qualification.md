@@ -8,7 +8,7 @@ not silently reported as the stock public entry point.
 | Path | Executed evidence | Remaining qualification |
 | --- | --- | --- |
 | GPU-info CUDA 13 build/import | Successful in the earlier build report | Device query |
-| Original alternating CUDA, seven translation units | Source/config/flags prepared | Compile/import, then forward and all four gradients |
+| Original alternating CUDA, seven translation units | First invocation exits before compilation: task source absent from Python path | Repeat with task source path, compile/import, then forward and all four gradients |
 | Original Triton LSTM/sLSTM kernels | All five finite GPU cases executed: four PASS, one retained sLSTM zero-state failure; exact failing element localized | FP32 internal-value diagnosis, broader numerical calibration, stock einops-wrapper parity |
 | Alternating LSTM cast reference | FP32 CPU T1/T17/T128 output and all-input gradient parity | BF16 native GPU error characterization |
 | Explicit per-element sLSTM reference option | Nine CPU tests pass, including mixed-normalizer counterexample | Native GPU comparison |
@@ -62,7 +62,12 @@ transport. It uses homogeneous BF16 or FP32 dtypes. The prepared CUDA gate
 executes T1/T17/T128 at B16/H1/D64, checks forward outputs and input ownership,
 and records dWx/dR/db/dinitial errors for final-only and history-plus-final
 losses. Gradient finiteness is a diagnostic; it is not gradient accuracy
-acceptance. Neither this build nor this GPU gate has executed yet.
+acceptance. The r4 invocation naturally exits 1 at the first project import
+(`ModuleNotFoundError: flashrnn`), before any of the seven files compile.
+The next invocation must include the task source root in its process-local
+`PYTHONPATH`, retain `CUDA_VISIBLE_DEVICES=""`, and preserve the original
+sources and flags. No package installation is needed. The recurrence GPU
+gate remains unexecuted. See [r4 log](evidence/baseline-build-r4.log).
 
 The cast reference matches the alternating backend's stored-state and
 recurrent-product rounding boundaries. CUDA fast-math activations are not
