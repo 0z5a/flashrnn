@@ -8,7 +8,7 @@ not silently reported as the stock public entry point.
 | Path | Executed evidence | Remaining qualification |
 | --- | --- | --- |
 | GPU-info CUDA 13 build/import | Successful in the earlier build report | Device query |
-| Original alternating CUDA, seven translation units | First invocation exits before compilation: task source absent from Python path | Repeat with task source path, compile/import, then forward and all four gradients |
+| Original alternating CUDA, seven translation units | Homogeneous BF16 build/import PASS on CUDA13, SM120; earlier missing-import failure retained | GPU forward and all four gradient comparisons |
 | Original Triton LSTM/sLSTM kernels | All five finite GPU cases executed: four PASS, one retained sLSTM zero-state failure; exact failing element localized | FP32 internal-value diagnosis, broader numerical calibration, stock einops-wrapper parity |
 | Alternating LSTM cast reference | FP32 CPU T1/T17/T128 output and all-input gradient parity | BF16 native GPU error characterization |
 | Explicit per-element sLSTM reference option | Nine CPU tests pass, including mixed-normalizer counterexample | Native GPU comparison |
@@ -64,10 +64,28 @@ and records dWx/dR/db/dinitial errors for final-only and history-plus-final
 losses. Gradient finiteness is a diagnostic; it is not gradient accuracy
 acceptance. The r4 invocation naturally exits 1 at the first project import
 (`ModuleNotFoundError: flashrnn`), before any of the seven files compile.
-The next invocation must include the task source root in its process-local
-`PYTHONPATH`, retain `CUDA_VISIBLE_DEVICES=""`, and preserve the original
-sources and flags. No package installation is needed. The recurrence GPU
-gate remains unexecuted. See [r4 log](evidence/baseline-build-r4.log).
+R5 adds the task source root to process-local `PYTHONPATH`, keeps CUDA hidden
+and uses the same frozen source archive and compiler flags. It successfully
+builds and imports all seven translation units in 38.26 seconds. All seven
+object files, the shared library and manifest have timestamps inside this
+run's actual start/end interval, so this is a fresh build. The final library
+SHA256 is `b2d55255b1a2079f91bf0ce824319d0b3ef0aab30a00060fc7fac9e1e49e05b3`.
+
+The resolved B16/H1/D64 LSTM configuration uses BF16 for all storage/operand
+types, including A and S; recurrent and forward clipping are disabled.
+The source/header hashes and full flags are in the
+[build manifest](evidence/baseline-build-r5-manifest.json). Its broad header
+inventory also records transported AppleDouble sidecars; they are not
+translation units or explicitly included headers. All seven compiled source
+files and ordinary headers match the local checkout.
+
+Both controller and SSH naturally exit 0. No packages change; neither the
+compiled GPU-info query nor recurrence is called. The original IO window is returned after
+off-host archive verification. See [r4 failure](evidence/baseline-build-r4.log),
+[r5 result](evidence/baseline-build-r5.log),
+[fresh-build audit](evidence/baseline-build-r5-freshness.json) and
+[return receipt](evidence/baseline-build-r5-complete.json). The recurrence
+GPU gate and gradient acceptance remain pending.
 
 The cast reference matches the alternating backend's stored-state and
 recurrent-product rounding boundaries. CUDA fast-math activations are not
