@@ -7,7 +7,7 @@ implementation is absent.
 
 | Workstream | Verified evidence | Remaining work |
 | --- | --- | --- |
-| P0 source and capability pinning | Pinned upstream, source map, existing-runtime probes, CUDA13 GPU-info and original seven-unit alternating LSTM BF16 build/import; five native Triton cases executed (four PASS, one retained failure), failed normalizer midpoint localized | Native CUDA first-forward error218 InvalidPtx confirmed; exact driver JIT diagnosis, device query and recurrence qualification; native Triton internal FP32 diagnosis; complete backend support matrix |
+| P0 source and capability pinning | Pinned upstream, source map, existing-runtime probes, CUDA13 GPU-info and original seven-unit alternating LSTM BF16 build/import; five native Triton cases executed (four PASS, one retained failure), failed normalizer midpoint localized | Native CUDA first-forward error218 InvalidPtx confirmed; function-level PTX diagnosis, device query and recurrence qualification; native Triton internal FP32 diagnosis; complete backend support matrix |
 | P0 numerical contracts | FP64 reference and all-input CPU gradients; explicit backend dtype/initialization differences; full-model Mamba FP64 rounding diagnosis | Independent per-state low-precision budgets, gradient budgets, trained-checkpoint tolerances |
 | P1 single CTA | Inferred Triton and explicit-layout Gluon forward; D64/D128 tested as supported | Broader inputs, long T, graph replay, resource/performance sweeps |
 | P2 output R tiling | Stepwise kernel-boundary synchronization; `persistent=false` recorded | Larger-D campaign and legally synchronized persistent cross-CTA implementation |
@@ -47,3 +47,9 @@ The [complete GLA1.3B CPU reference](gla-reference-results.md) now executes all
 B2/B4 state/logit comparisons are exact; B1 retains nine state failures.
 Native accelerated FLA, longer generation, quality and high-concurrency GPU
 E2E are unqualified.
+
+[Native runtime follow-up](native-runtime-results.md) passes short same-platform
+Mamba native/Script CPU3/3 and CUDA3/3 while retaining all original cross-platform
+oracle failures. Independent audit recomputes36 saved native tensor comparisons.
+Six captured PTX modules load/unload successfully; no function lookup or kernel
+launch is performed, so the original native CUDA first-forward failure remains.

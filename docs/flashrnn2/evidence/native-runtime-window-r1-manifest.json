@@ -1,0 +1,145 @@
+{
+  "scope": "SAME_PLATFORM_NATIVE_MAMBA_CPU3_CUDA3_AND_SIX_EXISTING_PTX_JIT_LOGS_NO_TIMING",
+  "boot_id": "18dbe202-804d-4276-8357-baf55f7d79f7",
+  "gpu_uuid": "GPU-84c4d7e9-b1c7-5d12-e7c2-6ec2a136044d",
+  "files": [
+    {
+      "path": "run_native_runtime_window_r1.py",
+      "bytes": 3038,
+      "sha256": "95b994bf6f1835076342533060e70f8f0ba687ef910340483a6c8fc29a9156c7"
+    },
+    {
+      "path": "source/tools/flashrnn2/mamba_native_gate.py",
+      "bytes": 6483,
+      "sha256": "693e324c28e3b47448293c0d995b20471b3a81e9e059b311b4c651410bcf4cc7"
+    },
+    {
+      "path": "source/tools/flashrnn2/mamba_native_runtime.py",
+      "bytes": 7327,
+      "sha256": "2a646a32343d228b62689863d6b5f572a95ecce93b3f9afa2fb6664e74ec1645"
+    },
+    {
+      "path": "source/tools/flashrnn2/mamba_script_diagnostic.py",
+      "bytes": 5475,
+      "sha256": "d8e12c887eaae5e3cb44ad76bd7c4c8e058650242397ce944bd8657b9684eddd"
+    },
+    {
+      "path": "source/tools/flashrnn2/mamba_script_gate.py",
+      "bytes": 4704,
+      "sha256": "1fb71487fe52e7ff12422e7ae179e16149c98acb241b9dfa643a44a8fe65f86a"
+    },
+    {
+      "path": "source/tools/flashrnn2/target_mamba_artifact.py",
+      "bytes": 2309,
+      "sha256": "e803a8e3532584218aa3500b39513b3a724585c7a4d384d0076ec16c0f9c3495"
+    },
+    {
+      "path": "source/tools/flashrnn2/native_ptx_jit_probe.py",
+      "bytes": 3415,
+      "sha256": "3ba4014c379a96fd40e84c016a4c0cfb3f8541146f336924f8dcaa165609ac93"
+    },
+    {
+      "path": "evidence/models/mamba-native-sources/modeling_mamba.py",
+      "bytes": 38910,
+      "sha256": "ad28b5f1a464a64d1eabf96b42394f41ef322dbe5f4276e85d4f27368b61a796"
+    },
+    {
+      "path": "evidence/models/mamba-native-sources/manifest.json",
+      "bytes": 455,
+      "sha256": "949f199cc79cd59d07c733ad58b9df7746e6eb3783ef87d082ec7b1dc16825df"
+    },
+    {
+      "path": "models/mamba-130m/config.json",
+      "bytes": 895,
+      "sha256": "784825b6b6cdde47a1602278db0e66d6764169af4a8e662404701bc636a2686a"
+    },
+    {
+      "path": "models/mamba-130m/prefill-decode-b1-t5-cuda.pt",
+      "bytes": 517182478,
+      "sha256": "e329c77a06bf7d19fb236059c224be484ee33be1b9f2005b637ddac405aebfc0"
+    },
+    {
+      "path": "models/mamba-130m/prefill-decode-b1-t5-cuda.meta.json",
+      "bytes": 2590,
+      "sha256": "3ded50b9a28367d62b33f95b55234efc9c7645f1d673d8cdf72b9769eedfa277"
+    },
+    {
+      "path": "models/mamba-130m/script-goldens-b1-t5.pt",
+      "bytes": 21322593,
+      "sha256": "f3ebb63d7b53370b44ba31ee513e85f8e3cbedd27fde7e2301086ea12bb40f41"
+    },
+    {
+      "path": "models/mamba-130m/script-goldens-b1-t5.meta.json",
+      "bytes": 1814,
+      "sha256": "50b9a1620b479666af9991d6eb39f81175bd1a8130163105d0c62268b7adc2fc"
+    },
+    {
+      "path": "evidence/native-library-r5--dump-ptx.log",
+      "bytes": 38627,
+      "sha256": "9097ebf45fa62a793ca860b2abd4513067f3472aa1634324dfb701ba60dc09eb"
+    }
+  ],
+  "tasks": [
+    {
+      "name": "mamba-native-cpu-remote-r1",
+      "command": [
+        "/root/miniconda3/bin/python",
+        "/root/autodl-tmp/0z5a/flashrnn2-20261005/source/tools/flashrnn2/mamba_native_gate.py",
+        "--model",
+        "/root/autodl-tmp/0z5a/flashrnn2-20261005/models/mamba-130m/prefill-decode-b1-t5-cuda.pt",
+        "--source",
+        "/root/autodl-tmp/0z5a/flashrnn2-20261005/evidence/models/mamba-native-sources/modeling_mamba.py",
+        "--config",
+        "/root/autodl-tmp/0z5a/flashrnn2-20261005/models/mamba-130m/config.json",
+        "--goldens",
+        "/root/autodl-tmp/0z5a/flashrnn2-20261005/models/mamba-130m/script-goldens-b1-t5.pt",
+        "--output",
+        "/root/autodl-tmp/0z5a/flashrnn2-20261005/evidence/mamba-native-cpu-remote-r1.jsonl",
+        "--device",
+        "cpu"
+      ],
+      "cuda_visible_devices": "",
+      "log": "evidence/mamba-native-cpu-remote-r1.log"
+    },
+    {
+      "name": "mamba-native-cuda-remote-r1",
+      "command": [
+        "/root/miniconda3/bin/python",
+        "/root/autodl-tmp/0z5a/flashrnn2-20261005/source/tools/flashrnn2/mamba_native_gate.py",
+        "--model",
+        "/root/autodl-tmp/0z5a/flashrnn2-20261005/models/mamba-130m/prefill-decode-b1-t5-cuda.pt",
+        "--source",
+        "/root/autodl-tmp/0z5a/flashrnn2-20261005/evidence/models/mamba-native-sources/modeling_mamba.py",
+        "--config",
+        "/root/autodl-tmp/0z5a/flashrnn2-20261005/models/mamba-130m/config.json",
+        "--goldens",
+        "/root/autodl-tmp/0z5a/flashrnn2-20261005/models/mamba-130m/script-goldens-b1-t5.pt",
+        "--output",
+        "/root/autodl-tmp/0z5a/flashrnn2-20261005/evidence/mamba-native-cuda-remote-r1.jsonl",
+        "--device",
+        "cuda"
+      ],
+      "cuda_visible_devices": "1",
+      "log": "evidence/mamba-native-cuda-remote-r1.log"
+    },
+    {
+      "name": "native-ptx-jit-r1",
+      "command": [
+        "/root/miniconda3/bin/python",
+        "/root/autodl-tmp/0z5a/flashrnn2-20261005/source/tools/flashrnn2/native_ptx_jit_probe.py",
+        "--dump",
+        "/root/autodl-tmp/0z5a/flashrnn2-20261005/evidence/native-library-r5--dump-ptx.log",
+        "--output",
+        "/root/autodl-tmp/0z5a/flashrnn2-20261005/evidence/native-ptx-jit-r1.json"
+      ],
+      "cuda_visible_devices": "1",
+      "log": "evidence/native-ptx-jit-r1.log"
+    }
+  ],
+  "estimated_seconds": 90,
+  "performance_claim": false,
+  "new_model_bytes": 0,
+  "status": "FROZEN_NOT_ADMITTED",
+  "native_source_scope": "Pinned unchanged Transformers Torch fallback methods; no optional mamba_ssm CUDA backend",
+  "kernel_launch_scope": "Full native and traced Mamba math only; PTX probe loads six modules without custom launches; no build"
+}
