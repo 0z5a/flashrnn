@@ -1,0 +1,33 @@
+name: Torch CPU backend
+
+on: [push, pull_request]
+
+jobs:
+  cpu-wheel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install in an isolated environment
+        run: |
+          python -m venv .cpu-test
+          .cpu-test/bin/pip install torch --index-url https://download.pytorch.org/whl/cpu --report .cpu-test/torch-install.json
+          .cpu-test/bin/pip install . --report .cpu-test/package-install.json
+      - name: Public API, imports, full states and gradients
+        env:
+          FLASHRNN_REQUIRE_CPU_WHEEL: '1'
+          OMP_NUM_THREADS: '1'
+          MKL_NUM_THREADS: '1'
+        run: |
+          cd "$RUNNER_TEMP"
+          "$GITHUB_WORKSPACE/.cpu-test/bin/python" -m unittest discover -s "$GITHUB_WORKSPACE/tests/flashrnn2" -p test_torch_backend.py -v
+          "$GITHUB_WORKSPACE/.cpu-test/bin/python" -m unittest discover -s "$GITHUB_WORKSPACE/tests/flashrnn2" -p test_reference.py -v
+          "$GITHUB_WORKSPACE/.cpu-test/bin/python" -m unittest discover -s "$GITHUB_WORKSPACE/tests/flashrnn2" -p test_torch_layer.py -v
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cpu-wheel-origins
+          path: .cpu-test/*-install.json
+          include-hidden-files: true
