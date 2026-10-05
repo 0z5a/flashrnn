@@ -66,14 +66,19 @@ class TorchBackendTest(unittest.TestCase):
                 actual = flashrnn_torch(
                     *tensors, cell=cell, numerics="fp32_state_bf16_mma"
                 )
-                expected = recurrence(
-                    wx,
-                    r.bfloat16().float(),
-                    b,
-                    initial,
-                    cell=cell,
-                    mma_dtype=torch.bfloat16,
-                )
+                history = []
+                carry = initial
+                for step in range(wx.shape[1]):
+                    state, carry = recurrence(
+                        wx[:, step : step + 1],
+                        r.bfloat16().float(),
+                        b,
+                        carry,
+                        cell=cell,
+                        mma_dtype=torch.bfloat16,
+                    )
+                    history.append(state)
+                expected = torch.cat(history, dim=2), carry
                 for a, e in zip(actual, expected):
                     self.assertEqual(a.dtype, torch.float32)
                     torch.testing.assert_close(a, e, atol=0, rtol=0)
@@ -85,6 +90,38 @@ class TorchBackendTest(unittest.TestCase):
                 )
                 for a, e in zip(ag, eg):
                     torch.testing.assert_close(a, e, atol=0, rtol=0)
+
+    def test_bf16_gradients_across_chunk_boundaries(self) -> None:
+        for cell in SIZES:
+            for chunk_size in (1, 2, 4):
+                with self.subTest(cell=cell, chunk_size=chunk_size):
+                    tensors = tuple(
+                        t.detach().float().requires_grad_()
+                        for t in inputs(cell, steps=7, width=3)
+                    )
+                    wx, r, b, initial = tensors
+                    policy = partial(
+                        flashrnn_torch, cell=cell, numerics="fp32_state_bf16_mma"
+                    )
+                    full = policy(*tensors)
+                    history = []
+                    carry = initial
+                    for chunk in wx.split(chunk_size, dim=1):
+                        state, carry = policy(chunk, r, b, carry)
+                        history.append(state)
+                    chunked = torch.cat(history, dim=2), carry
+                    for actual, expected in zip(chunked, full, strict=True):
+                        torch.testing.assert_close(actual, expected, atol=0, rtol=0)
+                    full_grad = torch.autograd.grad(
+                        full[0].square().sum() + full[1].sum(), tensors
+                    )
+                    chunk_grad = torch.autograd.grad(
+                        chunked[0].square().sum() + chunked[1].sum(), tensors
+                    )
+                    for actual, expected in zip(chunk_grad, full_grad, strict=True):
+                        torch.testing.assert_close(
+                            actual, expected, atol=1e-5, rtol=1e-5
+                        )
 
     def test_public_gradcheck(self) -> None:
         for cell in SIZES:

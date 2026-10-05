@@ -27,6 +27,7 @@ def recurrence(
     cell: Cell = "lstm",
     mma_dtype: torch.dtype | None = None,
     slstm_init: Literal["global", "elementwise"] = "global",
+    recurrent_mma_dtype: torch.dtype | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Return state history [S,B,T,N,D] and last state [S,B,1,N,D]."""
     batch, steps, gates, heads, width = wx.shape
@@ -47,7 +48,12 @@ def recurrence(
         hidden = (
             state[0] if mma_dtype is None else state[0].to(mma_dtype).to(state.dtype)
         )
-        ry = torch.einsum("bnp,gnop->bgno", hidden, recurrent)
+        weight = (
+            recurrent
+            if recurrent_mma_dtype is None
+            else recurrent.to(recurrent_mma_dtype).to(state.dtype)
+        )
+        ry = torch.einsum("bnp,gnop->bgno", hidden, weight)
         if cell == "gru":
             candidate = ry[:, 0] + bias[0]
             reset = torch.sigmoid(x[:, 0] + ry[:, 1] + bias[1])
