@@ -425,6 +425,105 @@
       }
     },
     {
+      "model": "linear-moe-hub/Gated-Deltanet-340M",
+      "revision": "c83bdada453cde56932f37be71338df22ca29b7d",
+      "weight_bytes": 799109000,
+      "weight_sha256": "f599714aff09f07efce88afc4c327806c8d7082ccc4469ff4d1d1a2e707bf4f9",
+      "weight_files": [
+        "model.safetensors"
+      ],
+      "metadata_origin": "Pinned complete verified public model manifest",
+      "status": "FULL_CHECKPOINT_HISTORICAL_FLA_TORCH_REFERENCE_CPU_ALL_CHECKS_PASS",
+      "fla_historical_revision": "bcd9e79bfea85a394a023663f164587b506e0422",
+      "checkpoint_tensors": 435,
+      "stored_parameters": 399531296,
+      "effective_tied_parameters": 366763296,
+      "layers": 24,
+      "cached_vs_full_prefix_cpu": {
+        "batches": [
+          1,
+          2,
+          4
+        ],
+        "prompt_length": 5,
+        "generated_tokens": 4,
+        "batch_steps": 36,
+        "token_choices": 84,
+        "natural_exit": 0,
+        "all_logits_recurrent_and_convolution_pass": true,
+        "independent_audit": {
+          "status": "PASS",
+          "logit_pairs": 36,
+          "token_choices": 84,
+          "final_recurrent_pairs": 72,
+          "final_convolution_pairs": 216
+        },
+        "rows": [
+          {
+            "batch": 1,
+            "steps": 12,
+            "matching_tokens": 12,
+            "checks": {
+              "logits": {
+                "passed_steps": 12,
+                "max_abs": 2.6702880859375e-05
+              },
+              "recurrent_state": {
+                "passed_steps": 12,
+                "max_abs": 6.67572021484375e-06
+              },
+              "convolution": {
+                "passed_steps": 12,
+                "max_abs": 4.9591064453125e-05
+              }
+            }
+          },
+          {
+            "batch": 2,
+            "steps": 12,
+            "matching_tokens": 24,
+            "checks": {
+              "logits": {
+                "passed_steps": 12,
+                "max_abs": 2.384185791015625e-05
+              },
+              "recurrent_state": {
+                "passed_steps": 12,
+                "max_abs": 6.67572021484375e-06
+              },
+              "convolution": {
+                "passed_steps": 12,
+                "max_abs": 9.5367431640625e-06
+              }
+            }
+          },
+          {
+            "batch": 4,
+            "steps": 12,
+            "matching_tokens": 48,
+            "checks": {
+              "logits": {
+                "passed_steps": 12,
+                "max_abs": 2.86102294921875e-05
+              },
+              "recurrent_state": {
+                "passed_steps": 12,
+                "max_abs": 5.7220458984375e-06
+              },
+              "convolution": {
+                "passed_steps": 12,
+                "max_abs": 1.049041748046875e-05
+              }
+            }
+          }
+        ],
+        "source": "docs/flashrnn2/evidence/gdn-reference/gdn-reference-r3.jsonl"
+      },
+      "native_accelerated_fla_qualified": false,
+      "gpu_e2e_speedup": null,
+      "cleanup": "EVICTED_AFTER_CPU_AUDIT_REDOWNLOAD_PINNED_WEIGHT_FOR_GPU"
+    },
+    {
       "model": "fla-hub/hgrn2-1.3B-100B",
       "revision": "2f413dd9b63591b9b177bbf940942ea7eb70abfe",
       "weight_bytes": 2728818968,
@@ -501,12 +600,11 @@
   ],
   "additional_required_families": [
     "sLSTM",
-    "GatedDeltaNet",
     "Mamba3",
     "GatedDeltaNet2",
     "KDA"
   ],
   "qualification": "Each family needs a pinned native implementation and complete supported checkpoint; layer tests are not full-model E2E.",
   "model_gpu_e2e_campaign_complete": false,
-  "coverage_note": "Eight complete checkpoints have CPU evidence; original failures remain visible. Native and high-concurrency GPU E2E remain incomplete. RetNet local weight was evicted after completed CPU diagnostics and requires pinned re-download before GPU use."
+  "coverage_note": "Nine complete checkpoints have CPU evidence; original failures remain visible. Native and high-concurrency GPU E2E remain incomplete. RetNet and Gated DeltaNet local weights were evicted after completed CPU audits and require pinned re-download before GPU use."
 }
