@@ -819,6 +819,45 @@
       "cleanup": "EVICTED_AFTER_CPU_AUDIT_REDOWNLOAD_PINNED_WEIGHT_FOR_GPU"
     },
     {
+      "model": "NX-AI/TiRex",
+      "task": "time_series_forecasting",
+      "revision": "63c740922493f5fbe60b277609ec62babfba2762",
+      "weight_bytes": 141230262,
+      "weight_sha256": "b8c3f5a036c63272ce4b91c00187e26922a394cb6cb49d4e16db070ad0422314",
+      "weight_files": [
+        "model.ckpt"
+      ],
+      "metadata_origin": "Pinned complete verified public model manifest",
+      "status": "FULL_CHECKPOINT_TORCH_CPU_FORECAST_BITWISE_PASS",
+      "checkpoint_tensors": 157,
+      "parameters": 35291200,
+      "layers": 12,
+      "forecast_cpu": {
+        "batches": [
+          1,
+          2,
+          4
+        ],
+        "context_length": 128,
+        "model_context_length": 2048,
+        "forecast_horizon": 64,
+        "quantiles": 9,
+        "cases": 9,
+        "series": 21,
+        "quantile_values_per_path": 12096,
+        "state_tensor_pairs": 864,
+        "batch_vs_serial_bitwise": true,
+        "two_patch_composition_bitwise": true,
+        "all_four_state_families_bitwise": true,
+        "natural_exit": 0,
+        "independent_audit": "PASS",
+        "source": "docs/flashrnn2/evidence/tirex-slstm-35m-reference/tirex-slstm-35m-reference-r1.jsonl"
+      },
+      "native_flashrnn_cuda_qualified": false,
+      "gpu_e2e_speedup": null,
+      "cleanup": "EVICTED_AFTER_CPU_AUDIT_REDOWNLOAD_PINNED_WEIGHT_FOR_GPU"
+    },
+    {
       "model": "fla-hub/retnet-1.3B-100B",
       "revision": "7fddefc4d5e196a8d1f076bb7612d54321b3effe",
       "weight_bytes": 2703483944,
@@ -1140,12 +1179,12 @@
     }
   ],
   "additional_required_families": [
-    "sLSTM",
+    "sLSTM language model",
     "Mamba3 native CUDA",
     "GatedDeltaNet2",
     "KDA"
   ],
   "qualification": "Each family needs a pinned native implementation and complete supported checkpoint; layer tests are not full-model E2E.",
   "model_gpu_e2e_campaign_complete": false,
-  "coverage_note": "Thirteen complete checkpoints have CPU evidence; original failures remain visible. Native and high-concurrency GPU E2E remain incomplete. RetNet, Gated DeltaNet, GLA, HGRN2, HGRN, Mamba3 SISO/MIMO and mLSTM 164M local weights were evicted after completed CPU work and require pinned re-download before GPU use."
+  "coverage_note": "Thirteen language-model checkpoints and one time-series forecasting checkpoint have CPU evidence; original failures remain visible. Forecast and language-generation outputs have different contracts. Native and high-concurrency GPU E2E remain incomplete. RetNet, Gated DeltaNet, GLA, HGRN2, HGRN, Mamba3 SISO/MIMO, mLSTM 164M and TiRex sLSTM local weights were evicted after completed CPU work and require pinned re-download before GPU use."
 }
