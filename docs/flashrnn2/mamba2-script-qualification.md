@@ -44,3 +44,5 @@ python tools/flashrnn2/export_mamba2.py --model MAMBA2_DIR \
 See [source and artifact metadata](evidence/mamba2-script-cpu-export.meta.json),
 [log](evidence/mamba2-export-r1.log), and
 [natural exit](evidence/mamba2-export-r1-controller.json).
+
+The later [long-generation qualification](mamba2-generation-qualification.md) adds P128/G32 B1/B2/B4 CPU results and cache-fault controls; the CUDA and performance limitations remain.

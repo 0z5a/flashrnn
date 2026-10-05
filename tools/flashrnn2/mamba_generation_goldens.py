@@ -9,8 +9,11 @@ from pathlib import Path
 
 import torch
 from export_mamba import MambaExecution
+from export_mamba2 import Mamba2Execution
+from mamba2_checkpoint import load_mamba2
 from pyarrow import parquet
 from transformers import AutoTokenizer, MambaForCausalLM
+from transformers.models.mamba2.modeling_mamba2 import Mamba2Cache
 
 DATASET_REVISION = "b08601e04326c79dfdd32d625aee71d232d685c3"
 DATASET_SHA256 = "204929b7ff9d6184953f867dedb860e40aa69c078fc1e54b3baaa8fb28511c4c"
@@ -21,9 +24,30 @@ def digest(path: Path) -> str:
         return hashlib.file_digest(handle, "sha256").hexdigest()
 
 
+def verified_checkpoint(directory: Path, file_names: set[str] | None = None) -> dict:
+    manifest = json.loads((directory / "verified-manifest.json").read_text())
+    if file_names is not None:
+        manifest["files"] = [
+            entry for entry in manifest["files"] if entry["file"] in file_names
+        ]
+        assert {entry["file"] for entry in manifest["files"]} == file_names
+    for entry in manifest["files"]:
+        path = directory / entry["file"]
+        assert path.stat().st_size == entry["size"]
+        if len(entry["checksum"]) == 64:
+            checksum = digest(path)
+        else:
+            data = path.read_bytes()
+            checksum = hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
+        assert checksum == entry["checksum"]
+    return manifest
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=Path, required=True)
+    parser.add_argument("--family", choices=("mamba", "mamba2"), default="mamba")
+    parser.add_argument("--tokenizer", type=Path)
     parser.add_argument("--dataset", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--batches", type=int, nargs="+", default=[1, 2, 4])
@@ -35,7 +59,16 @@ def main() -> None:
     assert digest(args.dataset) == DATASET_SHA256
     args.output.mkdir(parents=True, exist_ok=True)
     torch.set_num_threads(1)
-    tokenizer = AutoTokenizer.from_pretrained(args.model, local_files_only=True)
+    checkpoint = verified_checkpoint(args.model)
+    tokenizer_path = args.tokenizer or args.model
+    tokenizer_checkpoint = (
+        checkpoint
+        if tokenizer_path == args.model
+        else verified_checkpoint(
+            tokenizer_path, {"tokenizer.json", "tokenizer_config.json"}
+        )
+    )
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, local_files_only=True)
     prompts = []
     for row, text in enumerate(
         parquet.read_table(args.dataset, columns=["text"])["text"].to_pylist()
@@ -46,14 +79,18 @@ def main() -> None:
         if len(prompts) == max(args.batches) * args.cases:
             break
     assert len(prompts) == max(args.batches) * args.cases
-    model, loading = MambaForCausalLM.from_pretrained(
-        args.model,
-        local_files_only=True,
-        torch_dtype=torch.float32,
-        output_loading_info=True,
-    )
-    assert all(not values for values in loading.values()), loading
-    runner = MambaExecution(model.eval()).eval()
+    if args.family == "mamba2":
+        model = load_mamba2(args.model).eval()
+        runner = Mamba2Execution(model).eval()
+    else:
+        model, loading = MambaForCausalLM.from_pretrained(
+            args.model,
+            local_files_only=True,
+            torch_dtype=torch.float32,
+            output_loading_info=True,
+        )
+        assert all(not values for values in loading.values()), loading
+        runner = MambaExecution(model.eval()).eval()
     config = model.config
     with torch.inference_mode():
         for batch in args.batches:
@@ -65,18 +102,22 @@ def main() -> None:
                     index * max(args.batches) : index * max(args.batches) + batch
                 ]
                 ids = torch.tensor([p["ids"] for p in selection])
-                conv = torch.zeros(
-                    config.num_hidden_layers,
-                    batch,
-                    config.intermediate_size,
-                    config.conv_kernel,
-                )
-                ssm = torch.zeros(
-                    config.num_hidden_layers,
-                    batch,
-                    config.intermediate_size,
-                    config.state_size,
-                )
+                if args.family == "mamba2":
+                    cache = Mamba2Cache(config, batch, torch.float32, "cpu")
+                    conv, ssm = cache.conv_states, cache.ssm_states
+                else:
+                    conv = torch.zeros(
+                        config.num_hidden_layers,
+                        batch,
+                        config.intermediate_size,
+                        config.conv_kernel,
+                    )
+                    ssm = torch.zeros(
+                        config.num_hidden_layers,
+                        batch,
+                        config.intermediate_size,
+                        config.state_size,
+                    )
                 output = runner.prefill(ids, conv, ssm)
                 # Decode mutates its incoming caches; preserve the prefill oracle.
                 prefill_cache = (output[1].clone(), output[2].clone())
@@ -133,18 +174,18 @@ def main() -> None:
                 "generation_contract": "Fixed token count; no EOS stop. Prefill emits token 1; G-1 decode calls emit tokens 2..G. Final caches contain prompt plus first G-1 generated tokens.",
                 "logits_scope": "Complete vocabulary at each emitted token; earlier prefill positions excluded",
                 "cache_scope": "All layers, prefill and final snapshots; intermediate caches not saved",
-                "source": "native Transformers MambaForCausalLM CPU FP32",
+                "source": f"native Transformers {type(model).__name__} CPU FP32",
+                "model_family": args.family,
                 "torch": torch.__version__,
                 "parameters": sum(p.numel() for p in model.parameters()),
                 "layers": len(model.backbone.layers),
                 "artifact_sha256": digest(target),
                 "artifact_bytes": target.stat().st_size,
                 "harness_sha256": digest(Path(__file__)),
-                "wrapper_sha256": digest(Path(inspect.getfile(MambaExecution))),
-                "implementation_sha256": digest(
-                    Path(inspect.getfile(MambaForCausalLM))
-                ),
-                "tokenizer_sha256": digest(args.model / "tokenizer.json"),
+                "wrapper_sha256": digest(Path(inspect.getfile(type(runner)))),
+                "implementation_sha256": digest(Path(inspect.getfile(type(model)))),
+                "tokenizer_sha256": digest(tokenizer_path / "tokenizer.json"),
+                "tokenizer_checkpoint": tokenizer_checkpoint,
                 "dataset": {
                     "id": "Salesforce/wikitext",
                     "revision": DATASET_REVISION,
@@ -152,9 +193,7 @@ def main() -> None:
                     "sha256": DATASET_SHA256,
                     "selection": "First cases*max(batches) rows having at least P tokens; no special tokens; first P tokens; B uses the first B rows of each max(B) group",
                 },
-                "checkpoint": json.loads(
-                    (args.model / "verified-manifest.json").read_text()
-                ),
+                "checkpoint": checkpoint,
                 "logits_contract": {"atol": 0.001, "rtol": 0.001},
                 "cache_contract": {"atol": 0.00001, "rtol": 0.00001},
                 "tolerance_source": "Same budgets as the pre-existing one-step script gate; frozen before long-generation execution, without revising cached/full-prefix failures",
