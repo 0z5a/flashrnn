@@ -82,4 +82,7 @@ Evidence: [commands and actual exit](evidence/gla-reference-r1-controller.json),
 [executed gate](evidence/gla-reference-gate.executed-r1.py),
 [finite-value tests](evidence/gla-finite-comparison-tests-r1.json), and
 [file manifest](evidence/gla-evidence-manifest.json).
-The checkpoint remains needed for the unfinished GPU and concurrency campaign.
+The local weight was evicted after the completed CPU reference and arithmetic
+diagnostic, with its hash and no-reader check recorded in the
+[cleanup receipt](evidence/gla-weight-eviction-r1.json). GPU and concurrency
+work require pinned re-download and verification.

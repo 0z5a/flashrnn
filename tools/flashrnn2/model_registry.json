@@ -300,7 +300,7 @@
       "all_greedy_equal": true,
       "accelerated_native_fla_qualified": false,
       "gpu_e2e_speedup": null,
-      "cleanup": "RETAIN_UNFINISHED_MODEL_CAMPAIGN",
+      "cleanup": "EVICTED_AFTER_CPU_REFERENCE_AND_DIAGNOSTIC_REDOWNLOAD_PINNED_WEIGHT_FOR_GPU",
       "fixed_row_linear_diagnostic": {
         "status": "ALL36_STEPS_PASS",
         "arithmetic_changed": true,
@@ -595,7 +595,99 @@
       },
       "native_accelerated_fla_qualified": false,
       "gpu_e2e_speedup": null,
-      "cleanup": "RETAIN_FOR_UNFINISHED_GPU_CONSUMERS"
+      "cleanup": "EVICTED_AFTER_CPU_AUDIT_REDOWNLOAD_PINNED_WEIGHT_FOR_GPU"
+    },
+    {
+      "model": "fla-hub/hgrn-1.3B-100B",
+      "revision": "1adad50103ad6b9c5f79df6b3ce6c9fa2299a572",
+      "weight_bytes": 2728818968,
+      "weight_sha256": "480ed12b06d2ebfc604210c90ecb66e922d5825e7260ad49cd1061ef7d52a987",
+      "weight_files": [
+        "model.safetensors"
+      ],
+      "metadata_origin": "Pinned complete verified public model manifest",
+      "status": "FULL_CHECKPOINT_TORCH_REFERENCE_CPU_ALL_CHECKS_PASS",
+      "download_files": 8,
+      "download_bytes": 2732820627,
+      "checkpoint_tensors": 244,
+      "parameters": 1364396032,
+      "layers": 24,
+      "cached_vs_full_prefix_cpu": {
+        "batches": [
+          1,
+          2,
+          4
+        ],
+        "prompt_length": 5,
+        "generated_tokens": 4,
+        "batch_steps": 36,
+        "token_choices": 84,
+        "natural_exit": 0,
+        "all_logits_and_recurrent_states_pass": true,
+        "rows": [
+          {
+            "batch": 1,
+            "steps": 12,
+            "matching_tokens": 12,
+            "checks": {
+              "logits": {
+                "passed_steps": 12,
+                "max_abs": 4.1961669921875e-05,
+                "worst_normalized": 0.012779194861650467
+              },
+              "recurrent_state": {
+                "passed_steps": 12,
+                "max_abs": 0.000213623046875,
+                "worst_normalized": 0.25961679220199585
+              }
+            }
+          },
+          {
+            "batch": 2,
+            "steps": 12,
+            "matching_tokens": 24,
+            "checks": {
+              "logits": {
+                "passed_steps": 12,
+                "max_abs": 0.0,
+                "worst_normalized": 0.0
+              },
+              "recurrent_state": {
+                "passed_steps": 12,
+                "max_abs": 0.0,
+                "worst_normalized": 0.0
+              }
+            }
+          },
+          {
+            "batch": 4,
+            "steps": 12,
+            "matching_tokens": 48,
+            "checks": {
+              "logits": {
+                "passed_steps": 12,
+                "max_abs": 0.0,
+                "worst_normalized": 0.0
+              },
+              "recurrent_state": {
+                "passed_steps": 12,
+                "max_abs": 0.0,
+                "worst_normalized": 0.0
+              }
+            }
+          }
+        ],
+        "independent_audit": {
+          "status": "PASS",
+          "logit_pairs": 36,
+          "token_choices": 84,
+          "final_state_pairs": 72
+        },
+        "source": "docs/flashrnn2/evidence/hgrn-reference/hgrn-reference-r1.jsonl"
+      },
+      "native_accelerated_fla_qualified": false,
+      "gpu_e2e_speedup": null,
+      "cleanup": "EVICTED_AFTER_CPU_AUDIT_REDOWNLOAD_PINNED_WEIGHT_FOR_GPU"
     }
   ],
   "additional_required_families": [
@@ -606,5 +698,5 @@
   ],
   "qualification": "Each family needs a pinned native implementation and complete supported checkpoint; layer tests are not full-model E2E.",
   "model_gpu_e2e_campaign_complete": false,
-  "coverage_note": "Nine complete checkpoints have CPU evidence; original failures remain visible. Native and high-concurrency GPU E2E remain incomplete. RetNet and Gated DeltaNet local weights were evicted after completed CPU audits and require pinned re-download before GPU use."
+  "coverage_note": "Ten complete checkpoints have CPU evidence; original failures remain visible. Native and high-concurrency GPU E2E remain incomplete. RetNet, Gated DeltaNet, GLA, HGRN2 and HGRN local weights were evicted after completed CPU work and require pinned re-download before GPU use."
 }
