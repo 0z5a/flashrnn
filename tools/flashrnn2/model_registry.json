@@ -819,6 +819,43 @@
       "cleanup": "EVICTED_AFTER_CPU_AUDIT_REDOWNLOAD_PINNED_WEIGHT_FOR_GPU"
     },
     {
+      "model": "PatrickHaller/lovecraft_xlstm",
+      "revision": "34d473516f5391ffb59df94313b4acb6fd0745b6",
+      "source_revision": "ab22eadbd245f293dd8dec38ed29963d73758a12",
+      "weight_bytes": 8539632,
+      "weight_sha256": "1ed83701a3164eab20a2abb09278e8a2635d7ea8000253d4faec9cd6b6b397d1",
+      "weight_files": [
+        "model.safetensors"
+      ],
+      "metadata_origin": "Pinned public model and source manifests",
+      "status": "FULL_CHECKPOINT_MIXED_MLSTM_SLSTM_CPU_REFERENCE_PASS",
+      "checkpoint_tensors": 29,
+      "parameters": 2134018,
+      "blocks": {
+        "mlstm": 1,
+        "slstm": 1
+      },
+      "cached_and_batched_cpu": {
+        "batches": [
+          1,
+          2,
+          4
+        ],
+        "prompt_length": 5,
+        "generated_tokens": 4,
+        "batch_steps": 36,
+        "token_choices": 84,
+        "state_tensor_pairs": 504,
+        "independent_audit": "PASS",
+        "full_vs_serial_max_abs": 1.33514404296875e-05,
+        "step_vs_full_max_abs": 1.239776611328125e-05,
+        "source": "docs/flashrnn2/evidence/lovecraft-xlstm-reference/lovecraft-xlstm-reference-r2.jsonl"
+      },
+      "native_accelerated_xlstm_qualified": false,
+      "gpu_e2e_speedup": null,
+      "cleanup": "EVICTED_AFTER_CPU_AUDIT_REDOWNLOAD_PINNED_WEIGHT_FOR_GPU"
+    },
+    {
       "model": "NX-AI/TiRex",
       "task": "time_series_forecasting",
       "revision": "63c740922493f5fbe60b277609ec62babfba2762",
@@ -1179,12 +1216,12 @@
     }
   ],
   "additional_required_families": [
-    "sLSTM language model",
+    "sLSTM language-model native CUDA",
     "Mamba3 native CUDA",
     "GatedDeltaNet2",
     "KDA"
   ],
   "qualification": "Each family needs a pinned native implementation and complete supported checkpoint; layer tests are not full-model E2E.",
   "model_gpu_e2e_campaign_complete": false,
-  "coverage_note": "Thirteen language-model checkpoints and one time-series forecasting checkpoint have CPU evidence; original failures remain visible. Forecast and language-generation outputs have different contracts. Native and high-concurrency GPU E2E remain incomplete. RetNet, Gated DeltaNet, GLA, HGRN2, HGRN, Mamba3 SISO/MIMO, mLSTM 164M and TiRex sLSTM local weights were evicted after completed CPU work and require pinned re-download before GPU use."
+  "coverage_note": "Fifteen language-model checkpoints and one time-series forecasting checkpoint have CPU evidence; original failures remain visible. Forecast and language-generation outputs have different contracts. Native and high-concurrency GPU E2E remain incomplete. RetNet, Gated DeltaNet, GLA, HGRN2, HGRN, Mamba3 SISO/MIMO, mLSTM 164M, TiRex sLSTM, Monostich-2-base and the mixed mLSTM/sLSTM language-model local weights were evicted after completed CPU work and require pinned re-download before GPU use."
 }
