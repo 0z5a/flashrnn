@@ -25,15 +25,19 @@ flags and the resulting shared-library hash. No packages are installed.
 | r1 | Original GPU-info; same-stem distutils objects | Failed: duplicate symbols at link |
 | r2 | Original GPU-info; unique source stems | Failed: removed CUDA 13 struct members |
 | r3 | Explicit GPU-info compatibility patch; unique source stems | Build and import PASS; controller naturally exited 0 in 28.17 s |
+| r4 | Original seven-unit alternating LSTM build invocation | Failed at project import, before compilation; missing task PYTHONPATH |
+| r5 | Same seven-unit sources/flags, corrected process PYTHONPATH | Fresh homogeneous-BF16 CUDA13 build/import PASS with upstream compute80 PTX flags; natural exit 0 in 38.26 s |
 
 Evidence: [r1 log](evidence/baseline-build-r1.log),
 [r2 log](evidence/baseline-build-r2.log),
 [r3 log](evidence/baseline-build-r3.log),
 [r3 controller](evidence/baseline-build-r3-controller.json), and
 [r3 build manifest](evidence/baseline-build-r3-manifest.json).
-The run hid CUDA devices and executed no device query or recurrence kernel.
-Device-query runtime qualification, CUDA 12 compilation, original recurrence
-builds, numerical calibration and timing remain untested by this check.
+The run hid CUDA devices and did not call the compiled GPU-info query or recurrence kernel.
+The later [alternating recurrence build](native-baseline-qualification.md)
+now compiles and imports successfully. Device-query runtime qualification,
+CUDA 12 compilation, numerical calibration and timing remain untested by
+these compile-only checks.
 
 The separate CPU-only [dtype probe](evidence/resolved-dtype-contracts.json)
 confirms the default and explicitly selected configuration fields. It does

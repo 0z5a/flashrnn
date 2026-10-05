@@ -7,7 +7,7 @@ implementation is absent.
 
 | Workstream | Verified evidence | Remaining work |
 | --- | --- | --- |
-| P0 source and capability pinning | Pinned upstream, source map, existing-runtime probes, CUDA13 GPU-info build/import; five native Triton cases executed (four PASS, one retained failure), failed normalizer midpoint localized | Native CUDA device query/recurrence; native Triton internal FP32 diagnosis; complete backend support matrix |
+| P0 source and capability pinning | Pinned upstream, source map, existing-runtime probes, CUDA13 GPU-info and original seven-unit alternating LSTM BF16 build/import; five native Triton cases executed (four PASS, one retained failure), failed normalizer midpoint localized | Native CUDA device query/recurrence; native Triton internal FP32 diagnosis; complete backend support matrix |
 | P0 numerical contracts | FP64 reference and all-input CPU gradients; explicit backend dtype/initialization differences | Independent per-state low-precision budgets, gradient budgets, trained-checkpoint tolerances |
 | P1 single CTA | Inferred Triton and explicit-layout Gluon forward; D64/D128 tested as supported | Broader inputs, long T, graph replay, resource/performance sweeps |
 | P2 output R tiling | Stepwise kernel-boundary synchronization; `persistent=false` recorded | Larger-D campaign and legally synchronized persistent cross-CTA implementation |
