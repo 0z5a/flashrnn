@@ -41,6 +41,11 @@ Evidence: [raw cases](evidence/mamba2-model-gate-r1.jsonl),
 [state-dict shape audit](evidence/mamba2-checkpoint-shapes.json).
 Weights are retained until the GPU and concurrency campaign completes.
 
+A separate [complete TorchScript export](mamba2-script-qualification.md) now
+passes three independent native-versus-traced B1/P5 CPU cases, with bitwise
+prefill/decode logits and caches. This does not revise the failures above;
+its CUDA portability and performance remain untested.
+
 ```sh
 python tools/flashrnn2/mamba_model_gate.py --family mamba2 --model MAMBA2_DIR --tokenizer MAMBA130M_DIR --output mamba2.jsonl
 ```
