@@ -17,19 +17,26 @@ def main() -> None:
     parser.add_argument("--goldens", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--device", choices=("cpu", "cuda"), required=True)
+    parser.add_argument("--allow-batch-change", action="store_true")
     args = parser.parse_args()
     torch.set_num_threads(1)
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
     source = verified_metadata(args.model)
     oracle = verified_metadata(args.goldens)
-    assert source["batch"] == oracle["batch"]
+    assert source["batch"] == oracle["batch"] or args.allow_batch_change
     assert source["prompt_length"] == oracle["prompt_length"]
     cases = torch.load(args.goldens, map_location="cpu", weights_only=True)
     model = torch.jit.load(str(args.model), map_location=args.device).eval()
     assert sum(p.numel() for p in model.parameters()) == oracle["parameters"]
     metadata = {
         "scope": "COMPLETE_MAMBA_FIXED_LENGTH_GENERATION_AND_REQUEST_ISOLATION",
+        "model_family": oracle.get("model_family", "mamba"),
+        "batch_contract": (
+            "MATCHES_TRACE"
+            if source["batch"] == oracle["batch"]
+            else "CROSS_BATCH_PROBE"
+        ),
         "pid": os.getpid(),
         "started": time.time(),
         "status": "RUNNING",
