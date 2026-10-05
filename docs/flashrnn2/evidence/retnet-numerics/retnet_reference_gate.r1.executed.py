@@ -20,11 +20,7 @@ def main() -> None:
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--common", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument(
-        "--batches", type=int, nargs="+", choices=(1, 2, 4), default=[1, 2, 4]
-    )
     args = parser.parse_args()
-    assert len(set(args.batches)) == len(args.batches)
     assert not args.output.exists()
     assert not list(args.output.parent.glob(args.output.stem + "-b*-c*.pt"))
     torch.set_num_threads(1)
@@ -69,7 +65,6 @@ def main() -> None:
             str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths
         },
         "snapshots": [],
-        "batches": args.batches,
     }
     meta_path = args.output.with_suffix(".meta.json")
     meta_path.write_text(json.dumps(metadata, indent=2) + "\n")
@@ -78,7 +73,7 @@ def main() -> None:
     meta_path.write_text(json.dumps(metadata, indent=2) + "\n")
     rows = []
     with torch.inference_mode(), args.output.open("x") as handle:
-        for batch in args.batches:
+        for batch in (1, 2, 4):
             for case in range(3):
                 ids = torch.tensor(inputs[4 * case : 4 * case + batch])
                 full_ids = ids.clone()
@@ -147,10 +142,7 @@ def main() -> None:
                         full_prefix_lengths=full_cache.lengths,
                     )
                 path = args.output.with_name(f"{args.output.stem}-b{batch}-c{case}.pt")
-                partial = path.with_suffix(".pt.partial")
-                assert not partial.exists()
-                torch.save(snapshot, partial)
-                partial.replace(path)
+                torch.save(snapshot, path)
                 with path.open("rb") as file:
                     digest = hashlib.file_digest(file, "sha256").hexdigest()
                 metadata["snapshots"].append(
@@ -168,10 +160,10 @@ def main() -> None:
     metadata.update(
         status="PASS" if passed else "NUMERICAL_FAILED",
         finished=time.time(),
-        cases=3 * len(args.batches),
+        cases=9,
         batch_steps=len(rows),
         token_choices=sum(r["batch"] for r in rows),
-        snapshot_scope="Both logits for every selected step; both final caches for case0 at each selected batch, saved per case",
+        snapshot_scope="Both logits for all36 steps; both final caches for case0 at B1/B2/B4, saved per case",
     )
     meta_path.write_text(json.dumps(metadata, indent=2) + "\n")
     raise SystemExit(0 if passed else 1)
