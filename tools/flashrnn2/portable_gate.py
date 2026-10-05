@@ -23,6 +23,7 @@ class Case:
     shape: tuple[int, int, int, int]
     numerics: Numerics
     initial: str = "nonzero"
+    mathematical_dtype: torch.dtype = torch.float64
 
 
 def fixtures(case: Case, seed: int) -> tuple[torch.Tensor, ...]:
@@ -50,7 +51,9 @@ def fixtures(case: Case, seed: int) -> tuple[torch.Tensor, ...]:
         elif case.initial == "saturated":
             tensors[0][:, :, 0].add_(30)
             tensors[0][:, :, 1].sub_(30)
-    dtype = torch.float64 if case.numerics == "mathematical" else torch.float32
+    dtype = (
+        case.mathematical_dtype if case.numerics == "mathematical" else torch.float32
+    )
     return tuple(t.to(dtype) for t in tensors)
 
 
@@ -92,9 +95,13 @@ def run_case(case: Case, seed: int, device: torch.device) -> tuple[dict, dict]:
     actual_inputs = tuple(
         t.to(device).detach().clone().requires_grad_() for t in originals
     )
-    oracle_inputs = tuple(t.clone().requires_grad_() for t in originals)
     mathematical = case.numerics == "mathematical"
-    forward_budget, gradient_budget = (1e-12, 1e-11) if mathematical else (1e-5, 1e-5)
+    oracle_inputs = tuple(
+        t.clone().to(torch.float64 if mathematical else torch.float32).requires_grad_()
+        for t in originals
+    )
+    exact_dtype = mathematical and case.mathematical_dtype == torch.float64
+    forward_budget, gradient_budget = (1e-12, 1e-11) if exact_dtype else (1e-5, 1e-5)
     if mathematical:
         oracle = flashrnn(
             *oracle_inputs[:3],
@@ -201,6 +208,7 @@ def run_case(case: Case, seed: int, device: torch.device) -> tuple[dict, dict]:
         "seed": seed,
         "numerics": case.numerics,
         "dtype": str(actual_inputs[0].dtype),
+        "oracle_dtype": str(oracle_inputs[0].dtype),
         "device": str(device),
         "actual_backend": "torch_eager",
         "status": "PASSED" if passed else "FAILED",
@@ -240,19 +248,34 @@ def main() -> None:
     args = parser.parse_args()
     config = json.loads(args.config.read_text())
     assert config["schema_version"] == 1
+    mathematical_dtype = {"float32": torch.float32, "float64": torch.float64}[
+        config.get("mathematical_dtype", "float64")
+    ]
     cases = [
-        Case(row["id"], cell, tuple(row["shape"]), policy)
+        Case(
+            row["id"],
+            cell,
+            tuple(row["shape"]),
+            policy,
+            mathematical_dtype=mathematical_dtype,
+        )
         for row in config["shapes"]
         for cell in config["cells"]
         for policy in config["policies"]
     ]
     cases += [
-        Case(mode, "slstm", (3, 3, 2, 7), policy, mode)
+        Case(mode, "slstm", (3, 3, 2, 7), policy, mode, mathematical_dtype)
         for mode in ("zero", "mixed", "saturated")
         for policy in config["policies"]
     ]
     device = torch.device(args.device)
-    assert device.type in ("cpu", "cuda")
+    assert device.type in ("cpu", "cuda", "mps")
+    if device.type == "mps":
+        assert torch.backends.mps.is_available()
+        assert mathematical_dtype == torch.float32, (
+            "MPS requires FP32 mathematical inputs"
+        )
+        assert os.environ.get("PYTORCH_ENABLE_MPS_FALLBACK", "0") == "0"
     torch.set_num_threads(1)
     if device.type == "cuda":
         torch.backends.cuda.matmul.allow_tf32 = False
@@ -302,6 +325,12 @@ def main() -> None:
         }
         if torch.version.hip is None:
             metadata["accelerator"]["compute_capability"] = [props.major, props.minor]
+    elif device.type == "mps":
+        metadata["accelerator"] = {
+            "backend": "APPLE_MPS",
+            "macos": platform.mac_ver()[0],
+            "cpu_fallback_enabled": False,
+        }
     meta_path = args.output.with_suffix(".meta.json")
     meta_path.write_text(json.dumps(metadata, indent=2) + "\n")
     rows = []
