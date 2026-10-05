@@ -8,7 +8,7 @@ not silently reported as the stock public entry point.
 | Path | Executed evidence | Remaining qualification |
 | --- | --- | --- |
 | GPU-info CUDA 13 build/import | Successful in the earlier build report | Device query |
-| Original alternating CUDA, seven translation units | Homogeneous BF16 build/import PASS on CUDA13, SM120; earlier missing-import failure retained | GPU forward and all four gradient comparisons |
+| Original alternating CUDA, seven translation units | Homogeneous BF16 CUDA13 build/import PASS with upstream compute80 PTX flags; earlier missing-import failure retained | GPU forward and all four gradient comparisons |
 | Original Triton LSTM/sLSTM kernels | All five finite GPU cases executed: four PASS, one retained sLSTM zero-state failure; exact failing element localized | FP32 internal-value diagnosis, broader numerical calibration, stock einops-wrapper parity |
 | Alternating LSTM cast reference | FP32 CPU T1/T17/T128 output and all-input gradient parity | BF16 native GPU error characterization |
 | Explicit per-element sLSTM reference option | Nine CPU tests pass, including mixed-normalizer counterexample | Native GPU comparison |
@@ -73,6 +73,10 @@ SHA256 is `b2d55255b1a2079f91bf0ce824319d0b3ef0aab30a00060fc7fac9e1e49e05b3`.
 
 The resolved B16/H1/D64 LSTM configuration uses BF16 for all storage/operand
 types, including A and S; recurrent and forward clipping are disabled.
+The process supplies `TORCH_CUDA_ARCH_LIST=12.0`, but the unchanged upstream
+compiler flags explicitly request `arch=compute_80,code=compute_80`. The
+environment variable alone does not prove a native SM120 cubin; binary ISA
+inspection and actual RTX 5090 execution remain pending.
 The source/header hashes and full flags are in the
 [build manifest](evidence/baseline-build-r5-manifest.json). Its broad header
 inventory also records transported AppleDouble sidecars; they are not

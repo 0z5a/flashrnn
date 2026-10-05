@@ -26,7 +26,7 @@ flags and the resulting shared-library hash. No packages are installed.
 | r2 | Original GPU-info; unique source stems | Failed: removed CUDA 13 struct members |
 | r3 | Explicit GPU-info compatibility patch; unique source stems | Build and import PASS; controller naturally exited 0 in 28.17 s |
 | r4 | Original seven-unit alternating LSTM build invocation | Failed at project import, before compilation; missing task PYTHONPATH |
-| r5 | Same seven-unit sources/flags, corrected process PYTHONPATH | Fresh homogeneous-BF16 SM120 build/import PASS; natural exit 0 in 38.26 s |
+| r5 | Same seven-unit sources/flags, corrected process PYTHONPATH | Fresh homogeneous-BF16 CUDA13 build/import PASS with upstream compute80 PTX flags; natural exit 0 in 38.26 s |
 
 Evidence: [r1 log](evidence/baseline-build-r1.log),
 [r2 log](evidence/baseline-build-r2.log),
