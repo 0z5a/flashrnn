@@ -1,6 +1,6 @@
 # Recurrent-model campaign coverage
 
-The campaign remains incomplete. Twelve complete checkpoint families have CPU
+The campaign remains incomplete. Thirteen complete checkpoint families have CPU
 reference execution; these results do not qualify their native accelerated
 implementations or the requested high-concurrency GPU E2E matrix. The registry
 now records completed Mamba3 SISO/MIMO, RWKV6, DeltaNet, RetNet, HGRN, HGRN2 and
@@ -17,6 +17,7 @@ failures remain visible.
 | DeltaNet 1.3B | [Original reference](deltanet-reference.md) retains nine recurrent/six convolution failures; [changed Linear arithmetic control](deltanet-numerics.md) passes 36/36 | Native FLA and high-concurrency GPU E2E unfinished |
 | RetNet 1.3B | [Original 36-step/84-token reference](retnet-reference.md) retains nine BS=1 state failures; [changed Linear arithmetic control](retnet-numerics.md) passes 36/36 with bitwise state/logit parity | Native FLA, long contexts and high-concurrency GPU E2E unfinished |
 | xLSTM / mLSTM 7B | Immutable checkpoint metadata pinned; full checkpoint not downloaded | Complete-model and mlstm_kernels baseline execution unfinished |
+| xLSTM / mLSTM 164M | [Complete checkpoint](mlstm-164m-reference.md): 36/36 logits and 84/84 tokens; original five cell-state failures retained, fixed-row Linear control bitwise pass | Native `mlstm_kernels` and high-concurrency GPU E2E unfinished |
 | sLSTM language model | Cell-level reference/gradient tests only | Complete checkpoint and model E2E unfinished |
 | Gated DeltaNet 340M | [Complete checkpoint](gdn-reference.md): 36/36 logits, recurrent and convolution checks; 84/84 tokens; independent audit pass | Native FLA and high-concurrency GPU E2E unfinished |
 | HGRN2 1.3B | [Complete checkpoint](hgrn2-reference.md): 36 steps/84 tokens, seven BS=1 state failures; BS=2/4 bitwise | Native FLA and high-concurrency GPU E2E unfinished |
@@ -30,7 +31,7 @@ Changed-arithmetic diagnostics do not replace original failures or establish
 training quality. RetNet's local weight was evicted after the completed CPU
 diagnostic to make room for HGRN2 evidence; the pinned public weight needs
 re-download before its GPU run. Gated DeltaNet, GLA, HGRN2, HGRN and Mamba3
-SISO/MIMO local weights were likewise evicted after completed CPU work and no-reader checks;
+SISO/MIMO and mLSTM 164M local weights were likewise evicted after completed CPU work and no-reader checks;
 their pinned versions need re-download before GPU use. Other model weights
 remain needed for unfinished native/GPU consumers. Five redundant closed export
 files were losslessly archived locally;
