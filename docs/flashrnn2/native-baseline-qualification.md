@@ -8,7 +8,7 @@ not silently reported as the stock public entry point.
 | Path | Executed evidence | Remaining qualification |
 | --- | --- | --- |
 | GPU-info CUDA 13 build/import | Successful in the earlier build report | Device query |
-| Original alternating CUDA, seven translation units | Homogeneous BF16 CUDA13 build/import PASS with upstream compute80 PTX flags; earlier missing-import failure retained | GPU forward and all four gradient comparisons |
+| Original alternating CUDA, seven translation units | Homogeneous BF16 CUDA13 build/import PASS; cached first GPU forward fails; six SM80 PTX records and no cubin | GPU forward and all four gradient comparisons |
 | Original Triton LSTM/sLSTM kernels | All five finite GPU cases executed: four PASS, one retained sLSTM zero-state failure; exact failing element localized | FP32 internal-value diagnosis, broader numerical calibration, stock einops-wrapper parity |
 | Alternating LSTM cast reference | FP32 CPU T1/T17/T128 output and all-input gradient parity | BF16 native GPU error characterization |
 | Explicit per-element sLSTM reference option | Nine CPU tests pass, including mixed-normalizer counterexample | Native GPU comparison |
@@ -75,8 +75,9 @@ The resolved B16/H1/D64 LSTM configuration uses BF16 for all storage/operand
 types, including A and S; recurrent and forward clipping are disabled.
 The process supplies `TORCH_CUDA_ARCH_LIST=12.0`, but the unchanged upstream
 compiler flags explicitly request `arch=compute_80,code=compute_80`. The
-environment variable alone does not prove a native SM120 cubin; binary ISA
-inspection and actual RTX 5090 execution remain pending.
+environment variable alone does not prove a native SM120 cubin. The later
+[numerical window](cuda-numerical-diagnosis.md) confirms six SM80 PTX records
+and no ELF device image, then fails at the first forward with a runtime error.
 The source/header hashes and full flags are in the
 [build manifest](evidence/baseline-build-r5-manifest.json). Its broad header
 inventory also records transported AppleDouble sidecars; they are not
@@ -89,7 +90,7 @@ off-host archive verification. See [r4 failure](evidence/baseline-build-r4.log),
 [r5 result](evidence/baseline-build-r5.log),
 [fresh-build audit](evidence/baseline-build-r5-freshness.json) and
 [return receipt](evidence/baseline-build-r5-complete.json). The recurrence
-GPU gate and gradient acceptance remain pending.
+qualification and gradient acceptance remain incomplete after the later first-call failure.
 
 The cast reference matches the alternating backend's stored-state and
 recurrent-product rounding boundaries. CUDA fast-math activations are not
@@ -98,6 +99,7 @@ forward error 2.24e-8 and maximum gradient error 1.91e-6 across the three CPU
 sequence lengths. These results do not qualify the CUDA implementation.
 
 The compiler transport can reuse a completed artifact only after checking
-its saved SHA-256. This reuse path is prepared but not exercised yet.
+its saved SHA-256. The later numerical window exercised this reuse path and imported the cached
+artifact; its first recurrence call failed before a comparison completed.
 See [numerical contracts](numerical-contracts.md) for the differences between
 alternating CUDA, fused CUDA, Triton and the candidate kernels.

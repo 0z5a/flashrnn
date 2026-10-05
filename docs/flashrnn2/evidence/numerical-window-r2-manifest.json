@@ -1,0 +1,125 @@
+{
+  "scope": "SIX_NATIVE_CUDA_CASES_AND_THREE_CPU_THREE_GPU_MAMBA_NUMERICAL_DIAGNOSES_NO_TIMING",
+  "boot_id": "18dbe202-804d-4276-8357-baf55f7d79f7",
+  "gpu_uuid": "GPU-84c4d7e9-b1c7-5d12-e7c2-6ec2a136044d",
+  "build_manifest": "cuda-build/9347be60216de919764e10e58e2f838da897b5c44529441547a82b1ef4f242bd/build-manifest.json",
+  "files": [
+    {
+      "path": "run_numerical_window_r2.py",
+      "bytes": 4086,
+      "sha256": "dc0920d0fdefa942fceab4e94a20e318d55f8edc94d9c9013d32d30aaebd5a64"
+    },
+    {
+      "path": "source/tools/flashrnn2/upstream_cuda_gate.py",
+      "bytes": 6415,
+      "sha256": "c94a00f305a8463368022e8860c4664dde76187fd0113f6e7a92972b60241d14"
+    },
+    {
+      "path": "source/tools/flashrnn2/build_without_ninja.py",
+      "bytes": 4614,
+      "sha256": "0a2e8bfa0bc322b9d49ba5accfda49698ec358791bdf91742fbb4264d8d80dc5"
+    },
+    {
+      "path": "source/tools/flashrnn2/mamba_script_diagnostic.py",
+      "bytes": 5475,
+      "sha256": "d8e12c887eaae5e3cb44ad76bd7c4c8e058650242397ce944bd8657b9684eddd"
+    },
+    {
+      "path": "source/tools/flashrnn2/mamba_script_gate.py",
+      "bytes": 4704,
+      "sha256": "1fb71487fe52e7ff12422e7ae179e16149c98acb241b9dfa643a44a8fe65f86a"
+    },
+    {
+      "path": "source/tools/flashrnn2/target_mamba_artifact.py",
+      "bytes": 2309,
+      "sha256": "e803a8e3532584218aa3500b39513b3a724585c7a4d384d0076ec16c0f9c3495"
+    },
+    {
+      "path": "source/flashrnn/flashrnn/cuda_init.py",
+      "bytes": 5758,
+      "sha256": "71df93da665b20bf207c64aadaa11abf1e78b25e7fc6363bc3d4e9aaf4b9eedf"
+    },
+    {
+      "path": "source/flashrnn/flashrnn/flashrnn.py",
+      "bytes": 49051,
+      "sha256": "08d4fe1f4f5051cc296431b9696d91e16a74d1a07af41f331a841d70783d7a50"
+    },
+    {
+      "path": "models/mamba-130m/prefill-decode-b1-t5-cuda.pt",
+      "bytes": 517182478,
+      "sha256": "e329c77a06bf7d19fb236059c224be484ee33be1b9f2005b637ddac405aebfc0"
+    },
+    {
+      "path": "models/mamba-130m/prefill-decode-b1-t5-cuda.meta.json",
+      "bytes": 2590,
+      "sha256": "3ded50b9a28367d62b33f95b55234efc9c7645f1d673d8cdf72b9769eedfa277"
+    },
+    {
+      "path": "models/mamba-130m/script-goldens-b1-t5.pt",
+      "bytes": 21322593,
+      "sha256": "f3ebb63d7b53370b44ba31ee513e85f8e3cbedd27fde7e2301086ea12bb40f41"
+    },
+    {
+      "path": "models/mamba-130m/script-goldens-b1-t5.meta.json",
+      "bytes": 1814,
+      "sha256": "50b9a1620b479666af9991d6eb39f81175bd1a8130163105d0c62268b7adc2fc"
+    },
+    {
+      "path": "cuda-build/9347be60216de919764e10e58e2f838da897b5c44529441547a82b1ef4f242bd/build-manifest.json",
+      "bytes": 9149,
+      "sha256": "b82b09869915151f130e6f8b6b7a4b2f29b82a59eeab932bfc18cc7ee0d69c04"
+    }
+  ],
+  "tasks": [
+    {
+      "name": "upstream-cuda-r1",
+      "command": [
+        "/root/miniconda3/bin/python",
+        "/root/autodl-tmp/0z5a/flashrnn2-20261005/source/tools/flashrnn2/upstream_cuda_gate.py",
+        "--build-root",
+        "/root/autodl-tmp/0z5a/flashrnn2-20261005/cuda-build",
+        "--output",
+        "/root/autodl-tmp/0z5a/flashrnn2-20261005/evidence/upstream-cuda-r1.jsonl"
+      ],
+      "cuda_visible_devices": "1",
+      "log": "evidence/upstream-cuda-r1.log"
+    },
+    {
+      "name": "mamba-script-diagnostic-cpu-remote-r1",
+      "command": [
+        "/root/miniconda3/bin/python",
+        "/root/autodl-tmp/0z5a/flashrnn2-20261005/source/tools/flashrnn2/mamba_script_diagnostic.py",
+        "--model",
+        "/root/autodl-tmp/0z5a/flashrnn2-20261005/models/mamba-130m/prefill-decode-b1-t5-cuda.pt",
+        "--goldens",
+        "/root/autodl-tmp/0z5a/flashrnn2-20261005/models/mamba-130m/script-goldens-b1-t5.pt",
+        "--output",
+        "/root/autodl-tmp/0z5a/flashrnn2-20261005/evidence/mamba-script-diagnostic-cpu-remote-r1.jsonl",
+        "--device",
+        "cpu"
+      ],
+      "cuda_visible_devices": "",
+      "log": "evidence/mamba-script-diagnostic-cpu-remote-r1.log"
+    },
+    {
+      "name": "mamba-script-diagnostic-cuda-remote-r1",
+      "command": [
+        "/root/miniconda3/bin/python",
+        "/root/autodl-tmp/0z5a/flashrnn2-20261005/source/tools/flashrnn2/mamba_script_diagnostic.py",
+        "--model",
+        "/root/autodl-tmp/0z5a/flashrnn2-20261005/models/mamba-130m/prefill-decode-b1-t5-cuda.pt",
+        "--goldens",
+        "/root/autodl-tmp/0z5a/flashrnn2-20261005/models/mamba-130m/script-goldens-b1-t5.pt",
+        "--output",
+        "/root/autodl-tmp/0z5a/flashrnn2-20261005/evidence/mamba-script-diagnostic-cuda-remote-r1.jsonl",
+        "--device",
+        "cuda"
+      ],
+      "cuda_visible_devices": "1",
+      "log": "evidence/mamba-script-diagnostic-cuda-remote-r1.log"
+    }
+  ],
+  "estimated_seconds": 120,
+  "performance_claim": false,
+  "status": "FROZEN_NOT_ADMITTED"
+}
