@@ -22,7 +22,7 @@ and model inputs were hashed before execution. Its first T1/final call raises
 gradient result was produced. The raw metadata still says RUNNING because
 the exception preceded its final write; the process controller proves the
 terminal exit 1. The remaining five cases are not executed, not numerical
-failures. The raw diagnostic does not expose the underlying CUDA error code.
+failures. The raw diagnostic does not expose the underlying CUDA error code. A [subsequent single-forward probe](native-cuda-ptx-failure.md) reports `cudaErrorInvalidPtx` (218); the original records below remain unchanged.
 
 The binary has six PTX records targeting `sm_80`, PTX version 9.0, and no
 ELF device image in the cuobjdump listing. Setting the environment architecture
