@@ -1,0 +1,211 @@
+{
+  "scope": "COMPLETE_MAMBA_FIXED_LENGTH_GENERATION_AND_REQUEST_ISOLATION",
+  "model_family": "mamba",
+  "backend": "script",
+  "batch_contract": "MATCHES_TRACE",
+  "pid": 24527,
+  "started": 1791172792.839048,
+  "status": "PASS",
+  "torch": "2.13.0",
+  "device": "cpu",
+  "model": {
+    "status": "CPU_PARITY_PASS_CUDA_UNTESTED",
+    "started": 1791152908.5961611,
+    "finished": 1791153005.591208,
+    "torch": "2.13.0",
+    "prompt_length": 128,
+    "batch": 1,
+    "checkpoint_manifest": {
+      "model": "state-spaces/mamba-130m-hf",
+      "revision": "1e76775f628fbf1350fbe4dbb3d971ba64af25a1",
+      "metadata_origin": "hf-mirror.com immutable repository API; official endpoint currently unavailable",
+      "files": [
+        {
+          "file": "config.json",
+          "size": 895,
+          "checksum": "65cacc293f83d920b3a79690ce835426950f8b4d"
+        },
+        {
+          "file": "generation_config.json",
+          "size": 137,
+          "checksum": "7711d625ad3a8016f08d55aa9c64171dae37a12c"
+        },
+        {
+          "file": "model.safetensors",
+          "size": 516567560,
+          "checksum": "1a5ed29c492ef4d485df3b7c2c8109771696589855b2162ad1ba618b6067cbea"
+        },
+        {
+          "file": "tokenizer.json",
+          "size": 2113837,
+          "checksum": "f4b9ef760738eaa3ff5a29eb338b4da006fe1761"
+        },
+        {
+          "file": "tokenizer_config.json",
+          "size": 4793,
+          "checksum": "0f8da8f0bf3fbd3b8d570f77d7206b6089d4fdda"
+        }
+      ]
+    },
+    "harness_sha256": "044dfa1811fe83b3852590a15fe5852ac6802476857d33d48504a4b17a04abc8",
+    "implementation_sha256": "ad28b5f1a464a64d1eabf96b42394f41ef322dbe5f4276e85d4f27368b61a796",
+    "artifact_sha256": "560ac5a7f51391da3cf6ccae52656c3c6828d770734ec54f32e0bfcf30fb6feb",
+    "artifact_bytes": 519380690,
+    "model_layers": 24,
+    "parameters": 129135360,
+    "input_state_policy": "request-owned mutable convolution/SSM cache",
+    "device_literal_portability": "NOT_QUALIFIED",
+    "records": [
+      {
+        "batch": 1,
+        "sample": 0,
+        "prefill_max_errors": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "decode_max_errors": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "status": "PASS"
+      },
+      {
+        "batch": 1,
+        "sample": 1,
+        "prefill_max_errors": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "decode_max_errors": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "status": "PASS"
+      },
+      {
+        "batch": 1,
+        "sample": 2,
+        "prefill_max_errors": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "decode_max_errors": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "status": "PASS"
+      }
+    ]
+  },
+  "oracles": {
+    "status": "NATIVE_CPU_ORACLES_COMPLETE",
+    "started": 1791152867.897789,
+    "finished": 1791152878.973666,
+    "batch": 1,
+    "prompt_length": 128,
+    "generated_tokens": 32,
+    "cases": [
+      {
+        "case": 0,
+        "dataset_rows": [
+          3
+        ],
+        "input_ids_sha256": "293f4290d7a0736685dee8d91b9f735e520543fcf3c97a7c111a69cf8d9c8a9f",
+        "generated_ids_sha256": "dd5f2d81ae3dd94c3cb1342dbf9893aaf9167c11f68c256160c1aeecb5e2bb0f"
+      },
+      {
+        "case": 1,
+        "dataset_rows": [
+          42
+        ],
+        "input_ids_sha256": "2294a1fb1989a8dfa83380048b9f9a6fc00fda6848d3b0f883f7a5290715ad06",
+        "generated_ids_sha256": "179711cad347b7e55b9dea18952d6776172e5275752002b8100206d4305b0d09"
+      },
+      {
+        "case": 2,
+        "dataset_rows": [
+          56
+        ],
+        "input_ids_sha256": "6d1cb7178d1d923716a975c9af94d6c17e0d5d76856bbdede94b65b7aa2cb678",
+        "generated_ids_sha256": "3847725c1a6b3b2528dbf137719224cfab44f18108eac6f64158916ed3615ae4"
+      }
+    ],
+    "generation_contract": "Fixed token count; no EOS stop. Prefill emits token 1; G-1 decode calls emit tokens 2..G. Final caches contain prompt plus first G-1 generated tokens.",
+    "logits_scope": "Complete vocabulary at each emitted token; earlier prefill positions excluded",
+    "cache_scope": "All layers, prefill and final snapshots; intermediate caches not saved",
+    "source": "native Transformers MambaForCausalLM CPU FP32",
+    "torch": "2.13.0",
+    "parameters": 129135360,
+    "layers": 24,
+    "artifact_sha256": "f4e258bd4eaaf36eb480aff904e035a455e0c98fcef7eea28286864a105a7ba0",
+    "artifact_bytes": 37013369,
+    "harness_sha256": "f0c04aebc7e1166a55e66a2dafd0fa92e656184d1de07665c0ef5745a4302277",
+    "wrapper_sha256": "044dfa1811fe83b3852590a15fe5852ac6802476857d33d48504a4b17a04abc8",
+    "implementation_sha256": "ad28b5f1a464a64d1eabf96b42394f41ef322dbe5f4276e85d4f27368b61a796",
+    "tokenizer_sha256": "b074ad869d4f45d1265ca5c9814f78604f3d7e187acc063b15dd232b27585fcf",
+    "dataset": {
+      "id": "Salesforce/wikitext",
+      "revision": "b08601e04326c79dfdd32d625aee71d232d685c3",
+      "file": "wikitext-2-raw-v1/validation-00000-of-00001.parquet",
+      "sha256": "204929b7ff9d6184953f867dedb860e40aa69c078fc1e54b3baaa8fb28511c4c",
+      "selection": "First cases*max(batches) rows having at least P tokens; no special tokens; first P tokens; B uses the first B rows of each max(B) group"
+    },
+    "checkpoint": {
+      "model": "state-spaces/mamba-130m-hf",
+      "revision": "1e76775f628fbf1350fbe4dbb3d971ba64af25a1",
+      "metadata_origin": "hf-mirror.com immutable repository API; official endpoint currently unavailable",
+      "files": [
+        {
+          "file": "config.json",
+          "size": 895,
+          "checksum": "65cacc293f83d920b3a79690ce835426950f8b4d"
+        },
+        {
+          "file": "generation_config.json",
+          "size": 137,
+          "checksum": "7711d625ad3a8016f08d55aa9c64171dae37a12c"
+        },
+        {
+          "file": "model.safetensors",
+          "size": 516567560,
+          "checksum": "1a5ed29c492ef4d485df3b7c2c8109771696589855b2162ad1ba618b6067cbea"
+        },
+        {
+          "file": "tokenizer.json",
+          "size": 2113837,
+          "checksum": "f4b9ef760738eaa3ff5a29eb338b4da006fe1761"
+        },
+        {
+          "file": "tokenizer_config.json",
+          "size": 4793,
+          "checksum": "0f8da8f0bf3fbd3b8d570f77d7206b6089d4fdda"
+        }
+      ]
+    },
+    "logits_contract": {
+      "atol": 0.001,
+      "rtol": 0.001
+    },
+    "cache_contract": {
+      "atol": 1e-05,
+      "rtol": 1e-05
+    },
+    "tolerance_source": "Same budgets as the pre-existing one-step script gate; frozen before long-generation execution, without revising cached/full-prefix failures",
+    "gpu_executed": false
+  },
+  "schedule_contract": "Serial and round-robin interleaved request groups on one execution stream. This checks cache isolation, not parallel stream execution or serving throughput.",
+  "harness_sha256": "5dffa7b7ecd279d7dbe46715d1a2ce937da10a5d20eac50f1726dafb5527703d",
+  "comparison_helper_sha256": "1fb71487fe52e7ff12422e7ae179e16149c98acb241b9dfa643a44a8fe65f86a",
+  "matmul_tf32": false,
+  "cudnn_tf32": false,
+  "performance_claim": false,
+  "failed_steps": 0,
+  "compared_steps": 192,
+  "finished": 1791172817.7413702
+}
