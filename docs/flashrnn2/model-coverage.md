@@ -1,6 +1,6 @@
 # Recurrent-model campaign coverage
 
-The campaign remains incomplete. Fourteen language-model checkpoints and one
+The campaign remains incomplete. Fifteen language-model checkpoints and one
 time-series forecasting checkpoint have CPU reference execution; these results
 do not qualify their native accelerated
 implementations or the requested high-concurrency GPU E2E matrix. The registry
@@ -20,7 +20,7 @@ failures remain visible.
 | xLSTM / mLSTM 7B | Immutable checkpoint metadata pinned; full checkpoint not downloaded | Complete-model and mlstm_kernels baseline execution unfinished |
 | xLSTM / mLSTM 164M | [Complete checkpoint](mlstm-164m-reference.md): 36/36 logits and 84/84 tokens; original five cell-state failures retained, fixed-row Linear control bitwise pass | Native `mlstm_kernels` and high-concurrency GPU E2E unfinished |
 | TiRex sLSTM 35M, time-series forecast | [Complete checkpoint](tirex-slstm-reference.md): nine forecasts, 21 series, 12,096 quantile values per path and 864 layer-state tensor comparisons bitwise | Native FlashRNN CUDA, ONNX and high-concurrency GPU forecast E2E unfinished; not a language-token baseline |
-| sLSTM language model | Cell-level reference/gradient tests only | Complete checkpoint and model E2E unfinished |
+| Mixed mLSTM/sLSTM language model, 2.1M | [Complete checkpoint](lovecraft-xlstm-reference.md): 36/36 full-vocabulary batch/serial and cached/full-prefix checks, 84/84 tokens, 504/504 state tensor pairs; independent audit pass | Native xLSTM CUDA, larger-model baseline and high-concurrency GPU E2E unfinished |
 | Gated DeltaNet 340M | [Complete checkpoint](gdn-reference.md): 36/36 logits, recurrent and convolution checks; 84/84 tokens; independent audit pass | Native FLA and high-concurrency GPU E2E unfinished |
 | Monostich-2-base GDN-2/GQA 149M | [Complete checkpoint](monostich2-reference.md): 36/36 full-model batched/serial logits and 84/84 tokens; independent audit and pinned first GDN-2 layer crosscheck pass | Native FLA, cache, backward and high-concurrency GPU E2E unfinished |
 | HGRN2 1.3B | [Complete checkpoint](hgrn2-reference.md): 36 steps/84 tokens, seven BS=1 state failures; BS=2/4 bitwise | Native FLA and high-concurrency GPU E2E unfinished |
@@ -34,7 +34,7 @@ Changed-arithmetic diagnostics do not replace original failures or establish
 training quality. RetNet's local weight was evicted after the completed CPU
 diagnostic to make room for HGRN2 evidence; the pinned public weight needs
 re-download before its GPU run. Gated DeltaNet, GLA, HGRN2, HGRN and Mamba3
-SISO/MIMO, mLSTM 164M, TiRex sLSTM and Monostich-2-base local weights were likewise evicted after completed CPU work and no-reader checks;
+SISO/MIMO, mLSTM 164M, TiRex sLSTM, Monostich-2-base and the mixed mLSTM/sLSTM language model local weights were likewise evicted after completed CPU work and no-reader checks;
 their pinned versions need re-download before GPU use. Other model weights
 remain needed for unfinished native/GPU consumers. Five redundant closed export
 files were losslessly archived locally;
