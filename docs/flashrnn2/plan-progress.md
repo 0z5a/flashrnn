@@ -36,3 +36,8 @@ Full-model [FP64 rounding diagnosis](mamba-fp64-diagnosis.md) finds six original
 local FP32 SSM elements outside the unchanged budget, while saved remote CPU
 and CUDA cases fit it. This additional calculation does not replace the
 original native-oracle failures or complete CUDA qualification.
+
+[Native/Script queued serving](mamba-native-serving.md) passes all24 CPU rows,
+B1/B2/B4 and C up to128, with1022 request executions/32704 output tokens.
+This completes CPU qualification for these fixed cohorts only; GPU, HTTP,
+fresh-process performance and all remaining model families are still required.
