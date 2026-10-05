@@ -1,0 +1,37 @@
+--- a/tools/flashrnn2/mamba_serving.py
++++ b/tools/flashrnn2/mamba_serving.py
+@@ -155,15 +155,8 @@
+         "ttft_ms": quantiles([r["token_times_ms"][0] for r in requests]),
+         "queue_wait_ms": quantiles([r["prefill_start_ms"] for r in requests]),
+         "request_latency_ms": quantiles([r["token_times_ms"][-1] for r in requests]),
+-        "tpot_ms": quantiles(
+-            [
+-                (r["token_times_ms"][-1] - r["token_times_ms"][0]) / (steps - 1)
+-                for r in requests
+-            ]
+-        ),
+-        "itl_ms": quantiles(
+-            [b - a for r in requests for a, b in pairwise(r["token_times_ms"])]
+-        ),
++        "tpot_ms": quantiles([(s[-1] - s[0]) / (steps - 1) for s in stamps]),
++        "itl_ms": quantiles([b - a for s in stamps for a, b in pairwise(s)]),
+         "token_match": token_match,
+         "cache_checks": cache_checks,
+         "requests": requests,
+@@ -197,7 +190,6 @@
+     assert all(
+         c >= contract["batch"] and c % contract["batch"] == 0 for c in args.concurrency
+     )
+-    assert len(set(args.concurrency)) == len(args.concurrency)
+     torch.set_num_threads(1)
+     torch.backends.cuda.matmul.allow_tf32 = False
+     torch.backends.cudnn.allow_tf32 = False
+@@ -215,8 +207,6 @@
+         "model": source,
+         "oracles": contract,
+         "verification_only": args.verify_only,
+-        "concurrency": args.concurrency,
+-        "paired_blocks": 0 if args.verify_only else args.blocks,
+         "source_sha256": {
+             p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+             for p in (
