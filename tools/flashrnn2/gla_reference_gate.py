@@ -1,4 +1,4 @@
-"""Exercise complete GLA cached generation against full-prefix recomputation."""
+"""Exercise complete GLA/DeltaNet cached generation against full-prefix evaluation."""
 
 import argparse
 import hashlib
@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 
 import torch
+from deltanet_torch_reference import DeltaNetReference
 from gla_torch_reference import GLAReference
 from tokenizers import Tokenizer
 
@@ -46,6 +47,7 @@ def main() -> None:
     parser.add_argument("--model", type=Path, required=True)
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--family", choices=("gla", "deltanet"), default="gla")
     args = parser.parse_args()
     assert not args.output.exists()
     torch.set_num_threads(1)
@@ -56,7 +58,7 @@ def main() -> None:
         "started": started,
         "device": "cpu",
         "torch": torch.__version__,
-        "scope": "FULL_GLA_TORCH_REFERENCE_CACHED_VS_FULL_PREFIX_P5_G4",
+        "scope": f"FULL_{args.family.upper()}_TORCH_REFERENCE_CACHED_VS_FULL_PREFIX_P5_G4",
         "logits_budget": {"atol": 1e-3, "rtol": 1e-3},
         "state_budget": {"atol": 1e-5, "rtol": 1e-5},
         "performance_claim": False,
@@ -66,6 +68,7 @@ def main() -> None:
             for p in (
                 Path(__file__),
                 Path(__file__).with_name("gla_torch_reference.py"),
+                Path(__file__).with_name("deltanet_torch_reference.py"),
             )
         },
     }
@@ -74,7 +77,8 @@ def main() -> None:
     tokenizer = Tokenizer.from_file(str(args.model / "tokenizer.json"))
     tokenized = [tokenizer.encode(text).ids for text in PROMPTS]
     assert all(len(ids) >= 5 for ids in tokenized)
-    model = GLAReference(args.model, args.source)
+    model_class = GLAReference if args.family == "gla" else DeltaNetReference
+    model = model_class(args.model, args.source)
     metadata["model"] = model.provenance
     meta_path.write_text(json.dumps(metadata, indent=2) + "\n")
     snapshots, records = [], []
@@ -106,6 +110,29 @@ def main() -> None:
                             x["failed_elements"] for x in state_checks
                         ),
                     }
+                    if args.family == "deltanet":
+                        conv_checks = [
+                            compare(a, b, 1e-5)
+                            for left_state, right_state in zip(
+                                cache.states, full_cache.states, strict=True
+                            )
+                            for a, b in zip(
+                                left_state["conv_state"],
+                                right_state["conv_state"],
+                                strict=True,
+                            )
+                        ]
+                        assert len(conv_checks) == 72
+                        checks["convolution"] = {
+                            "pass": all(x["pass"] for x in conv_checks),
+                            "max_abs": max(x["max_abs"] for x in conv_checks),
+                            "worst_normalized": max(
+                                x["worst_normalized"] for x in conv_checks
+                            ),
+                            "failed_elements": sum(
+                                x["failed_elements"] for x in conv_checks
+                            ),
+                        }
                     next_ids = left.argmax(-1, keepdim=True)
                     match = torch.equal(next_ids, right.argmax(-1, keepdim=True))
                     row = {
