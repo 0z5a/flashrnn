@@ -164,6 +164,149 @@
       }
     },
     {
+      "model": "state-spaces/mamba3-siso-187m",
+      "revision": "6792c27c00f3bb41506db1066dcd1c51bb0f4b02",
+      "weight_bytes": 373744619,
+      "weight_sha256": "b462d55e9f8ab9746be641d4de550b51bf65e55ab662e66835588b5a458c95ec",
+      "weight_files": [
+        "pytorch_model.bin"
+      ],
+      "metadata_origin": "Pinned complete verified public model manifest",
+      "status": "FULL_CHECKPOINT_TORCH_REFERENCE_CPU_ALL_CHECKS_PASS",
+      "download_files": 3,
+      "download_bytes": 373747749,
+      "checkpoint_tensors": 147,
+      "stored_elements": 285350208,
+      "effective_tied_parameters": 186849600,
+      "layers": 12,
+      "tokenizer": {
+        "repo": "meta-llama/Llama-3.1-8B",
+        "revision": "d04e592bb4f6aa9cfee91e2e20afa771667e1d4b",
+        "restricted_content_committed": false
+      },
+      "cached_vs_full_prefix_cpu": {
+        "batches": [
+          1,
+          2,
+          4
+        ],
+        "prompt_length": 5,
+        "generated_tokens": 4,
+        "batch_steps": 36,
+        "token_choices": 84,
+        "natural_exit": 0,
+        "all_logits_angle_ssm_key_value_pass": true,
+        "rows": [
+          {
+            "batch": 1,
+            "steps": 12,
+            "matching_tokens": 12,
+            "checks": {
+              "logits": {
+                "passed_steps": 12,
+                "max_abs": 8.678436279296875e-05,
+                "worst_normalized": 0.03524957597255707
+              },
+              "angle": {
+                "passed_steps": 12,
+                "max_abs": 6.4373016357421875e-06,
+                "worst_normalized": 0.28986644744873047
+              },
+              "ssm": {
+                "passed_steps": 12,
+                "max_abs": 6.377696990966797e-06,
+                "worst_normalized": 0.487819641828537
+              },
+              "key": {
+                "passed_steps": 12,
+                "max_abs": 1.0728836059570312e-05,
+                "worst_normalized": 0.9537807106971741
+              },
+              "value": {
+                "passed_steps": 12,
+                "max_abs": 5.245208740234375e-06,
+                "worst_normalized": 0.2875988185405731
+              }
+            }
+          },
+          {
+            "batch": 2,
+            "steps": 12,
+            "matching_tokens": 24,
+            "checks": {
+              "logits": {
+                "passed_steps": 12,
+                "max_abs": 4.5299530029296875e-05,
+                "worst_normalized": 0.02752586267888546
+              },
+              "angle": {
+                "passed_steps": 12,
+                "max_abs": 3.337860107421875e-06,
+                "worst_normalized": 0.2860044836997986
+              },
+              "ssm": {
+                "passed_steps": 12,
+                "max_abs": 6.735324859619141e-06,
+                "worst_normalized": 0.6447206735610962
+              },
+              "key": {
+                "passed_steps": 12,
+                "max_abs": 8.58306884765625e-06,
+                "worst_normalized": 0.7390212416648865
+              },
+              "value": {
+                "passed_steps": 12,
+                "max_abs": 6.198883056640625e-06,
+                "worst_normalized": 0.24666787683963776
+              }
+            }
+          },
+          {
+            "batch": 4,
+            "steps": 12,
+            "matching_tokens": 48,
+            "checks": {
+              "logits": {
+                "passed_steps": 12,
+                "max_abs": 4.5299530029296875e-05,
+                "worst_normalized": 0.02752586267888546
+              },
+              "angle": {
+                "passed_steps": 12,
+                "max_abs": 3.993511199951172e-06,
+                "worst_normalized": 0.287020742893219
+              },
+              "ssm": {
+                "passed_steps": 12,
+                "max_abs": 6.735324859619141e-06,
+                "worst_normalized": 0.6447206735610962
+              },
+              "key": {
+                "passed_steps": 12,
+                "max_abs": 9.417533874511719e-06,
+                "worst_normalized": 0.7390212416648865
+              },
+              "value": {
+                "passed_steps": 12,
+                "max_abs": 6.198883056640625e-06,
+                "worst_normalized": 0.24666787683963776
+              }
+            }
+          }
+        ],
+        "independent_audit": {
+          "status": "PASS",
+          "logit_pairs": 36,
+          "token_choices": 84,
+          "final_state_pairs": 144
+        },
+        "source": "docs/flashrnn2/evidence/mamba3-siso-reference/mamba3-siso-reference-r1.jsonl"
+      },
+      "native_accelerated_mamba_qualified": false,
+      "gpu_e2e_speedup": null,
+      "cleanup": "EVICTED_AFTER_CPU_AUDIT_REDOWNLOAD_PINNED_WEIGHT_FOR_GPU"
+    },
+    {
       "model": "RWKV/RWKV7-Goose-World2.9-0.4B-HF",
       "revision": "e94655a9fad2c8da9f25aba575d8f0fdedc05931",
       "weight_bytes": 901620328,
@@ -692,11 +835,11 @@
   ],
   "additional_required_families": [
     "sLSTM",
-    "Mamba3",
+    "Mamba3 MIMO/native",
     "GatedDeltaNet2",
     "KDA"
   ],
   "qualification": "Each family needs a pinned native implementation and complete supported checkpoint; layer tests are not full-model E2E.",
   "model_gpu_e2e_campaign_complete": false,
-  "coverage_note": "Ten complete checkpoints have CPU evidence; original failures remain visible. Native and high-concurrency GPU E2E remain incomplete. RetNet, Gated DeltaNet, GLA, HGRN2 and HGRN local weights were evicted after completed CPU work and require pinned re-download before GPU use."
+  "coverage_note": "Eleven complete checkpoints have CPU evidence; original failures remain visible. Native and high-concurrency GPU E2E remain incomplete. RetNet, Gated DeltaNet, GLA, HGRN2, HGRN and Mamba3 SISO local weights were evicted after completed CPU work and require pinned re-download before GPU use."
 }
