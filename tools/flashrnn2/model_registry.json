@@ -1049,6 +1049,119 @@
       "cleanup": "EVICTED_AFTER_CPU_AUDIT_REDOWNLOAD_PINNED_WEIGHT_FOR_GPU"
     },
     {
+      "model": "kerzgrr/Monostich-2-base",
+      "revision": "7779182b4dfad5939827f40cd1c819843a6825e2",
+      "weight_bytes": 298279400,
+      "weight_sha256": "60a7bb7ac497c1373ccbe073ebeaed0b54c8af0d488316808082a1e970056508",
+      "weight_files": [
+        "model.safetensors"
+      ],
+      "metadata_origin": "Pinned verified public model and source manifest",
+      "status": "FULL_CHECKPOINT_TORCH_REFERENCE_CPU_BATCH_SERIAL_PASS",
+      "checkpoint_tensors": 586,
+      "parameters": 149108320,
+      "layers": 32,
+      "gdn2_layers": 24,
+      "gqa_layers": 8,
+      "full_vocabulary_batch_serial_steps": "36/36",
+      "token_choices": "84/84",
+      "independent_audit": "PASS",
+      "native_accelerated_fla_qualified": false,
+      "gpu_e2e_speedup": null,
+      "cleanup": "EVICTED_AFTER_CPU_AUDIT_REDOWNLOAD_PINNED_WEIGHT_FOR_GPU",
+      "source": "docs/flashrnn2/monostich2-reference.md"
+    },
+    {
+      "model": "Jellyfish042/Loser-GDN-2-305M-20260601",
+      "revision": "2d98aff017d7a9e125a14dd02e8c4b6f631930a8",
+      "weight_bytes": 1219361090,
+      "weight_sha256": "48af211d5cbebb8a26bf1c7024e897ccab65bb4f8204b278ce94ff0f4cc7735d",
+      "weight_files": [
+        "pytorch_model.bin"
+      ],
+      "metadata_origin": "Pinned verified public model and source manifest",
+      "status": "FULL_CHECKPOINT_TORCH_REFERENCE_CPU_BATCH_SERIAL_CACHE_PASS",
+      "checkpoint_tensors": 267,
+      "parameters": 304809920,
+      "layers": 12,
+      "gdn2_layers": 12,
+      "full_vocabulary_batch_serial_cache_steps": "36/36",
+      "token_choices": "84/84",
+      "cached_serial_state_pairs": "1008/1008",
+      "cached_full_state_pairs": "432/432",
+      "independent_audit": "PASS",
+      "native_accelerated_fla_qualified": false,
+      "gpu_e2e_speedup": null,
+      "cleanup": "EVICTED_AFTER_CPU_AUDIT_REDOWNLOAD_PINNED_WEIGHT_FOR_GPU",
+      "source": "docs/flashrnn2/gdn2-pure-305m-reference.md"
+    },
+    {
+      "model": "openeurollm/complex-kda-1.3B-100B",
+      "revision": "5ca8cba4c02b4a8fbcb3684532348ef5d7675c63",
+      "weight_files": [
+        "model.safetensors"
+      ],
+      "weight_bytes": 2725315744,
+      "weight_sha256": "f7bf983e79f660cff0286b7c611f96b9603f6d5ecdabd85ec1c09af0f4544b38",
+      "metadata_origin": "Pinned public checkpoint and author source",
+      "status": "FULL_CHECKPOINT_CPU_NUMERICAL_SCREEN_BF16_FAILED_FP32_PASS",
+      "checkpoint_tensors": 507,
+      "parameters": 1362630016,
+      "layers": 24,
+      "batch_size": 1,
+      "prompt_lengths": [
+        5,
+        16
+      ],
+      "bf16_failed_logits": [
+        159,
+        248
+      ],
+      "fp32_failed_logits": [
+        0,
+        0
+      ],
+      "final_state_pairs_per_run": "96/96",
+      "independent_audit": "PASS_4_OF_4",
+      "native_accelerated_qualified": false,
+      "gpu_e2e_speedup": null,
+      "cleanup": "EVICTED_AFTER_CPU_SCREEN_REDOWNLOAD_PINNED_WEIGHT_FOR_GPU",
+      "source": "docs/flashrnn2/kda-paired-numerics.md"
+    },
+    {
+      "model": "openeurollm/kda-sigmoid-1.3B-100B",
+      "revision": "88510f58bd0bba11104869f9d83d4006e083b037",
+      "weight_files": [
+        "model.safetensors"
+      ],
+      "weight_bytes": 2725315744,
+      "weight_sha256": "8ece86b3ce8e6ab36ba542f25b6260276523b5dab5565f370c3c36f772c4a55f",
+      "metadata_origin": "Pinned public checkpoint and author source",
+      "status": "FULL_CHECKPOINT_CPU_NUMERICAL_SCREEN_BF16_FAILED_FP32_PASS",
+      "checkpoint_tensors": 507,
+      "parameters": 1362630016,
+      "layers": 24,
+      "batch_size": 1,
+      "prompt_lengths": [
+        5,
+        16
+      ],
+      "bf16_failed_logits": [
+        255,
+        216
+      ],
+      "fp32_failed_logits": [
+        0,
+        0
+      ],
+      "final_state_pairs_per_run": "96/96",
+      "independent_audit": "PASS_4_OF_4",
+      "native_accelerated_qualified": false,
+      "gpu_e2e_speedup": null,
+      "cleanup": "EVICTED_AFTER_CPU_SCREEN_REDOWNLOAD_PINNED_WEIGHT_FOR_GPU",
+      "source": "docs/flashrnn2/kda-paired-numerics.md"
+    },
+    {
       "model": "fla-hub/hgrn2-1.3B-100B",
       "revision": "2f413dd9b63591b9b177bbf940942ea7eb70abfe",
       "weight_bytes": 2728818968,
@@ -1223,5 +1336,5 @@
   ],
   "qualification": "Each family needs a pinned native implementation and complete supported checkpoint; layer tests are not full-model E2E.",
   "model_gpu_e2e_campaign_complete": false,
-  "coverage_note": "Fifteen language-model checkpoints and one time-series forecasting checkpoint have CPU evidence; original failures remain visible. Forecast and language-generation outputs have different contracts. Native and high-concurrency GPU E2E remain incomplete. RetNet, Gated DeltaNet, GLA, HGRN2, HGRN, Mamba3 SISO/MIMO, mLSTM 164M, TiRex sLSTM, Monostich-2-base and the mixed mLSTM/sLSTM language-model local weights were evicted after completed CPU work and require pinned re-download before GPU use."
+  "coverage_note": "Sixteen language-model checkpoints and one time-series forecasting checkpoint have complete CPU reference evidence; original failures remain visible. Two KDA checkpoints have partial CPU numerical screens with BF16 logit failures and FP32 controls, not full generation qualification. Forecast and language-generation outputs have different contracts. Native and high-concurrency GPU E2E remain incomplete. RetNet, Gated DeltaNet, GLA, HGRN2, HGRN, Mamba3 SISO/MIMO, mLSTM 164M, TiRex sLSTM, Monostich-2-base, pure GDN-2 305M, the mixed mLSTM/sLSTM language model and both KDA weights were evicted after CPU work and require pinned re-download before GPU use."
 }

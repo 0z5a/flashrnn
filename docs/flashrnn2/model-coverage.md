@@ -1,6 +1,6 @@
 # Recurrent-model campaign coverage
 
-The campaign remains incomplete. Fifteen language-model checkpoints and one
+The campaign remains incomplete. Sixteen language-model checkpoints and one
 time-series forecasting checkpoint have CPU reference execution; these results
 do not qualify their native accelerated
 implementations or the requested high-concurrency GPU E2E matrix. The registry
@@ -27,14 +27,15 @@ failures remain visible.
 | HGRN 1.3B | [Complete checkpoint](hgrn-reference.md): 36/36 logits and recurrent-state checks, 84/84 tokens; independent audit pass | Native FLA and high-concurrency GPU E2E unfinished |
 | Mamba3 SISO 187M | [Complete checkpoint](mamba3-siso-reference.md): 36/36 logits, angle/SSM/key/value states; 84/84 tokens; independent audit pass | Native Mamba-3 CUDA and high-concurrency GPU E2E unfinished |
 | Mamba3 MIMO 187M | [Complete checkpoint](mamba3-mimo-reference.md): 36/36 logits, 84/84 tokens; original strict state gate failed, calibrated gate and independent audit pass | Native Mamba-3 CUDA and high-concurrency GPU E2E unfinished |
-| GatedDeltaNet2 | Hybrid checkpoint above exercises GDN-2; pure native baseline remains registered | Standalone GDN-2 checkpoint/native GPU E2E unfinished |
-| KDA | Family registered | Complete pinned model/native baseline unfinished |
+| Pure GatedDeltaNet2 305M | [Complete checkpoint](gdn2-pure-305m-reference.md): 36/36 full-vocabulary steps, 84/84 tokens, 1,008/1,008 cached/serial and 432/432 cached/full state pairs; independent audit pass | Native FLA fused recurrent/chunk, backward and high-concurrency GPU E2E unfinished |
+| KDA / signed Complex KDA 1.3B | [Two complete checkpoints screened](kda-paired-numerics.md): BF16 B1/P5 and B1/P16 full-vocabulary logits fail in both models, FP32 controls and all 96 final-state pairs per run pass; eight raw-tensor audits pass | Full batch/generation qualification, native author kernels, backward and high-concurrency GPU E2E unfinished |
 
 Changed-arithmetic diagnostics do not replace original failures or establish
-training quality. RetNet's local weight was evicted after the completed CPU
+training quality. The KDA screens do not add to the sixteen complete CPU model
+qualifications above. RetNet's local weight was evicted after the completed CPU
 diagnostic to make room for HGRN2 evidence; the pinned public weight needs
 re-download before its GPU run. Gated DeltaNet, GLA, HGRN2, HGRN and Mamba3
-SISO/MIMO, mLSTM 164M, TiRex sLSTM, Monostich-2-base and the mixed mLSTM/sLSTM language model local weights were likewise evicted after completed CPU work and no-reader checks;
+SISO/MIMO, mLSTM 164M, TiRex sLSTM, Monostich-2-base, the mixed mLSTM/sLSTM language model and pure GDN-2 305M local weights were likewise evicted after completed CPU work and no-reader checks. The two KDA weights were evicted after their numerical screens and audits;
 their pinned versions need re-download before GPU use. Other model weights
 remain needed for unfinished native/GPU consumers. Five redundant closed export
 files were losslessly archived locally;
