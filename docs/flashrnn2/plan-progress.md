@@ -41,3 +41,9 @@ original native-oracle failures or complete CUDA qualification.
 B1/B2/B4 and C up to128, with1022 request executions/32704 output tokens.
 This completes CPU qualification for these fixed cohorts only; GPU, HTTP,
 fresh-process performance and all remaining model families are still required.
+
+The [complete GLA1.3B CPU reference](gla-reference-results.md) now executes all
+339 checkpoint tensors/24 layers at B1/B2/B4, with84 matching greedy tokens.
+B2/B4 state/logit comparisons are exact; B1 retains nine state failures.
+Native accelerated FLA, longer generation, quality and high-concurrency GPU
+E2E are unqualified.
