@@ -62,7 +62,14 @@ The output path must be fresh. JSONL rows point to all-input, full-state and
 full-gradient tensor snapshots with SHA256 hashes. Metadata records source and
 configuration hashes. The CPU-wheel workflow runs this matrix against the
 installed package outside the checkout and uploads both rows and tensor files.
-The workflow is added here; its result must be checked separately.
+The independent Linux CPU-wheel run passed on implementation commit
+`bd72edbeb8b3ccd07b8658d04190d74e6e958b5f`: [run 37348607245](https://github.com/0z5a/flashrnn/actions/runs/37348607245).
+It used Python 3.12.14, Torch 2.14.1+cpu and einops 0.8.2 on x86_64.
+All 38 cases and the 15-method test step passed. Downloaded tensors were
+independently recomputed: 456 pairs and 176 per-state checks, plus readonly
+and repeat comparisons. Installed source hashes match that commit; package
+origins and wheel hashes are retained. The full log fetch timed out; the
+GitHub job/step receipts and all tensor artifacts were retrieved successfully.
 
 [Raw evidence](../../evidence/flashrnn2/portable-gate/) includes original and
 corrected JSONL, process receipts, independent audits, the original source
