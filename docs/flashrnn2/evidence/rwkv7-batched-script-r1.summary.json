@@ -1,0 +1,117 @@
+{
+  "status": "CPU_PARITY_FAIL_GPU_UNTESTED",
+  "model_family": "rwkv7",
+  "started": 1791167395.23328,
+  "torch": "2.13.0",
+  "oracles": {
+    "status": "NATIVE_CPU_ORACLES_COMPLETE_ACCELERATOR_PARITY_UNTESTED",
+    "artifact_sha256": "8eeb8d4a0764f3ae27b95d3b5092141cc1eea5abb77846a31830f3aeae5eafd8",
+    "artifact_bytes": 42201146,
+    "model_layers": 24,
+    "checkpoint_elements": 450767872,
+    "prompt_length": 5,
+    "generated_tokens": 4,
+    "records": [
+      {
+        "case": 0,
+        "dataset_row": 1,
+        "input_ids": [
+          296,
+          20056,
+          24694,
+          38577,
+          8663
+        ],
+        "generated_ids": [
+          275,
+          77,
+          47,
+          3490
+        ],
+        "decoded": " (L. 17",
+        "state_tensors": 72,
+        "status": "FINITE_NATIVE_EXECUTION"
+      },
+      {
+        "case": 1,
+        "dataset_row": 3,
+        "input_ids": [
+          20056,
+          24694,
+          38577,
+          8663,
+          279
+        ],
+        "generated_ids": [
+          22590,
+          55014,
+          21811,
+          26901
+        ],
+        "decoded": " the European herring",
+        "state_tensors": 72,
+        "status": "FINITE_NATIVE_EXECUTION"
+      },
+      {
+        "case": 2,
+        "dataset_row": 5,
+        "input_ids": [
+          296,
+          296,
+          63154,
+          296,
+          296
+        ],
+        "generated_ids": [
+          296,
+          296,
+          296,
+          296
+        ],
+        "decoded": " = = = =",
+        "state_tensors": 72,
+        "status": "FINITE_NATIVE_EXECUTION"
+      }
+    ]
+  },
+  "contracts": {
+    "logits_contract": {
+      "atol": 0.001,
+      "rtol": 0.001
+    },
+    "cache_contract": {
+      "atol": 1e-05,
+      "rtol": 1e-05
+    }
+  },
+  "tolerance_source": "Same pre-existing logits/state budgets as the Mamba script qualification; fixed before RWKV execution",
+  "checkpoint_elements": 450767872,
+  "inference_buffer_elements": 450765824,
+  "model_layers": 24,
+  "cache_layout": {
+    "shifts": "[attention_or_channel,L,B,D]",
+    "matrices": "[L,B,H,V,K]"
+  },
+  "cache_policy": "Functional outputs; incoming shift/matrix tensors cloned",
+  "dtype": "float32",
+  "batches": [
+    1,
+    2,
+    4
+  ],
+  "prompt_length": 5,
+  "generated_tokens": 4,
+  "selection": "Three groups per B, circularly selecting the three independent native prompts; B4 repeats one prompt in a distinct row",
+  "performance_claim": false,
+  "failed_steps": 12,
+  "compared_steps": 36,
+  "finished": 1791167432.0182872,
+  "artifact_sha256": "54dd315e61a65a3e05b9d7744fb6ed9b40812475bffcba13ac86f5391eb3ba8a",
+  "artifact_bytes": 1803293512,
+  "source_sha256": {
+    "/Users/0z5a/Documents/infra/flashrnn2-20261005/source/tools/flashrnn2/export_rwkv7.py": "0f0819001bee6c2012ad5ff4ab4ab59f94d2ae820fd7eb6331f70972ba2403dc",
+    "/Users/0z5a/Documents/infra/flashrnn2-20261005/source/tools/flashrnn2/rwkv7_native.py": "3af576ae9db5fdb7427f6dd5206937533d633d33d8deca39180965c1b81b4204",
+    "/Users/0z5a/Documents/infra/flashrnn2-20261005/source/tools/flashrnn2/rwkv7_batched.py": "e2c898f5dc08be71bd1831e1deba9dd54b7370db0ce24a4f171e10bcc36234a0",
+    "/Users/0z5a/Documents/infra/flashrnn2-20261005/source/tools/flashrnn2/mamba_script_gate.py": "1fb71487fe52e7ff12422e7ae179e16149c98acb241b9dfa643a44a8fe65f86a"
+  }
+}
