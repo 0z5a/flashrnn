@@ -69,3 +69,5 @@ make elapsed wall time unsuitable as a speed result.
 
 Native FLA, long-context and high-concurrency GPU performance remain to be
 qualified; this result preserves the seven original BS=1 state failures.
+The local weight was evicted after the completed audit and a no-reader check;
+GPU use requires pinned re-download.
