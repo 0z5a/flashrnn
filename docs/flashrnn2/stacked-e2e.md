@@ -33,7 +33,9 @@ The cuDNN baseline ran in eval mode and dispatched `aten::_cudnn_rnn`, but its
 log warns that non-contiguous weights may be compacted at every call. This
 invalidates the 4.7643× ratio as a comparison against a qualified optimized
 cuDNN baseline. A later run must prove packed-weight reuse before reporting
-that comparison as fair.
+that comparison as fair. The [packing probe](../../tools/flashrnn2/cudnn_pack_probe.py)
+is prepared to compare the mapped baseline with a plain PyTorch LSTM on the
+same device; it has not run yet.
 
 The [raw offbox archive](../../evidence/flashrnn2-stacked-e2e-h20-b16-c32/own-offbox-raw.tar.gz)
 has SHA256 `2b77b63631e8a06071325dea3b2816d256886863fdbbfbd9d783b6d252d0a75c`.
