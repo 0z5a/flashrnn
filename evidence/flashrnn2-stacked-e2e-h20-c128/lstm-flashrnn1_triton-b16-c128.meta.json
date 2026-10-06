@@ -1,0 +1,54 @@
+{
+  "status": "PASS",
+  "started": 1791303593.367619,
+  "pid": 83351,
+  "scope": "SYNTHETIC_COMPLETE_STACKED_SEQUENCE_MODEL_E2E",
+  "model": {
+    "seed": 20261006,
+    "layers": 4,
+    "width": 64,
+    "vocab": 512,
+    "cell": "lstm"
+  },
+  "workload": {
+    "batch": 16,
+    "concurrency": 128,
+    "sequence_length": 128,
+    "groups": 8,
+    "fixture_seed": 20261022
+  },
+  "baseline": "flashrnn1_triton",
+  "candidate": "flashrnn2_triton_persistent",
+  "cudnn_training_flags": [],
+  "dtype": "bfloat16",
+  "device_uuid": "d952768b-40d1-0de6-38f2-6725427f8214",
+  "device_name": "NVIDIA H20",
+  "torch": "2.12.1+cu130",
+  "cuda": "13.0",
+  "source_sha256": {
+    "stacked_e2e.py": "3cecac542192b2dc35fd63022b8ad449a24e02b55975d27d7b89dc32b06b9ff5",
+    "torch_layer.py": "029a72b034fc47e61099ee6fb96644d428caafd2a04ce02f9aa1067a7fc3b5c6",
+    "triton_persistent.py": "9738e3654e309b892b8044bf02ecd0e3fffbfddd633238c66bc2154313c7d842",
+    "upstream_triton.py": "726c44344b2edba55e2fda30fb7a3cb49b53314273bc18720f15afd8ba2c53fd",
+    "lstm_fw.py": "9d5a940a13b95f2df603b5d61d44d5d4b6778a65e4ee7ab0455b909b528b1cc6"
+  },
+  "fixture_sha256": [
+    "84c4ed4c04fcde69720767622f7e6ed5a78dbb2215de77c2b6ccb484cacde591",
+    "c952572df5e411a1fd248d2530c2494a10e6f580a98383b5d4bf8b457bcc8584",
+    "bda8b953d128a9a6494c640849920cde4ce8c23cd669d3439a487908c3c76222",
+    "efe131bd00b5f6d8194d3ff928b311641a791f9ccde744858e52f9359eaeb4fd",
+    "ef054490d0ba9231a848127da43d931dc57acc76b569b005dc4f0da71d8bd6b6",
+    "973912d48da53e6e913e49816954be0659367517bc51a86902c9f4cf83e47d47",
+    "ebd8314b98ea28e8beec19c187b598da76b173956f40bba297d1face92262973",
+    "edd37d48ff0164f8448238386feaac1906bfa60820c7f3a6ff322cb1aace1f3e"
+  ],
+  "timed": "Batched IDs H2D, embedding, every recurrent layer, final readout, logits D2H and queued groups",
+  "excluded": "Model construction, JIT, warmup, qualification, fixture generation and JSON I/O",
+  "arrival_policy": "All C requests at time zero; one worker runs B-sized groups in order",
+  "statistics": "Within-process paired AB/BA blocks; no independent-start interval",
+  "memory_scope": "Both arms' model weights remain resident; peak is process total",
+  "qualification_max_abs": 0.000244140625,
+  "qualification_sha256": "38e226a040babace7f04e3473feadb2625efb75b39d3edf31d526a1456993a3d",
+  "qualification_bytes": 17482469,
+  "finished": 1791303595.8002176
+}
