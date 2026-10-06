@@ -210,7 +210,8 @@ def main() -> None:
         for weights in cudnn_weights
     ]
     if args.require_packed_cudnn and (
-        not all(count == 1 for count in cudnn_storage_counts)
+        len(cudnn_storage_counts) != args.layers
+        or not all(count == 1 for count in cudnn_storage_counts)
         or not all(cudnn_weights_acceptable)
     ):
         raise RuntimeError("cuDNN weights are not packed on this runtime")
