@@ -81,9 +81,11 @@ included in the Git diff. Reproduction regenerates the small fixtures.
 | Measurement level | Baseline | Candidate | Speedup |
 |---|---|---|---|
 | CPU correctness matrix | Contract v1 | Contract v2 | Not measured |
-| CUDA / full-model E2E | Not run in this qualification | Not run | Not measured |
+| [H20 CUDA correctness matrix](h20-portable-cuda.md) | Public Torch oracle | Portable Torch CUDA, 38/38 pass | Not measured |
+| Full-model high-concurrency GPU E2E | Unmeasured | Unmeasured | Unmeasured |
 
-The harness accepts CUDA and contains two-stream output checks, but those paths
-have not run. ROCm/XPU/MPS, compile compatibility, sanitizer checks, GPU training
-and the complete model/high-concurrency campaign remain unqualified. Repeated R
-casts can affect eager execution cost; no throughput improvement is claimed.
+The H20 run exercised CUDA and the two-stream output checks with independent
+tensor-level audits. ROCm/XPU, compile compatibility, sanitizer checks, GPU
+training and the complete model/high-concurrency campaign remain unqualified.
+Repeated R casts can affect eager execution cost; no throughput improvement is
+claimed.
