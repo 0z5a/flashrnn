@@ -8,6 +8,8 @@ now records completed Mamba3 SISO/MIMO, RWKV6, DeltaNet, RetNet, HGRN, HGRN2 and
 Gated DeltaNet work rather than leaving stale not-downloaded entries. Original numerical
 failures remain visible.
 
+The [full-model speedup matrix](full-model-e2e-speedups.md) lists the accelerated baselines still requiring same-device qualification; none has a reportable GPU E2E ratio yet.
+
 | Registered family | Existing complete-model evidence | Remaining GPU/native qualification |
 |---|---|---|
 | Mamba 130M | [CPU native-Torch/Script long generation](mamba-native-reference.md): 576 steps, 1,344 token choices; [high-batch trace gate](mamba-highbatch-cpu.md): B16/B32/B64, 576 steps and 21,504 choices; [separately loaded native oracle](mamba-highbatch-oracle.md): 288 steps, 10,752 choices, 36 boundary pairs pass; [queued serving control](mamba-native-serving.md): 1,022 request executions | [Same-platform short Torch-fallback/Script CUDA](native-runtime-results.md) passes 3/3; accelerated mamba_ssm and long/high-concurrency GPU E2E unfinished |
