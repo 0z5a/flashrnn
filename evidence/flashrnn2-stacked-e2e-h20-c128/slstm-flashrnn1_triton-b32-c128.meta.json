@@ -1,0 +1,50 @@
+{
+  "status": "PASS",
+  "started": 1791303607.2124538,
+  "pid": 83444,
+  "scope": "SYNTHETIC_COMPLETE_STACKED_SEQUENCE_MODEL_E2E",
+  "model": {
+    "seed": 20261006,
+    "layers": 4,
+    "width": 64,
+    "vocab": 512,
+    "cell": "slstm"
+  },
+  "workload": {
+    "batch": 32,
+    "concurrency": 128,
+    "sequence_length": 128,
+    "groups": 4,
+    "fixture_seed": 20261038
+  },
+  "baseline": "flashrnn1_triton",
+  "candidate": "flashrnn2_triton_persistent",
+  "cudnn_training_flags": [],
+  "dtype": "bfloat16",
+  "device_uuid": "d952768b-40d1-0de6-38f2-6725427f8214",
+  "device_name": "NVIDIA H20",
+  "torch": "2.12.1+cu130",
+  "cuda": "13.0",
+  "source_sha256": {
+    "stacked_e2e.py": "3cecac542192b2dc35fd63022b8ad449a24e02b55975d27d7b89dc32b06b9ff5",
+    "torch_layer.py": "029a72b034fc47e61099ee6fb96644d428caafd2a04ce02f9aa1067a7fc3b5c6",
+    "triton_persistent.py": "9738e3654e309b892b8044bf02ecd0e3fffbfddd633238c66bc2154313c7d842",
+    "upstream_triton.py": "726c44344b2edba55e2fda30fb7a3cb49b53314273bc18720f15afd8ba2c53fd",
+    "slstm_fw.py": "4b25ef542b80ab0e0ac7cf17b3cde891a0efcb5932866d9fc7dfef6577bb894c"
+  },
+  "fixture_sha256": [
+    "2df66aaff016d0a0f241f14e2b5caa565b2a64cf157f1c74362b63379c83699e",
+    "e1ae26309788ce747ac4e760ff9a2f707e1f29e0dcc4fdbd28941cbea9a675ca",
+    "6f07c1621e092b54cec5b8adee5d16f3ee2cc233743ad2ed91477eba3cc156f3",
+    "65c7070ac234b3a669a7e68a6023f237836dc88042a842fe8cffb7e14af6280e"
+  ],
+  "timed": "Batched IDs H2D, embedding, every recurrent layer, final readout, logits D2H and queued groups",
+  "excluded": "Model construction, JIT, warmup, qualification, fixture generation and JSON I/O",
+  "arrival_policy": "All C requests at time zero; one worker runs B-sized groups in order",
+  "statistics": "Within-process paired AB/BA blocks; no independent-start interval",
+  "memory_scope": "Both arms' model weights remain resident; peak is process total",
+  "qualification_max_abs": 0.0078125,
+  "qualification_sha256": "d1952455c4cacab70b48c14d391185b58fa2ca2f6bb10dff55f068b503e165c2",
+  "qualification_bytes": 17720235,
+  "finished": 1791303609.263273
+}

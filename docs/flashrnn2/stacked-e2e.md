@@ -21,6 +21,29 @@ saved qualification tensors. Each row retains all 20 AB/BA paired blocks.
 | LSTM / original FlashRNN Triton | 15,590.162 | 12,789.009 | 0.8222× [0.8192, 0.8252] | −17.78% | FlashRNN2 slower at this shape |
 | sLSTM / original FlashRNN Triton | 14,112.876 | 12,962.632 | 0.8810× [0.8067, 0.9222] | −11.90% | FlashRNN2 slower at this shape |
 
+A second H20 window completed six more FlashRNN1 comparisons with C128
+requests. All six processes exited naturally with code 0, and a second local
+NumPy run reproduced the independent audit of all 252 saved tensor pairs.
+Each row retains its 20 AB/BA blocks. The throughput is still completed
+sequence responses/s for the same BF16 T128, four-layer D64 model.
+
+| Cell | B | C | FlashRNN1 responses/s | FlashRNN2 responses/s | Paired speedup [95% CI] | Throughput change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| LSTM | 16 | 128 | 15,851.919 | 12,937.361 | 0.8165× [0.8136, 0.8197] | −18.35% |
+| LSTM | 32 | 128 | 31,161.451 | 25,419.915 | 0.8167× [0.8128, 0.8224] | −18.33% |
+| LSTM | 64 | 128 | 59,242.892 | 49,368.017 | 0.8966× [0.8415, 0.9966] | −10.34% |
+| sLSTM | 16 | 128 | 14,311.674 | 13,123.953 | 0.9185× [0.9156, 0.9217] | −8.15% |
+| sLSTM | 32 | 128 | 28,082.347 | 26,188.495 | 0.9324× [0.9289, 0.9369] | −6.76% |
+| sLSTM | 64 | 128 | 53,573.625 | 49,886.388 | 0.9315× [0.9282, 0.9350] | −6.85% |
+
+The LSTM B64/C128 baseline took 5.751836 ms in block 6, producing a
+2.156187× block ratio; that block was not removed. The table's geometric-mean
+speedup and within-process interval include it. Across the six C128 cases,
+the largest qualified tensor difference was 0.0078125 in sLSTM B32/C128.
+The [raw rows, audits and paired summaries](../../evidence/flashrnn2-stacked-e2e-h20-c128/RAW_ARCHIVE.md)
+are committed with the complete offbox in three SHA-verified parts, including
+the qualification tensors.
+
 The speedup is the geometric mean of the 20 paired latency ratios, so it need
 not equal the ratio of the two displayed median response rates. The intervals
 bootstrap paired blocks within one process; independent-start variance was not
@@ -32,10 +55,14 @@ so the recorded process peak is not a single-arm memory comparison.
 The cuDNN baseline ran in eval mode and dispatched `aten::_cudnn_rnn`, but its
 log warns that non-contiguous weights may be compacted at every call. This
 invalidates the 4.7643× ratio as a comparison against a qualified optimized
-cuDNN baseline. A later run must prove packed-weight reuse before reporting
-that comparison as fair. The [packing probe](../../tools/flashrnn2/cudnn_pack_probe.py)
-is prepared to compare the mapped baseline with a plain PyTorch LSTM on the
-same device; it has not run yet.
+cuDNN baseline. The [packing probe](../../tools/flashrnn2/cudnn_pack_probe.py)
+ran on the same H20: mapped and plain BF16 PyTorch LSTMs both retained four
+weight storages after `flatten_parameters()`, all their weights failed the
+installed `is_acceptable` check, and both triggered compaction warnings.
+The installed PyTorch 2.12.1+cu130 dtype guard lists FP16, FP32 and FP64 but
+omits BF16. This explains the warning on this runtime; retrying the same
+flatten call is not a fix. A matched-FP16 baseline needs a separate numerical
+and packed-weight gate before any fair cuDNN speedup is reported.
 
 The [raw offbox archive](../../evidence/flashrnn2-stacked-e2e-h20-b16-c32/own-offbox-raw.tar.gz)
 has SHA256 `2b77b63631e8a06071325dea3b2816d256886863fdbbfbd9d783b6d252d0a75c`.
@@ -57,7 +84,8 @@ bootstrap interval. The untimed qualification saves every request group's IDs,
 both arms' per-layer hidden/final tensors and logits in a SHA-bound `.pt` file
 for independent numerical recomputation. Each group has distinct token IDs.
 
-The other 16 legal B × C pairs per row remain unmeasured. Haste requires a
+Thirteen legal B × C pairs per FlashRNN1 cell remain unmeasured. The cuDNN
+B16/C32 row remains diagnostic, and its other 16 pairs are unrun. Haste requires a
 separate FP32/FP16 model contract; BF16 results here cannot be assigned to
 Haste. GRU and Elman need their own FlashRNN2 GPU candidates before a
 same-cell speedup exists. These fixed-weight synthetic results do not establish

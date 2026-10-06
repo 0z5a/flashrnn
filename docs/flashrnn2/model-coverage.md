@@ -8,7 +8,7 @@ now records completed Mamba3 SISO/MIMO, RWKV6, DeltaNet, RetNet, HGRN, HGRN2 and
 Gated DeltaNet work rather than leaving stale not-downloaded entries. Original numerical
 failures remain visible.
 
-The [full-model speedup matrix](full-model-e2e-speedups.md) lists the accelerated baselines still requiring same-device qualification; none of its pretrained checkpoints has a reportable GPU E2E ratio yet. A separate [fixed-weight synthetic four-layer control](stacked-e2e.md) has measured original FlashRNN1 LSTM/sLSTM comparisons at B16/C32.
+The [full-model speedup matrix](full-model-e2e-speedups.md) lists the accelerated baselines still requiring same-device qualification; none of its pretrained checkpoints has a reportable GPU E2E ratio yet. A separate [fixed-weight synthetic four-layer control](stacked-e2e.md) has eight measured original FlashRNN1 LSTM/sLSTM comparisons at B16/C32 and B16/B32/B64 with C128.
 The [competing-baseline ledger](competing-baselines.md) separately tracks original FlashRNN, cuDNN/Haste and historical or parallel-time papers with their comparability gates.
 
 | Registered family | Existing complete-model evidence | Remaining GPU/native qualification |
@@ -51,7 +51,7 @@ replay must restore those exact files from their retained delta manifests.
 | Four-cell functional API | [Portable CPU](portable-gate.md) and [Apple MPS](mps-gate.md), 38 cases per matrix | Correctness only |
 | Small CPU compiled recurrence | [Inductor](compile-gate.md), B2/T4/H1/D8, full history/gradients | Local forward+loss+backward probe 1.61–3.44×; no model E2E claim |
 | One LSTM GPU layer | [Paired layer pilot](layer-timing.md), B16/T128/H1/D64 | 6.3669× versus cuDNN in this layer pilot |
-| Full recurrent models | Reports above; [synthetic stacked control](stacked-e2e.md) | Pretrained high-concurrency GPU speedups unmeasured; synthetic B16/C32 FlashRNN1 ratios 0.8222× LSTM and 0.8810× sLSTM |
+| Full recurrent models | Reports above; [synthetic stacked control](stacked-e2e.md) | Pretrained high-concurrency GPU speedups unmeasured; eight synthetic FlashRNN1 ratios range from 0.8165× to 0.9324× |
 
 The required campaign still includes model batches 1/4/16/32/64, request
 concurrency 1/8/32/64/128, native and accelerated baselines, comparable output
