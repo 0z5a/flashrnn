@@ -30,6 +30,16 @@ def main() -> None:
             item["module"] or any(item["heads"]) for item in flags
         ):
             raise ValueError("cuDNN baseline did not run in eval mode")
+        packed = False
+        if "packed_cudnn_required" in meta:
+            packed = (
+                meta["packed_cudnn_required"]
+                and len(meta["cudnn_weight_storage_counts"]) == meta["model"]["layers"]
+                and all(count == 1 for count in meta["cudnn_weight_storage_counts"])
+                and all(meta["cudnn_weights_acceptable"])
+            )
+    else:
+        packed = None
     if [row["block"] for row in rows] != list(range(len(rows))):
         raise ValueError("missing or duplicate paired block")
     for row in rows:
@@ -57,17 +67,18 @@ def main() -> None:
         candidate_responses_per_second=candidate_rate,
         device_uuid=meta["device_uuid"],
         qualification_max_abs=meta["qualification_max_abs"],
+        cudnn_fair_baseline_qualified=packed,
     )
     args.output.with_suffix(".json").write_text(json.dumps(summary, indent=2) + "\n")
     low, high = summary["ci95"]
     lines = [
         "# Complete synthetic stacked-model sequence inference",
         "",
-        f"Fixed random weights and request IDs; this is a full {meta['model']['layers']}-layer model workload, not a pretrained checkpoint or autoregressive generation result. Throughput is completed sequence responses/s. Timed scope includes host-to-device IDs, embedding, recurrence, readout, device-to-host logits and queued groups. Compilation, model construction and qualification are excluded.",
+        f"Fixed random weights and request IDs in {meta['dtype']}; this is a full {meta['model']['layers']}-layer model workload, not a pretrained checkpoint or autoregressive generation result. Throughput is completed sequence responses/s. Timed scope includes host-to-device IDs, embedding, recurrence, readout, device-to-host logits and queued groups. Compilation, model construction and qualification are excluded.",
         "",
-        "| Cell | Baseline | Batch | Concurrent requests | Baseline responses/s | FlashRNN2 responses/s | Paired speedup [95% CI] |",
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: |",
-        f"| {meta['model']['cell']} | {meta['baseline']} | {batch} | {concurrency} | {base_rate:.3f} | {candidate_rate:.3f} | {summary['paired_speedup']:.3f}× [{low:.3f}, {high:.3f}] |",
+        "| Cell | Baseline | Batch | Concurrent requests | Baseline responses/s | FlashRNN2 responses/s | Paired speedup [95% CI] | Qualification |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |",
+        f"| {meta['model']['cell']} | {meta['baseline']} | {batch} | {concurrency} | {base_rate:.3f} | {candidate_rate:.3f} | {summary['paired_speedup']:.3f}× [{low:.3f}, {high:.3f}] | {'Diagnostic: cuDNN weights not proven packed' if packed is False else 'Qualified'} |",
     ]
     args.output.with_suffix(".md").write_text("\n".join(lines) + "\n")
 
