@@ -117,6 +117,11 @@ def main() -> None:
         str(path.name): hashlib.sha256(path.read_bytes()).hexdigest()
         for path in source_files
     }
+    candidate_hashes = {
+        name: digest
+        for name, digest in hashes.items()
+        if name not in ("torch_layer.py", "upstream_triton.py", "lstm_fw.py")
+    }
     session = str(uuid.uuid4())
     props = torch.cuda.get_device_properties(0)
     metadata = {
@@ -137,7 +142,7 @@ def main() -> None:
             else hashes["upstream_triton.py"] + ":" + hashes["lstm_fw.py"]
         ),
         "candidate_sha": hashlib.sha256(
-            json.dumps(hashes, sort_keys=True).encode()
+            json.dumps(candidate_hashes, sort_keys=True).encode()
         ).hexdigest(),
         "source_sha256": hashes,
         "dtype_contract_id": "bf16-layer-input-weights-hidden-final-v1",
