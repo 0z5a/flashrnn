@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import time
+import warnings
 from pathlib import Path
 
 import torch
@@ -19,35 +20,36 @@ from flashrnn.flashrnn2.upstream_triton import recurrence as upstream
 
 
 class StackedModel:
-    def __init__(self, cell: str, baseline: str, layers: int, width: int) -> None:
+    def __init__(
+        self,
+        cell: str,
+        baseline: str,
+        layers: int,
+        width: int,
+        dtype: torch.dtype = torch.bfloat16,
+    ) -> None:
         generator = torch.Generator().manual_seed(20261006)
-        self.cell, self.baseline, self.width = cell, baseline, width
-        self.embedding = (
-            (torch.randn(512, width, generator=generator) * 0.1).bfloat16().cuda()
+        self.cell, self.baseline, self.width, self.dtype = cell, baseline, width, dtype
+        self.embedding = (torch.randn(512, width, generator=generator) * 0.1).to(
+            device="cuda", dtype=dtype
         )
-        self.readout = (
-            (torch.randn(width, 512, generator=generator) * 0.1).bfloat16().cuda()
+        self.readout = (torch.randn(width, 512, generator=generator) * 0.1).to(
+            device="cuda", dtype=dtype
         )
         self.weights = []
         self.modules = []
         for _ in range(layers):
             w = (
-                (
-                    torch.randn(4, 1, width, width, generator=generator)
-                    * (0.2 / width**0.5)
-                )
-                .bfloat16()
-                .cuda()
-            )
+                torch.randn(4, 1, width, width, generator=generator)
+                * (0.2 / width**0.5)
+            ).to(device="cuda", dtype=dtype)
             r = (
-                (
-                    torch.randn(4, 1, width, width, generator=generator)
-                    * (0.2 / width**0.5)
-                )
-                .bfloat16()
-                .cuda()
+                torch.randn(4, 1, width, width, generator=generator)
+                * (0.2 / width**0.5)
+            ).to(device="cuda", dtype=dtype)
+            b = (torch.randn(4, 1, width, generator=generator) * 0.02).to(
+                device="cuda", dtype=dtype
             )
-            b = (torch.randn(4, 1, width, generator=generator) * 0.02).bfloat16().cuda()
             self.weights.append((w, r, b))
             self.modules.append(
                 TorchLayer(w, r, b, "lstm").eval() if baseline == "cudnn" else None
@@ -60,7 +62,7 @@ class StackedModel:
         layers = []
         for (w, r, bias), module in zip(self.weights, self.modules):
             initial = torch.zeros(
-                (states, batch, 1, 1, self.width), device="cuda", dtype=torch.bfloat16
+                (states, batch, 1, 1, self.width), device="cuda", dtype=self.dtype
             )
             if self.cell == "slstm":
                 initial[2].fill_(1)
@@ -154,6 +156,8 @@ def main() -> None:
     parser.add_argument("--layers", type=int, default=4)
     parser.add_argument("--width", type=int, default=64)
     parser.add_argument("--blocks", type=int, default=20)
+    parser.add_argument("--dtype", choices=("bf16", "fp16"), default="bf16")
+    parser.add_argument("--require-packed-cudnn", action="store_true")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.cell == "slstm" and args.baseline == "cudnn":
@@ -162,6 +166,8 @@ def main() -> None:
         parser.error("concurrency must be a positive multiple of batch")
     if args.steps < 1 or args.layers < 2 or args.width != 64 or args.blocks < 20:
         parser.error("requires T>=1, at least two layers, D64 and 20 paired blocks")
+    if args.require_packed_cudnn and args.baseline != "cudnn":
+        parser.error("packed-weight gate applies to the cuDNN baseline")
     qualification_path = args.output.with_suffix(".qualification.pt")
     meta_path = args.output.with_suffix(".meta.json")
     if any(path.exists() for path in (args.output, meta_path, qualification_path)):
@@ -180,7 +186,8 @@ def main() -> None:
         "GPU-"
     ):
         raise ValueError("GPU UUID differs from the admitted device")
-    model = StackedModel(args.cell, args.baseline, args.layers, args.width)
+    dtype = torch.bfloat16 if args.dtype == "bf16" else torch.float16
+    model = StackedModel(args.cell, args.baseline, args.layers, args.width, dtype)
     if args.baseline == "cudnn":
         assert all(
             module is not None
@@ -188,6 +195,26 @@ def main() -> None:
             and all(not layer.training for layer in module.layers)
             for module in model.modules
         )
+    cudnn_weights = [
+        layer._flat_weights
+        for module in model.modules
+        if module is not None
+        for layer in module.layers
+    ]
+    cudnn_storage_counts = [
+        len({weight.untyped_storage().data_ptr() for weight in weights})
+        for weights in cudnn_weights
+    ]
+    cudnn_weights_acceptable = [
+        all(torch.backends.cudnn.is_acceptable(weight) for weight in weights)
+        for weights in cudnn_weights
+    ]
+    if args.require_packed_cudnn and (
+        len(cudnn_storage_counts) != args.layers
+        or not all(count == 1 for count in cudnn_storage_counts)
+        or not all(cudnn_weights_acceptable)
+    ):
+        raise RuntimeError("cuDNN weights are not packed on this runtime")
     source_files = [
         Path(__file__),
         Path(TorchLayer.forward.__code__.co_filename),
@@ -231,7 +258,10 @@ def main() -> None:
             for module in model.modules
             if module is not None
         ],
-        "dtype": "bfloat16",
+        "dtype": str(dtype),
+        "cudnn_weight_storage_counts": cudnn_storage_counts,
+        "cudnn_weights_acceptable": cudnn_weights_acceptable,
+        "packed_cudnn_required": args.require_packed_cudnn,
         "device_uuid": str(props.uuid),
         "device_name": props.name,
         "torch": torch.__version__,
@@ -249,6 +279,11 @@ def main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     meta_path.write_text(json.dumps(metadata, indent=2) + "\n")
     with torch.inference_mode():
+        if args.require_packed_cudnn:
+            warnings.filterwarnings(
+                "error",
+                message="RNN module weights are not part of single contiguous chunk of memory",
+            )
         goldens, worst, evidence = qualify(model, fixtures)
         torch.save({"cases": evidence, "max_abs": worst}, qualification_path)
         metadata.update(

@@ -64,6 +64,13 @@ omits BF16. This explains the warning on this runtime; retrying the same
 flatten call is not a fix. A matched-FP16 baseline needs a separate numerical
 and packed-weight gate before any fair cuDNN speedup is reported.
 
+The next finite run uses `--dtype fp16 --require-packed-cudnn` for both model
+arms. Before timing, the runner requires one shared weight storage per cuDNN
+layer, accepted cuDNN weights, eval-mode `aten::_cudnn_rnn` dispatch, no
+weight-compaction warning and the same per-layer hidden/final-state and logit
+numerical gate. The analyzer marks the earlier BF16 row diagnostic even when
+replayed from its archived metadata. No FP16 GPU result has been measured yet.
+
 The [raw offbox archive](../../evidence/flashrnn2-stacked-e2e-h20-b16-c32/own-offbox-raw.tar.gz)
 has SHA256 `2b77b63631e8a06071325dea3b2816d256886863fdbbfbd9d783b6d252d0a75c`.
 Its 143 payload files and the frozen 122-file source manifest passed bytewise
