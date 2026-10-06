@@ -4,7 +4,7 @@ No full-model, high-concurrency GPU speedup has passed the paired measurement ga
 
 | Model family | Accelerated baseline to qualify | Full-model GPU baseline throughput | Candidate throughput | Paired speedup [95% CI] |
 | --- | --- | ---: | ---: | ---: |
-| LSTM / GRU / Elman / sLSTM representative stacks | cuDNN / `torch.nn` where the output contract matches; upstream FlashRNN | — | — | Unmeasured |
+| LSTM / GRU / Elman / sLSTM representative stacks | [FlashRNN1 backends, cuDNN and Haste](competing-baselines.md) where the cell/output contract matches | — | — | Unmeasured |
 | Mamba 130M | `mamba_ssm` fused scan and native Torch control | — | — | Unmeasured |
 | Mamba2 130M | Author fused backend and [native Torch control](mamba2-serving-harness.md) | — | — | Unmeasured |
 | Mamba3 SISO / MIMO 187M | Author Mamba-3 CUDA | — | — | Unmeasured |
@@ -24,3 +24,5 @@ No full-model, high-concurrency GPU speedup has passed the paired measurement ga
 | KDA / signed Complex KDA 1.3B | Author fused kernels; BF16 numerical gate pending | — | — | Unmeasured |
 
 The [model coverage registry](model-coverage.md) links each checkpoint's completed CPU evidence and retained numerical failures. Baselines in this table are targets for qualification, not claims that those kernels already ran. Request concurrency and model batch are separate axes; unsupported pairs must be recorded rather than silently replaced by another workload.
+
+[Persistent RNN, Sparse Persistent RNNs, DEER and ParaRNN](competing-baselines.md) are additional paper controls. Their sparse, adapted-cell or training-time results need their own matched workload and must not be inserted as same-checkpoint inference speedups. No complete-model GPU result from any of these papers or from FlashRNN1 has been measured here.
