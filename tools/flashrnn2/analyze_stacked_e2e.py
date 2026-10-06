@@ -1,6 +1,7 @@
 """Turn one qualified stacked-model AB/BA run into a speedup Markdown row."""
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 from statistics import median
@@ -14,6 +15,12 @@ def main() -> None:
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
     meta = json.loads(args.input.with_suffix(".meta.json").read_text())
+    qualification = args.input.with_suffix(".qualification.pt")
+    with qualification.open("rb") as handle:
+        assert (
+            hashlib.file_digest(handle, "sha256").hexdigest()
+            == meta["qualification_sha256"]
+        )
     rows = [json.loads(line) for line in args.input.read_text().splitlines()]
     if meta["status"] != "PASS" or len(rows) < 20:
         raise ValueError("complete qualified timing required")

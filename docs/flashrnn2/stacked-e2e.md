@@ -23,7 +23,9 @@ logits, then uses at least 20 paired AB/BA blocks. A result is reportable only
 when the complete JSONL and metadata say `PASS`, the actual cuDNN dispatch is
 observed where applicable, both arms use the admitted GPU UUID, and the
 [analyzer](../../tools/flashrnn2/analyze_stacked_e2e.py) produces a 95% paired
-bootstrap interval. Each distinct request group has its own frozen token IDs.
+bootstrap interval. The untimed qualification saves every request group's IDs,
+both arms' per-layer hidden/final tensors and logits in a SHA-bound `.pt` file
+for independent numerical recomputation. Each group has distinct token IDs.
 
 The first bounded H20 package targets B16/C32 for the three rows above. It must
 receive a fresh GPU+IO window and be staged with an immutable source manifest;

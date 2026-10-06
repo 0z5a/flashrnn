@@ -84,8 +84,9 @@ def source_hash(path: Path) -> str:
 
 def qualify(
     model: StackedModel, fixtures: list[torch.Tensor]
-) -> tuple[list[torch.Tensor], float]:
+) -> tuple[list[torch.Tensor], float, list[dict]]:
     goldens = []
+    evidence = []
     worst = 0.0
     for ids in fixtures:
         baseline, base_layers = model.forward(ids, "baseline", True)
@@ -101,7 +102,22 @@ def qualify(
         torch.testing.assert_close(candidate, baseline, atol=0.015, rtol=0.03)
         assert error <= 0.03, error
         goldens.append(baseline.cpu())
-    return goldens, worst
+        evidence.append(
+            {
+                "ids": ids,
+                "baseline": {
+                    "logits": baseline.cpu(),
+                    "layers": [tuple(t.cpu() for t in layer) for layer in base_layers],
+                },
+                "candidate": {
+                    "logits": candidate.cpu(),
+                    "layers": [
+                        tuple(t.cpu() for t in layer) for layer in candidate_layers
+                    ],
+                },
+            }
+        )
+    return goldens, worst, evidence
 
 
 def burst(model: StackedModel, fixtures: list[torch.Tensor], groups: int, arm: str):
@@ -146,8 +162,10 @@ def main() -> None:
         parser.error("concurrency must be a positive multiple of batch")
     if args.steps < 1 or args.layers < 2 or args.width != 64 or args.blocks < 20:
         parser.error("requires T>=1, at least two layers, D64 and 20 paired blocks")
-    if args.output.exists():
-        parser.error("output already exists")
+    qualification_path = args.output.with_suffix(".qualification.pt")
+    meta_path = args.output.with_suffix(".meta.json")
+    if any(path.exists() for path in (args.output, meta_path, qualification_path)):
+        parser.error("output or qualification file already exists")
     torch.set_num_threads(1)
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
@@ -214,11 +232,16 @@ def main() -> None:
         "memory_scope": "Both arms' model weights remain resident; peak is process total",
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    meta_path = args.output.with_suffix(".meta.json")
     meta_path.write_text(json.dumps(metadata, indent=2) + "\n")
     with torch.inference_mode():
-        goldens, worst = qualify(model, fixtures)
-        metadata["qualification_max_abs"] = worst
+        goldens, worst, evidence = qualify(model, fixtures)
+        torch.save({"cases": evidence, "max_abs": worst}, qualification_path)
+        metadata.update(
+            qualification_max_abs=worst,
+            qualification_sha256=source_hash(qualification_path),
+            qualification_bytes=qualification_path.stat().st_size,
+        )
+        meta_path.write_text(json.dumps(metadata, indent=2) + "\n")
         if args.baseline == "cudnn":
             with torch.profiler.profile(
                 activities=[torch.profiler.ProfilerActivity.CPU]
