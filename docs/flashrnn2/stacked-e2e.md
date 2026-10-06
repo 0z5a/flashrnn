@@ -21,7 +21,7 @@ The 17 legal `(batch, concurrent requests)` pairs are `(1,1/8/32/64/128)`,
 Each run first compares every layer's hidden history and final state plus final
 logits, then uses at least 20 paired AB/BA blocks. A result is reportable only
 when the complete JSONL and metadata say `PASS`, the actual cuDNN dispatch is
-observed where applicable, both arms use the admitted GPU UUID, and the
+observed in eval mode where applicable, both arms use the admitted GPU UUID, and the
 [analyzer](../../tools/flashrnn2/analyze_stacked_e2e.py) produces a 95% paired
 bootstrap interval. The untimed qualification saves every request group's IDs,
 both arms' per-layer hidden/final tensors and logits in a SHA-bound `.pt` file

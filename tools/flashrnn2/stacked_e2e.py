@@ -50,7 +50,7 @@ class StackedModel:
             b = (torch.randn(4, 1, width, generator=generator) * 0.02).bfloat16().cuda()
             self.weights.append((w, r, b))
             self.modules.append(
-                TorchLayer(w, r, b, "lstm") if baseline == "cudnn" else None
+                TorchLayer(w, r, b, "lstm").eval() if baseline == "cudnn" else None
             )
 
     def forward(self, ids: torch.Tensor, arm: str, trace: bool = False):
@@ -181,6 +181,13 @@ def main() -> None:
     ):
         raise ValueError("GPU UUID differs from the admitted device")
     model = StackedModel(args.cell, args.baseline, args.layers, args.width)
+    if args.baseline == "cudnn":
+        assert all(
+            module is not None
+            and not module.training
+            and all(not layer.training for layer in module.layers)
+            for module in model.modules
+        )
     source_files = [
         Path(__file__),
         Path(TorchLayer.forward.__code__.co_filename),
@@ -216,6 +223,14 @@ def main() -> None:
         },
         "baseline": args.baseline,
         "candidate": "flashrnn2_triton_persistent",
+        "cudnn_training_flags": [
+            {
+                "module": module.training,
+                "heads": [layer.training for layer in module.layers],
+            }
+            for module in model.modules
+            if module is not None
+        ],
         "dtype": "bfloat16",
         "device_uuid": str(props.uuid),
         "device_name": props.name,

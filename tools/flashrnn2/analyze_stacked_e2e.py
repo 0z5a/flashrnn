@@ -24,6 +24,12 @@ def main() -> None:
     rows = [json.loads(line) for line in args.input.read_text().splitlines()]
     if meta["status"] != "PASS" or len(rows) < 20:
         raise ValueError("complete qualified timing required")
+    if meta["baseline"] == "cudnn":
+        flags = meta["cudnn_training_flags"]
+        if len(flags) != meta["model"]["layers"] or any(
+            item["module"] or any(item["heads"]) for item in flags
+        ):
+            raise ValueError("cuDNN baseline did not run in eval mode")
     if [row["block"] for row in rows] != list(range(len(rows))):
         raise ValueError("missing or duplicate paired block")
     for row in rows:
