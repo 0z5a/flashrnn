@@ -32,6 +32,12 @@ the original FlashRNN CUDA/Triton baselines, other shapes, concurrency,
 backward and complete model timings remain required. No full-model speedup
 is inferred from this table.
 
+The same runner now accepts `--baseline upstream_triton` for the hash-pinned
+original FlashRNN1 LSTM forward kernel through its explicit Torch layout
+adapter. It applies the same independent reference gate before any paired
+timing. This path is prepared but has no same-shape qualification or measured
+speedup yet; the earlier five-case native gate cannot substitute for it.
+
 Evidence: [20 pairs](evidence/l1-r1.jsonl),
 [metadata and source hashes](evidence/l1-r1.meta.json),
 [controller](evidence/l1-r1-controller.json),
