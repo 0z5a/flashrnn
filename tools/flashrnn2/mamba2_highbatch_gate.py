@@ -38,6 +38,7 @@ def main() -> None:
     parser.add_argument("--script", type=Path, required=True)
     parser.add_argument("--inputs", type=Path, required=True)
     parser.add_argument("--batch", type=int, choices=(16, 32, 64), required=True)
+    parser.add_argument("--groups", type=int, choices=(1, 2, 3), default=3)
     parser.add_argument("--device", choices=("cpu", "cuda"), required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
@@ -56,10 +57,12 @@ def main() -> None:
     assert inputs["prompt_length"] == 128 and inputs["generated_tokens"] == 32
     cases = inputs["batches"][str(args.batch)]["input_ids"]
     assert len(cases) == 3 and all(len(group) == args.batch for group in cases)
+    cases = cases[: args.groups]
     started = time.time()
     metadata = {
         "status": "RUNNING",
         "batch": args.batch,
+        "request_groups": args.groups,
         "device": args.device,
         "prompt_length": 128,
         "generated_tokens": 32,
@@ -101,7 +104,7 @@ def main() -> None:
                 arm: [torch.tensor(group, device=args.device) for group in cases]
                 for arm in states
             }
-            order = [(case, step) for case in range(3) for step in range(32)]
+            order = [(case, step) for case in range(args.groups) for step in range(32)]
             if schedule == "interleaved":
                 order.sort(key=lambda item: (item[1], item[0]))
             generated[schedule] = {arm: [[] for _ in cases] for arm in states}

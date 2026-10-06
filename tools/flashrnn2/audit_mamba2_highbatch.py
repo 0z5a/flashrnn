@@ -39,25 +39,33 @@ def main() -> None:
     rows = [json.loads(line) for line in args.result.read_text().splitlines()]
     inputs = json.loads(args.inputs.read_text())
     batch = metadata["batch"]
+    groups = metadata.get("request_groups", 3)
     assert metadata["status"] == "PASS" and metadata["device"] == "cpu"
     assert batch in (16, 32, 64)
+    assert groups in (1, 2, 3)
+    if "request_groups" in metadata:
+        assert metadata["source_sha256"]["mamba2_highbatch_gate.py"] == digest(
+            Path(__file__).with_name("mamba2_highbatch_gate.py")
+        )
     assert metadata["input_sha256"] == digest(args.inputs)
     assert metadata["script_artifact_sha256"] == digest(args.script)
     assert metadata["script_trace_batch"] == 1
     assert len(inputs["batches"][str(batch)]["input_ids"]) == 3
-    assert len(rows) == metadata["compared_steps"] == 192
-    assert metadata["token_choices"] == 192 * batch
+    assert len(rows) == metadata["compared_steps"] == 64 * groups
+    assert metadata["token_choices"] == 64 * groups * batch
     assert metadata["failed_steps"] == 0
     expected_order = {
-        "serial": [(case, step) for case in range(3) for step in range(32)],
-        "interleaved": [(case, step) for step in range(32) for case in range(3)],
+        "serial": [(case, step) for case in range(groups) for step in range(32)],
+        "interleaved": [(case, step) for step in range(32) for case in range(groups)],
     }
     tokens = {}
     checks = 0
     for schedule, order in expected_order.items():
         selected = [row for row in rows if row["schedule"] == schedule]
         assert [(row["case"], row["step"]) for row in selected] == order
-        assert all(row["pass"] and row["native_ids"] == row["traced_ids"] for row in selected)
+        assert all(
+            row["pass"] and row["native_ids"] == row["traced_ids"] for row in selected
+        )
         assert all(len(row["native_ids"]) == batch for row in selected)
         for row in selected:
             assert len(row["checks"]) == (3 if row["step"] in (0, 31) else 1)
@@ -91,8 +99,9 @@ def main() -> None:
     audit = {
         "status": "PASS",
         "batch": batch,
-        "complete_model_steps": 192,
-        "token_choices": 192 * batch,
+        "request_groups": groups,
+        "complete_model_steps": 64 * groups,
+        "token_choices": 64 * groups * batch,
         "runner_logit_cache_checks": checks,
         "saved_boundary_tensor_pairs_recomputed": saved_pairs,
         "serial_interleaved_tokens_equal": True,

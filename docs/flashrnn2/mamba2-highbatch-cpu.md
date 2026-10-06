@@ -1,14 +1,14 @@
 # Mamba2-130M high-batch complete-model CPU gate
 
-The pinned complete `state-spaces/mamba2-130m` checkpoint is loaded through the strict Transformers mapping. Its native Torch fallback is compared with the existing B1/P128 TorchScript artifact on the [same fixed WikiText requests](evidence/mamba-highbatch/mamba-highbatch-inputs-b16-b32-b64-r1.json). Every step compares full-vocabulary logits and generated IDs; each prefill/final step also compares all-layer convolution and SSM caches at the original `1e-3` logits and `1e-5` cache absolute/relative budgets. Three request groups run serially and round-robin interleaved with independent states.
+The pinned complete `state-spaces/mamba2-130m` checkpoint is loaded through the strict Transformers mapping. Its native Torch fallback is compared with the existing B1/P128 TorchScript artifact on the [same fixed WikiText requests](evidence/mamba-highbatch/mamba-highbatch-inputs-b16-b32-b64-r1.json). Every step compares full-vocabulary logits and generated IDs; each prefill/final step also compares all-layer convolution and SSM caches at the original `1e-3` logits and `1e-5` cache absolute/relative budgets. B16 runs three independent request groups; the local B32 memory-limited gate runs the first group only.
 
-| Batch | Serial steps | Interleaved steps | Token choices | Runner logit/cache checks | Saved boundary tensor pairs | Max absolute error | Result |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| 16 | 96/96 | 96/96 | 3,072/3,072 | 216/216 | 6/6 | 0 | Pass |
-| 32 | — | — | — | — | — | — | Not run |
-| 64 | — | — | — | — | — | — | Not run |
+| Batch | Request groups | Serial steps | Interleaved steps | Token choices | Runner logit/cache checks | Saved boundary tensor pairs | Max absolute error | Result |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 16 | 3 | 96/96 | 96/96 | 3,072/3,072 | 216/216 | 6/6 | 0 | Pass |
+| 32 | 1 | 32/32 | 32/32 | 2,048/2,048 | 72/72 | 6/6 | 0 | Pass |
+| 64 | — | — | — | — | — | — | — | Not run |
 
-The B16 runner naturally exited 0 after 192/192 complete-model steps; both schedules generated identical tokens. The [independent audit](evidence/mamba2-highbatch/mamba2-highbatch-cpu-b16-r1.audit.json) verifies row order, all 3,072 token choices, 216 reported tensor checks, input and TorchScript hashes, and recomputes six full-logit/convolution/SSM boundary tensor pairs from the SHA-256-pinned 1.2 GiB local snapshot. The [raw rows and metadata](evidence/mamba2-highbatch/) are committed; the large snapshot remains local. All checked tensor elements match bitwise. The B1 artifact's cross-batch behavior beyond B4 was previously untested. Local 16 GiB memory used over 5 GiB swap during B16, so B32/B64 multi-group runs await a larger device.
+Both runners naturally exited 0. The [B16 audit](evidence/mamba2-highbatch/mamba2-highbatch-cpu-b16-r1.audit.json) and [B32 audit](evidence/mamba2-highbatch/mamba2-highbatch-cpu-b32-g1-r1.audit.json) verify row order, every token choice, all reported checks, input and TorchScript hashes, and recompute six full-logit/convolution/SSM boundary tensor pairs per batch. The B32 audit also checks the exact gate-source hash. Their [raw rows and metadata](evidence/mamba2-highbatch/) are committed; the 1.2 GiB and 2.4 GiB SHA-256-pinned snapshots remain local. All checked tensor elements match bitwise. The B32 one-group serial/interleaved orders are identical, so its schedule parity is not a multi-group concurrency test. B32/B64 three-group and GPU runs still require a larger device.
 
 | Required full-model GPU E2E comparison | Workload | Native accelerated tok/s | Candidate tok/s | Speedup |
 | --- | --- | ---: | ---: | ---: |
