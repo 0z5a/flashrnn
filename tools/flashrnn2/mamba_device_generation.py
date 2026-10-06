@@ -32,7 +32,7 @@ def main() -> None:
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--inputs", type=Path, required=True)
-    parser.add_argument("--batch", type=int, choices=(1, 2, 4), required=True)
+    parser.add_argument("--batch", type=int, choices=(1, 2, 4, 16, 32, 64), required=True)
     parser.add_argument("--device", choices=("cpu", "cuda"), required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
