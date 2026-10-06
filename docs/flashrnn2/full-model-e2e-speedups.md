@@ -2,6 +2,8 @@
 
 No full-model, high-concurrency GPU speedup has passed the paired measurement gate yet. The [single-layer GPU pilot](layer-timing.md) and [small CPU compile probe](compile-gate.md) have narrower contracts and are excluded from this table. Each future result must use the same checkpoint, inputs, output contract, batch, concurrency and device for baseline and candidate; report paired AB/BA blocks and a 95% interval. Language-model throughput is generated tokens/s; TiRex uses completed forecasts/s.
 
+The [synthetic stacked LSTM/sLSTM complete-model control](stacked-e2e.md) has a separate sequence-responses/s contract. Its prepared runner and unmeasured matrix do not fill any pretrained-model row below.
+
 | Model family | Accelerated baseline to qualify | Full-model GPU baseline throughput | Candidate throughput | Paired speedup [95% CI] |
 | --- | --- | ---: | ---: | ---: |
 | LSTM / GRU / Elman / sLSTM representative stacks | [FlashRNN1 backends, cuDNN and Haste](competing-baselines.md) where the cell/output contract matches | — | — | Unmeasured |
