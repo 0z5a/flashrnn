@@ -69,8 +69,8 @@ def run_case(root: Path, cell: str) -> list[dict[str, object]]:
         )
         actual = (h[1:].transpose(0, 1), torch.stack((h[-1], c[-1]))[:, :, None, None])
     else:
-        # Haste update/reset/candidate uses FlashRNN gates 2/1/0.
-        kernel = w[[2, 1, 0], 0].reshape(3 * width, input_size).T.contiguous()
+        # FlashRNN input gates are reset/update/candidate; recurrent gates differ.
+        kernel = w[[1, 0, 2], 0].reshape(3 * width, input_size).T.contiguous()
         recurrent = r[[2, 1, 0], 0].reshape(3 * width, width).T.contiguous()
         bias = torch.cat((b[2, 0], b[1, 0], b[3, 0]))
         recurrent_bias = torch.cat((b[2, 0] * 0, b[1, 0] * 0, b[0, 0]))
