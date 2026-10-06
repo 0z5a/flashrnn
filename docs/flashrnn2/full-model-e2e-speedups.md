@@ -1,8 +1,8 @@
 # Full-model E2E speedup matrix
 
-No full-model, high-concurrency GPU speedup has passed the paired measurement gate yet. The [single-layer GPU pilot](layer-timing.md) and [small CPU compile probe](compile-gate.md) have narrower contracts and are excluded from this table. Each future result must use the same checkpoint, inputs, output contract, batch, concurrency and device for baseline and candidate; report paired AB/BA blocks and a 95% interval. Language-model throughput is generated tokens/s; TiRex uses completed forecasts/s.
+No pretrained-checkpoint, high-concurrency GPU speedup has passed the paired measurement gate yet. The [single-layer GPU pilot](layer-timing.md) and [small CPU compile probe](compile-gate.md) have narrower contracts and are excluded from this table. Each future result must use the same checkpoint, inputs, output contract, batch, concurrency and device for baseline and candidate; report paired AB/BA blocks and a 95% interval. Language-model throughput is generated tokens/s; TiRex uses completed forecasts/s.
 
-The [synthetic stacked LSTM/sLSTM complete-model control](stacked-e2e.md) has a separate sequence-responses/s contract. Its prepared runner and unmeasured matrix do not fill any pretrained-model row below.
+The [synthetic stacked LSTM/sLSTM complete-model control](stacked-e2e.md) now has three measured B16/C32 rows and a separate sequence-responses/s contract. Its FlashRNN1 comparisons show 0.8222× LSTM and 0.8810× sLSTM, while the cuDNN row is diagnostic because of a weight-compaction warning. These fixed-weight rows do not fill any pretrained-model row below.
 
 | Model family | Accelerated baseline to qualify | Full-model GPU baseline throughput | Candidate throughput | Paired speedup [95% CI] |
 | --- | --- | ---: | ---: | ---: |
@@ -27,4 +27,4 @@ The [synthetic stacked LSTM/sLSTM complete-model control](stacked-e2e.md) has a 
 
 The [model coverage registry](model-coverage.md) links each checkpoint's completed CPU evidence and retained numerical failures. Baselines in this table are targets for qualification, not claims that those kernels already ran. Request concurrency and model batch are separate axes; unsupported pairs must be recorded rather than silently replaced by another workload.
 
-[Persistent RNN, Sparse Persistent RNNs, DEER and ParaRNN](competing-baselines.md) are additional paper controls. Their sparse, adapted-cell or training-time results need their own matched workload and must not be inserted as same-checkpoint inference speedups. No complete-model GPU result from any of these papers or from FlashRNN1 has been measured here.
+[Persistent RNN, Sparse Persistent RNNs, DEER and ParaRNN](competing-baselines.md) are additional paper controls. Their sparse, adapted-cell or training-time results need their own matched workload and must not be inserted as same-checkpoint inference speedups. No pretrained-checkpoint complete-model GPU result from these papers or FlashRNN1 has been measured here.
