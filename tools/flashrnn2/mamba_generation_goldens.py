@@ -49,6 +49,7 @@ def main() -> None:
     parser.add_argument("--family", choices=("mamba", "mamba2"), default="mamba")
     parser.add_argument("--tokenizer", type=Path)
     parser.add_argument("--dataset", type=Path, required=True)
+    parser.add_argument("--inputs", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--batches", type=int, nargs="+", default=[1, 2, 4])
     parser.add_argument("--prompt-length", type=int, default=128)
@@ -70,14 +71,32 @@ def main() -> None:
     )
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, local_files_only=True)
     prompts = []
-    for row, text in enumerate(
-        parquet.read_table(args.dataset, columns=["text"])["text"].to_pylist()
-    ):
-        ids = tokenizer.encode(text, add_special_tokens=False)
-        if len(ids) >= args.prompt_length:
-            prompts.append({"dataset_row": row, "ids": ids[: args.prompt_length]})
-        if len(prompts) == max(args.batches) * args.cases:
-            break
+    if args.inputs:
+        input_manifest = json.loads(args.inputs.read_text())
+        assert input_manifest["dataset_sha256"] == DATASET_SHA256
+        assert input_manifest["tokenizer_sha256"] == digest(
+            tokenizer_path / "tokenizer.json"
+        )
+        assert input_manifest["prompt_length"] == args.prompt_length
+        assert input_manifest["generated_tokens"] == args.generated_tokens
+        group = input_manifest["batches"][str(max(args.batches))]
+        assert len(group["dataset_rows"]) == len(group["input_ids"]) == args.cases
+        prompts = [
+            {"dataset_row": row, "ids": ids}
+            for rows, case in zip(
+                group["dataset_rows"], group["input_ids"], strict=True
+            )
+            for row, ids in zip(rows, case, strict=True)
+        ]
+    else:
+        for row, text in enumerate(
+            parquet.read_table(args.dataset, columns=["text"])["text"].to_pylist()
+        ):
+            ids = tokenizer.encode(text, add_special_tokens=False)
+            if len(ids) >= args.prompt_length:
+                prompts.append({"dataset_row": row, "ids": ids[: args.prompt_length]})
+            if len(prompts) == max(args.batches) * args.cases:
+                break
     assert len(prompts) == max(args.batches) * args.cases
     if args.family == "mamba2":
         model = load_mamba2(args.model).eval()
@@ -191,8 +210,13 @@ def main() -> None:
                     "revision": DATASET_REVISION,
                     "file": "wikitext-2-raw-v1/validation-00000-of-00001.parquet",
                     "sha256": DATASET_SHA256,
-                    "selection": "First cases*max(batches) rows having at least P tokens; no special tokens; first P tokens; B uses the first B rows of each max(B) group",
+                    "selection": (
+                        "Pinned input manifest; B uses the first B rows of each max(B) group"
+                        if args.inputs
+                        else "First cases*max(batches) rows having at least P tokens; no special tokens; first P tokens; B uses the first B rows of each max(B) group"
+                    ),
                 },
+                "input_manifest_sha256": digest(args.inputs) if args.inputs else None,
                 "checkpoint": checkpoint,
                 "logits_contract": {"atol": 0.001, "rtol": 0.001},
                 "cache_contract": {"atol": 0.00001, "rtol": 0.00001},
