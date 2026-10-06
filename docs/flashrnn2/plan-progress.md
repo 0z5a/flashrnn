@@ -12,7 +12,7 @@ implementation is absent.
 | P1 single CTA | Inferred Triton and explicit-layout Gluon forward; D64/D128 tested as supported | Broader inputs, long T, graph replay, resource/performance sweeps |
 | P2 output R tiling | Stepwise kernel-boundary synchronization; `persistent=false` recorded | Larger-D campaign and legally synchronized persistent cross-CTA implementation |
 | P3 Hopper overlap | No implementation or hardware measurement | Implement and validate on appropriate hardware |
-| P4 Blackwell operand/TMEM | SM120 R-as-A offline exploration and register-layout improvement | SM100/103 complete recurrences, two orientations, TMEM ledger and measured ablations; SM120 is not substitute evidence |
+| P4 Blackwell operand/TMEM | SM120 R-as-A offline exploration and register-layout improvement; [Thor SM110 TMEM qualification](thor-sm110-tmem.md) source and finite gate prepared, uncompiled/unrun | Thor roundtrip and BF16 MMA, SM100/103 complete recurrences, two orientations, TMEM ledger and measured ablations; SM110/120 are not substitute B200 evidence |
 | P5 readiness/reuse | Repeat, independent streams and changed-R checks on existing prototypes | Conservative readiness protocol, generations, reuse hazards, negative controls, sanitizer |
 | P6 backward/training | CPU mathematical/autograd reference and torch.nn gradient mappings | Candidate CUDA dWx/dR/db/dinitial, both losses, intermediate checkpoints, optimizer/loss/task trajectories |
 | P7 selector | Fixed cases and holdout definitions | Finite legal search, selector/cache implementation, holdout and oracle regret |
