@@ -9,6 +9,7 @@ Gated DeltaNet work rather than leaving stale not-downloaded entries. Original n
 failures remain visible.
 
 The [full-model speedup matrix](full-model-e2e-speedups.md) lists the accelerated baselines still requiring same-device qualification; none has a reportable GPU E2E ratio yet.
+The [competing-baseline ledger](competing-baselines.md) separately tracks original FlashRNN, cuDNN/Haste and historical or parallel-time papers with their comparability gates.
 
 | Registered family | Existing complete-model evidence | Remaining GPU/native qualification |
 |---|---|---|
