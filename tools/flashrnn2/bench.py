@@ -42,6 +42,9 @@ def main() -> None:
     parser.add_argument("--heads", type=int, default=1)
     parser.add_argument("--width", type=int, default=64)
     parser.add_argument(
+        "--baseline", choices=("torch_nn", "upstream_triton"), default="torch_nn"
+    )
+    parser.add_argument(
         "--candidate",
         choices=("triton_step", "triton_persistent", "gluon_persistent"),
         default="triton_persistent",
@@ -64,15 +67,25 @@ def main() -> None:
     cpu_inputs[1].div_(width**0.5)
     cpu_inputs[2].div_(width**0.5)
     x, w, r, b, s = (tensor.cuda() for tensor in cpu_inputs)
-    torch.cuda.synchronize()
-    setup_start = time.perf_counter_ns()
-    module = TorchLayer(w, r, b, "lstm")
-    torch.cuda.synchronize()
-    setup_ms = (time.perf_counter_ns() - setup_start) / 1e6
+    module = None
+    upstream = None
+    setup_ms = None
+    if args.baseline == "torch_nn":
+        torch.cuda.synchronize()
+        setup_start = time.perf_counter_ns()
+        module = TorchLayer(w, r, b, "lstm")
+        torch.cuda.synchronize()
+        setup_ms = (time.perf_counter_ns() - setup_start) / 1e6
+    else:
+        from flashrnn.flashrnn2.upstream_triton import recurrence as upstream
     kernel = step if args.candidate == "triton_step" else persistent
 
     def baseline() -> Output:
-        return module(x, s)
+        if module is not None:
+            return module(x, s)
+        wx = torch.einsum("bti,ghdi->btghd", x, w)
+        history, final = upstream(wx, r, b, s, "lstm")
+        return history[0], final
 
     def candidate() -> Output:
         wx = torch.einsum("bti,ghdi->btghd", x, w)
@@ -91,6 +104,11 @@ def main() -> None:
         Path(__file__),
         Path(TorchLayer.forward.__code__.co_filename),
     )
+    if args.baseline == "upstream_triton":
+        source_files += (
+            Path(upstream.__code__.co_filename),
+            Path(__file__).parents[2] / "flashrnn/flashrnn/triton_fused/lstm_fw.py",
+        )
     if args.candidate == "gluon_persistent":
         source_files += (
             Path(persistent.__code__.co_filename).with_name("gluon_persistent.py"),
@@ -98,6 +116,11 @@ def main() -> None:
     hashes = {
         str(path.name): hashlib.sha256(path.read_bytes()).hexdigest()
         for path in source_files
+    }
+    candidate_hashes = {
+        name: digest
+        for name, digest in hashes.items()
+        if name not in ("torch_layer.py", "upstream_triton.py", "lstm_fw.py")
     }
     session = str(uuid.uuid4())
     props = torch.cuda.get_device_properties(0)
@@ -113,17 +136,25 @@ def main() -> None:
         "torch": torch.__version__,
         "cuda": torch.version.cuda,
         "cudnn": torch.backends.cudnn.version(),
-        "baseline_sha": torch.__version__ + ":" + hashes["torch_layer.py"],
+        "baseline_sha": (
+            torch.__version__ + ":" + hashes["torch_layer.py"]
+            if args.baseline == "torch_nn"
+            else hashes["upstream_triton.py"] + ":" + hashes["lstm_fw.py"]
+        ),
         "candidate_sha": hashlib.sha256(
-            json.dumps(hashes, sort_keys=True).encode()
+            json.dumps(candidate_hashes, sort_keys=True).encode()
         ).hexdigest(),
         "source_sha256": hashes,
         "dtype_contract_id": "bf16-layer-input-weights-hidden-final-v1",
         "reference_cast_path": "FP32 projection rounded to BF16; FP32 local states; recurrent h rounded to BF16; BF16 snapshots",
         "candidate_local_states": "FP32",
-        "baseline_internal_casts": "cuDNN opaque; not inferred from candidate implementation",
+        "baseline_internal_casts": (
+            "cuDNN opaque; not inferred from candidate implementation"
+            if args.baseline == "torch_nn"
+            else "original Triton source; see numerical-contracts.md"
+        ),
         "contract": contract,
-        "baseline": "torch_nn",
+        "baseline": args.baseline,
         "candidate": args.candidate,
         "scope": "LAYER_FORWARD_ONLY",
         "torch_nn_setup_ms": setup_ms,
@@ -158,20 +189,22 @@ def main() -> None:
                 )
                 assert error <= contract["max_error_limit"], (label, error)
             correctness[label] = errors
-        with torch.profiler.profile(
-            activities=[torch.profiler.ProfilerActivity.CPU]
-        ) as profile:
-            baseline()
-            torch.cuda.synchronize()
-        operators = sorted(
-            {
-                event.key
-                for event in profile.key_averages()
-                if "cudnn" in event.key.lower()
-            }
-        )
-        if not operators:
-            raise RuntimeError("torch.nn did not dispatch a cuDNN operator")
+        operators = []
+        if args.baseline == "torch_nn":
+            with torch.profiler.profile(
+                activities=[torch.profiler.ProfilerActivity.CPU]
+            ) as profile:
+                baseline()
+                torch.cuda.synchronize()
+            operators = sorted(
+                {
+                    event.key
+                    for event in profile.key_averages()
+                    if "cudnn" in event.key.lower()
+                }
+            )
+            if not operators:
+                raise RuntimeError("torch.nn did not dispatch a cuDNN operator")
         metadata.update(
             correctness_max_errors=correctness,
             cudnn_operators=operators,
