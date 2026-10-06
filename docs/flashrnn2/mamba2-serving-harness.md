@@ -1,6 +1,6 @@
 # Mamba2 queued-serving comparison
 
-The [Mamba2-130M B16 CPU gate](mamba2-highbatch-cpu.md) establishes complete-model numerical parity for the pinned B1/P128 TorchScript artifact. The queued-serving harness is prepared for a same-GPU comparison of the native Transformers Torch path and that artifact; it has not produced GPU timings. It is not a measurement of `mamba_ssm` fused kernels or a FlashRNN candidate.
+The [Mamba2-130M B16/B32 CPU gates](mamba2-highbatch-cpu.md) establish complete-model numerical parity for the pinned B1/P128 TorchScript artifact. The B32 CPU run has one request group and does not satisfy this harness's three-group timing prerequisite. The queued-serving harness is prepared for a same-GPU comparison of the native Transformers Torch path and that artifact; it has not produced GPU timings. It is not a measurement of `mamba_ssm` fused kernels or a FlashRNN candidate.
 
 Before timing, `mamba2_highbatch_gate.py` must pass on the target GPU for all three fixed WikiText request groups at the selected B16, B32 or B64 batch. It compares every full-vocabulary logit step and token, plus all-layer convolution and SSM caches at prefill and final boundaries. `mamba2_serving.py` binds that qualification, checkpoint, input and script hashes, then generates the native golden outputs on the same device. Each arm must match all generated tokens and final caches during its qualification cohort.
 
