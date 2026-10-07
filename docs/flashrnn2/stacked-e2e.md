@@ -72,6 +72,8 @@ numerical gate. The analyzer marks the earlier BF16 row diagnostic even when
 replayed from its archived metadata. The frozen H20 FP16 run remains unmeasured;
 separate H100 FP16 results cover the [full 51-case LSTM, GRU and Elman
 matrix](h100-full-matrix-results.md).
+The separate [H100 FlashRNN1 LSTM/sLSTM matrix](h100-flashrnn1-results.md)
+qualifies all 34 legal original-kernel comparisons.
 
 The [raw offbox archive](../../evidence/flashrnn2-stacked-e2e-h20-b16-c32/own-offbox-raw.tar.gz)
 has SHA256 `2b77b63631e8a06071325dea3b2816d256886863fdbbfbd9d783b6d252d0a75c`.
@@ -98,7 +100,8 @@ cuDNN B16/C32 row remains diagnostic, and its other 16 pairs are unrun. Haste
 requires a separate FP32/FP16 model contract; BF16 results here cannot be
 assigned to Haste. On H100, the LSTM, GRU and Elman candidates passed the
 matched packed-cuDNN gate and all 51 legal complete-model E2E cases in the
-linked table. These fixed-weight synthetic results do not establish
+linked table. LSTM and sLSTM also passed all 34 legal H100 original
+FlashRNN1 Triton comparisons. These fixed-weight synthetic results do not establish
 pretrained-checkpoint generation throughput for the 18-family matrix.
 
 For one admitted run, the command shape is:
@@ -106,7 +109,7 @@ For one admitted run, the command shape is:
 ```sh
 PYTHONPATH=application python application/tools/flashrnn2/stacked_e2e.py \
   --cell lstm --baseline cudnn --batch 16 --concurrency 32 \
-  --expected-gpu-uuid GPU-d952768b-40d1-0de6-38f2-6725427f8214 \
+  --expected-gpu-uuid "$GPU_UUID" \
   --output results/lstm-cudnn-b16-c32.jsonl
 ```
 

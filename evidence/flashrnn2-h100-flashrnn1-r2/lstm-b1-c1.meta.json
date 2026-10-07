@@ -1,0 +1,47 @@
+{
+  "status": "PASS",
+  "scope": "SYNTHETIC_COMPLETE_STACKED_SEQUENCE_MODEL_E2E",
+  "model": {
+    "seed": 20261006,
+    "layers": 4,
+    "width": 64,
+    "vocab": 512,
+    "cell": "lstm"
+  },
+  "workload": {
+    "batch": 1,
+    "concurrency": 1,
+    "sequence_length": 32,
+    "groups": 1,
+    "fixture_seed": 20261007
+  },
+  "baseline": "flashrnn1_triton",
+  "candidate": "flashrnn2_triton_persistent",
+  "cudnn_training_flags": [],
+  "dtype": "torch.float16",
+  "cudnn_weight_storage_counts": [],
+  "cudnn_weights_acceptable": [],
+  "packed_cudnn_required": false,
+  "device_uuid": "redacted",
+  "device_name": "NVIDIA H100",
+  "torch": "2.4.0a0+gite3b9b71",
+  "cuda": "11.8",
+  "source_sha256": {
+    "stacked_e2e.py": "bfaa5d0c81b2950cac13935e0157804d09e808cd04b3378fc6a4521df556455c",
+    "torch_layer.py": "029a72b034fc47e61099ee6fb96644d428caafd2a04ce02f9aa1067a7fc3b5c6",
+    "triton_persistent.py": "9738e3654e309b892b8044bf02ecd0e3fffbfddd633238c66bc2154313c7d842",
+    "upstream_triton.py": "726c44344b2edba55e2fda30fb7a3cb49b53314273bc18720f15afd8ba2c53fd",
+    "lstm_fw.py": "9d5a940a13b95f2df603b5d61d44d5d4b6778a65e4ee7ab0455b909b528b1cc6"
+  },
+  "fixture_sha256": [
+    "c989c77f3283812e86a8f02960f61257eed65a6d0bcea67fa20759f9654f3399"
+  ],
+  "timed": "Batched IDs H2D, embedding, every recurrent layer, final readout, logits D2H and queued groups",
+  "excluded": "Model construction, JIT, warmup, qualification, fixture generation and JSON I/O",
+  "arrival_policy": "All C requests at time zero; one worker runs B-sized groups in order",
+  "statistics": "Within-process paired AB/BA blocks; no independent-start interval",
+  "memory_scope": "Both arms' model weights remain resident; peak is process total",
+  "qualification_max_abs": 1.52587890625e-05,
+  "qualification_sha256": "37f4606ce2d1158184116370c784cd9a344172709520e849ecfbfcd5b83ccee8",
+  "qualification_bytes": 43492
+}
