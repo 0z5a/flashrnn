@@ -3,6 +3,7 @@
 import torch
 import triton
 import triton.language as tl
+from triton.language.extra import libdevice
 
 
 @triton.jit
@@ -21,6 +22,7 @@ def _sequence(
     BM: tl.constexpr,
     BD: tl.constexpr,
     WEIGHT_A: tl.constexpr,
+    TIREX: tl.constexpr,
 ):
     rows = tl.program_id(0) * BM + tl.arange(0, BM)
     head = tl.program_id(1)
@@ -60,6 +62,11 @@ def _sequence(
             af = tl.dot(h_mma, rf)
             az = tl.dot(h_mma, rz)
             ao = tl.dot(h_mma, ro)
+        if TIREX:
+            ai = ai.to(dtype).to(tl.float32)
+            af = af.to(dtype).to(tl.float32)
+            az = az.to(dtype).to(tl.float32)
+            ao = ao.to(dtype).to(tl.float32)
         i = ai + tl.load(WX + x_offset, valid, 0).to(tl.float32) + bi[None, :]
         f = af + tl.load(WX + x_offset + H * D, valid, 0).to(tl.float32) + bf[None, :]
         z = (
@@ -72,16 +79,32 @@ def _sequence(
             + tl.load(WX + x_offset + 3 * H * D, valid, 0).to(tl.float32)
             + bo[None, :]
         )
-        z_value = 2.0 * tl.sigmoid(2.0 * z) - 1.0
+        if TIREX:
+            z_value = libdevice.tanh(z)
+        else:
+            z_value = 2.0 * tl.sigmoid(2.0 * z) - 1.0
         if SLSTM:
+            if TIREX:
+                f = tl.minimum(f, 15.0)
             logf = tl.minimum(f, 0.0) - tl.log(1.0 + tl.exp(-tl.abs(f))) + m
             next_m = tl.where((step == 0) & zero_normalizer, i, tl.maximum(i, logf))
             igate = tl.exp(i - next_m)
             fgate = tl.exp(logf - next_m)
+            if TIREX:
+                igate = tl.minimum(igate, 1.0)
+                fgate = tl.minimum(fgate, 1.0)
             c = fgate * c + igate * z_value
-            n = tl.maximum(fgate * n + igate, 1.0)
+            if TIREX:
+                n = fgate * n + igate
+            else:
+                n = tl.maximum(fgate * n + igate, 1.0)
             hidden = tl.sigmoid(o) * c / n
             m = next_m
+            if TIREX:
+                hidden = hidden.to(dtype).to(tl.float32)
+                c = c.to(dtype).to(tl.float32)
+                n = n.to(dtype).to(tl.float32)
+                m = m.to(dtype).to(tl.float32)
         else:
             c = tl.sigmoid(f) * c + tl.sigmoid(i) * z_value
             hidden = tl.sigmoid(o) * (2.0 * tl.sigmoid(2.0 * c) - 1.0)
@@ -104,6 +127,7 @@ def recurrence(
     snapshot_dtype: torch.dtype | None = None,
     weight_operand: str = "b",
     register_layout: bool = False,
+    slstm_semantics: str = "flashrnn",
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Run one program per batch tile/head; optional FP32 snapshots are diagnostic."""
     if register_layout and weight_operand != "b":
@@ -112,6 +136,11 @@ def recurrence(
         raise ValueError("weight operand must be a or b")
     if cell not in ("lstm", "slstm"):
         raise ValueError("persistent prototype supports LSTM and sLSTM")
+    if slstm_semantics not in ("flashrnn", "tirex") or (
+        slstm_semantics == "tirex"
+        and (cell != "slstm" or wx.dtype != torch.bfloat16 or register_layout)
+    ):
+        raise ValueError("TiRex semantics require BF16 sLSTM without register layout")
     if wx.dtype not in (torch.float16, torch.bfloat16) or not wx.is_cuda:
         raise ValueError("persistent prototype requires CUDA FP16/BF16 inputs")
     if torch.is_grad_enabled() and any(
@@ -126,10 +155,15 @@ def recurrence(
         raise ValueError("expected public weight and bias layouts")
     if initial.shape != (states, batch, 1, heads, width):
         raise ValueError("expected public initial state layout")
-    if any(
-        x.dtype != wx.dtype or x.device != wx.device for x in (recurrent, bias, initial)
-    ):
-        raise ValueError("all inputs must share dtype and device")
+    if recurrent.dtype != wx.dtype or initial.dtype != wx.dtype:
+        raise ValueError("recurrent weights and initial state must match input dtype")
+    bias_dtypes = (
+        (wx.dtype, torch.float32) if slstm_semantics == "tirex" else (wx.dtype,)
+    )
+    if bias.dtype not in bias_dtypes:
+        raise ValueError("bias dtype does not match selected semantics")
+    if any(x.device != wx.device for x in (recurrent, bias, initial)):
+        raise ValueError("all inputs must share device")
     wx, recurrent, bias, initial = (
         x.contiguous() for x in (wx, recurrent, bias, initial)
     )
@@ -157,6 +191,7 @@ def recurrence(
         16,
         triton.next_power_of_2(width),
         weight_operand == "a",
+        slstm_semantics == "tirex",
         num_warps=8 if register_layout else 4,
         enable_fp_fusion=False,
     )

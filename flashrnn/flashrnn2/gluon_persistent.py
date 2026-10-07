@@ -26,8 +26,10 @@ def _sequence(
     BM: gl.constexpr,
     BD: gl.constexpr,
     WEIGHT_A: gl.constexpr,
+    TIREX: gl.constexpr,
 ):
     gl.static_assert(not WEIGHT_A)
+    gl.static_assert(not TIREX)
     state_layout: gl.constexpr = gl.BlockedLayout([1, 4], [4, 8], [1, 8], [1, 0])
     weight_layout: gl.constexpr = gl.BlockedLayout([4, 1], [8, 4], [1, 8], [0, 1])
     mma_layout: gl.constexpr = gl.NVMMADistributedLayout([2, 0], [1, 8], [16, 8])
