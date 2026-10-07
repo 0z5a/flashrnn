@@ -72,6 +72,8 @@ numerical gate. The analyzer marks the earlier BF16 row diagnostic even when
 replayed from its archived metadata. The frozen H20 FP16 run remains unmeasured;
 separate H100 FP16 results cover the [full 51-case LSTM, GRU and Elman
 matrix](h100-full-matrix-results.md).
+The separate [H100 FlashRNN1 sLSTM gate](h100-flashrnn1-results.md) qualifies
+one original-kernel comparison; its remaining legal cells are pending.
 
 The [raw offbox archive](../../evidence/flashrnn2-stacked-e2e-h20-b16-c32/own-offbox-raw.tar.gz)
 has SHA256 `2b77b63631e8a06071325dea3b2816d256886863fdbbfbd9d783b6d252d0a75c`.
