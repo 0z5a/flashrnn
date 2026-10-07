@@ -69,7 +69,9 @@ arms. Before timing, the runner requires one shared weight storage per cuDNN
 layer, accepted cuDNN weights, eval-mode `aten::_cudnn_rnn` dispatch, no
 weight-compaction warning and the same per-layer hidden/final-state and logit
 numerical gate. The analyzer marks the earlier BF16 row diagnostic even when
-replayed from its archived metadata. No FP16 GPU result has been measured yet.
+replayed from its archived metadata. The frozen H20 FP16 run remains unmeasured;
+separate H100 FP16 results are reported in the
+[GRU and Elman complete-model table](h100-gru-elman-results.md).
 
 The [raw offbox archive](../../evidence/flashrnn2-stacked-e2e-h20-b16-c32/own-offbox-raw.tar.gz)
 has SHA256 `2b77b63631e8a06071325dea3b2816d256886863fdbbfbd9d783b6d252d0a75c`.
@@ -94,8 +96,9 @@ for independent numerical recomputation. Each group has distinct token IDs.
 Thirteen legal B × C pairs per FlashRNN1 cell remain unmeasured. The cuDNN
 B16/C32 row remains diagnostic, and its other 16 pairs are unrun. Haste requires a
 separate FP32/FP16 model contract; BF16 results here cannot be assigned to
-Haste. GRU and Elman need their own FlashRNN2 GPU candidates before a
-same-cell speedup exists. These fixed-weight synthetic results do not establish
+Haste. The single-CTA GRU/Elman candidate and matched cuDNN model route passed
+the H100 FP16 correctness and eight complete-model E2E cases in the linked
+table. These fixed-weight synthetic results do not establish
 pretrained-checkpoint generation throughput for the 18-family matrix.
 
 For one admitted run, the command shape is:

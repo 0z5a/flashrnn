@@ -1,0 +1,68 @@
+{
+  "scope": "H100_FP16_CUDNN_MAPPING_AND_PACKING_DIAGNOSTIC",
+  "device_name": "NVIDIA H100",
+  "torch": "2.4.0a0+gite3b9b71",
+  "cuda": "11.8",
+  "cudnn": 90000,
+  "source_sha256": {
+    "check_cudnn_fp16.py": "9cf3d72833e94e2e293e076fa1ed25fbf47c536d82125f7bee01d34cff786d55",
+    "flashrnn/flashrnn2/reference.py": "23ef2f8fcec54f9335a367a644f936b61852ce250ff7933e7989c9e1ac8e0029",
+    "flashrnn/flashrnn2/torch_layer.py": "029a72b034fc47e61099ee6fb96644d428caafd2a04ce02f9aa1067a7fc3b5c6"
+  },
+  "rows": [
+    {
+      "cell": "lstm",
+      "status": "PASS",
+      "batch": 16,
+      "steps": 32,
+      "width": 64,
+      "dtype": "fp16",
+      "packed_storages": 1,
+      "cudnn_weights_acceptable": true,
+      "cudnn_operators": [
+        "aten::_cudnn_rnn",
+        "aten::cudnn_is_acceptable"
+      ],
+      "compaction_warnings": [],
+      "max_hidden_abs_error": 6.103515625e-05,
+      "max_final_abs_error": 6.103515625e-05
+    },
+    {
+      "cell": "gru",
+      "status": "PASS",
+      "batch": 16,
+      "steps": 32,
+      "width": 64,
+      "dtype": "fp16",
+      "packed_storages": 1,
+      "cudnn_weights_acceptable": true,
+      "cudnn_operators": [
+        "aten::_cudnn_rnn",
+        "aten::cudnn_is_acceptable"
+      ],
+      "compaction_warnings": [],
+      "max_hidden_abs_error": 9.1552734375e-05,
+      "max_final_abs_error": 3.0517578125e-05
+    },
+    {
+      "cell": "elman",
+      "status": "PASS",
+      "batch": 16,
+      "steps": 32,
+      "width": 64,
+      "dtype": "fp16",
+      "packed_storages": 1,
+      "cudnn_weights_acceptable": true,
+      "cudnn_operators": [
+        "aten::_cudnn_rnn",
+        "aten::cudnn_is_acceptable"
+      ],
+      "compaction_warnings": [],
+      "max_hidden_abs_error": 6.103515625e-05,
+      "max_final_abs_error": 6.103515625e-05
+    }
+  ],
+  "all_pass": true,
+  "flashrnn2_candidate_executed": false,
+  "e2e_speedup": null
+}
