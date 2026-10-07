@@ -108,7 +108,9 @@ def compare(reference: torch.Tensor, candidate: torch.Tensor) -> dict:
         "failed_elements": int(np.count_nonzero(failed)),
         "max_abs": float(np.max(difference[finite])) if np.any(finite) else None,
         "worst_normalized": (
-            float(np.max((difference / allowed)[finite])) if np.any(finite) else None
+            float(np.max(difference[finite] / allowed[finite]))
+            if np.any(finite)
+            else None
         ),
     }
 
