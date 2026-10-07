@@ -2,11 +2,11 @@
 
 No pretrained-checkpoint, high-concurrency GPU speedup has passed the paired measurement gate yet. The [single-layer GPU pilot](layer-timing.md) and [small CPU compile probe](compile-gate.md) have narrower contracts and are excluded from this table. Each future result must use the same checkpoint, inputs, output contract, batch, concurrency and device for baseline and candidate; report paired AB/BA blocks and a 95% interval. Language-model throughput is generated tokens/s; TiRex uses completed forecasts/s.
 
-The [synthetic stacked LSTM/sLSTM complete-model control](stacked-e2e.md) has eight measured FlashRNN1 rows at B16/C32 and B16/B32/B64 with C128, plus one diagnostic cuDNN row. Its FlashRNN1 speed ratios range from 0.8165× to 0.9324×, while the cuDNN BF16 path repeatedly compacts weights and cannot support a fair optimized-baseline claim. These fixed-weight rows have a separate sequence-responses/s contract and do not fill any pretrained-model row below.
+Separate fixed-weight synthetic controls report [34 H100 FP16 LSTM/sLSTM rows against FlashRNN1](h100-flashrnn1-results.md) at 1.177×–1.808× and [51 H100 FP16 LSTM/GRU/Elman rows against packed cuDNN](h100-full-matrix-results.md) at 1.422×–1.655×. The [H20 BF16 stacked control](stacked-e2e.md) has eight FlashRNN1 rows at 0.8165×–0.9324× plus one diagnostic cuDNN row with weight-compaction warnings. These fixed-weight sequence-responses/s controls do not fill any pretrained-model row below.
 
 | Model family | Accelerated baseline to qualify | Full-model GPU baseline throughput | Candidate throughput | Paired speedup [95% CI] |
 | --- | --- | ---: | ---: | ---: |
-| LSTM / GRU / Elman / sLSTM representative stacks | [FlashRNN1 backends, cuDNN and Haste](competing-baselines.md) where the cell/output contract matches | — | — | Unmeasured |
+| LSTM / GRU / Elman / sLSTM representative pretrained stacks | [FlashRNN1 backends, cuDNN and Haste](competing-baselines.md) where the cell/output contract matches; synthetic controls linked above | — | — | Pretrained checkpoint unmeasured |
 | Mamba 130M | `mamba_ssm` fused scan and native Torch control | — | — | Unmeasured |
 | Mamba2 130M | Author fused backend and [native Torch control](mamba2-serving-harness.md) | — | — | Unmeasured |
 | Mamba3 SISO / MIMO 187M | Author Mamba-3 CUDA | — | — | Unmeasured |
