@@ -18,7 +18,8 @@ python tools/flashrnn2/tirex_gpu_gate.py \
 It compares the official Torch cell and full 12-block, 64-step forecast with
 the candidate on the same GPU. Batch sizes 1, 2 and 4 cover synthetic cell
 inputs and the public forecast path; each block's output and four recurrent
-states are checked after both forecast patches. The gate saves raw tensor
+states are checked after both forecast patches at the CPU reference's
+unchanged `1e-4 × (1 + |reference|)` tolerance. The gate saves raw tensor
 pairs for an independent audit. Passing this gate is required before paired
 AB/BA E2E timing and high-concurrency throughput measurements.
 
