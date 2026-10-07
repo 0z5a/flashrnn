@@ -94,8 +94,10 @@ for independent numerical recomputation. Each group has distinct token IDs.
 Thirteen legal B × C pairs per FlashRNN1 cell remain unmeasured. The cuDNN
 B16/C32 row remains diagnostic, and its other 16 pairs are unrun. Haste requires a
 separate FP32/FP16 model contract; BF16 results here cannot be assigned to
-Haste. GRU and Elman need their own FlashRNN2 GPU candidates before a
-same-cell speedup exists. These fixed-weight synthetic results do not establish
+Haste. A single-CTA GRU/Elman candidate and matched cuDNN model route are now
+prepared for the same four-layer D64 workload. They have no GPU correctness or
+speed result yet; the source-only addition does not qualify a same-cell
+speedup. These fixed-weight synthetic results do not establish
 pretrained-checkpoint generation throughput for the 18-family matrix.
 
 For one admitted run, the command shape is:

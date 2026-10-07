@@ -14,7 +14,9 @@ from pathlib import Path
 
 import torch
 
+from flashrnn.flashrnn2.reference import SIZES
 from flashrnn.flashrnn2.torch_layer import TorchLayer
+from flashrnn.flashrnn2.triton_basic import recurrence as basic
 from flashrnn.flashrnn2.triton_persistent import recurrence as persistent
 from flashrnn.flashrnn2.upstream_triton import recurrence as upstream
 
@@ -38,27 +40,28 @@ class StackedModel:
         )
         self.weights = []
         self.modules = []
+        gates, bias_gates, _ = SIZES[cell]
         for _ in range(layers):
             w = (
-                torch.randn(4, 1, width, width, generator=generator)
+                torch.randn(gates, 1, width, width, generator=generator)
                 * (0.2 / width**0.5)
             ).to(device="cuda", dtype=dtype)
             r = (
-                torch.randn(4, 1, width, width, generator=generator)
+                torch.randn(gates, 1, width, width, generator=generator)
                 * (0.2 / width**0.5)
             ).to(device="cuda", dtype=dtype)
-            b = (torch.randn(4, 1, width, generator=generator) * 0.02).to(
+            b = (torch.randn(bias_gates, 1, width, generator=generator) * 0.02).to(
                 device="cuda", dtype=dtype
             )
             self.weights.append((w, r, b))
             self.modules.append(
-                TorchLayer(w, r, b, "lstm").eval() if baseline == "cudnn" else None
+                TorchLayer(w, r, b, cell).eval() if baseline == "cudnn" else None
             )
 
     def forward(self, ids: torch.Tensor, arm: str, trace: bool = False):
         batch = ids.shape[0]
         x = self.embedding[ids.to("cuda")]
-        states = 4 if self.cell == "slstm" else 2
+        states = SIZES[self.cell][2]
         layers = []
         for (w, r, bias), module in zip(self.weights, self.modules):
             initial = torch.zeros(
@@ -70,7 +73,12 @@ class StackedModel:
                 hidden, final = module(x, initial)
             else:
                 wx = torch.einsum("bti,ghdi->btghd", x, w)
-                kernel = upstream if arm == "baseline" else persistent
+                if arm == "baseline":
+                    kernel = upstream
+                elif self.cell in ("lstm", "slstm"):
+                    kernel = persistent
+                else:
+                    kernel = basic
                 history, final = kernel(wx, r, bias, initial, self.cell)
                 hidden = history[0]
             x = hidden[:, :, 0]
@@ -143,7 +151,9 @@ def burst(model: StackedModel, fixtures: list[torch.Tensor], groups: int, arm: s
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--cell", choices=("lstm", "slstm"), required=True)
+    parser.add_argument(
+        "--cell", choices=("lstm", "slstm", "gru", "elman"), required=True
+    )
     parser.add_argument(
         "--baseline", choices=("cudnn", "flashrnn1_triton"), required=True
     )
@@ -162,6 +172,8 @@ def main() -> None:
     args = parser.parse_args()
     if args.cell == "slstm" and args.baseline == "cudnn":
         parser.error("cuDNN has no sLSTM cell")
+    if args.cell in ("gru", "elman") and args.baseline != "cudnn":
+        parser.error("GRU and Elman require the matched cuDNN baseline")
     if args.batch < 1 or args.concurrency < args.batch or args.concurrency % args.batch:
         parser.error("concurrency must be a positive multiple of batch")
     if args.steps < 1 or args.layers < 2 or args.width != 64 or args.blocks < 20:
@@ -215,10 +227,11 @@ def main() -> None:
         or not all(cudnn_weights_acceptable)
     ):
         raise RuntimeError("cuDNN weights are not packed on this runtime")
+    candidate = persistent if args.cell in ("lstm", "slstm") else basic
     source_files = [
         Path(__file__),
         Path(TorchLayer.forward.__code__.co_filename),
-        Path(persistent.__code__.co_filename),
+        Path(candidate.__code__.co_filename),
     ]
     if args.baseline == "flashrnn1_triton":
         source_files.extend(
