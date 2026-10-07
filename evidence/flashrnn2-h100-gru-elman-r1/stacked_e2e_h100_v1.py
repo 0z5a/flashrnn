@@ -195,15 +195,12 @@ def main() -> None:
         for _ in range(groups)
     ]
     props = torch.cuda.get_device_properties(0)
-    visible = os.environ["CUDA_VISIBLE_DEVICES"]
-    if "," in visible or torch.cuda.device_count() != 1:
-        raise ValueError("expected exactly one assigned GPU")
     device_uuid = subprocess.check_output(
-        ["nvidia-smi", "-i", visible, "--query-gpu=uuid", "--format=csv,noheader"],
-        text=True,
+        ["nvidia-smi", "--query-gpu=uuid", "--format=csv,noheader"], text=True
     ).strip()
-    expected_uuids = args.expected_gpu_uuid.split(",")
-    if device_uuid not in expected_uuids:
+    if device_uuid.removeprefix("GPU-") != args.expected_gpu_uuid.removeprefix(
+        "GPU-"
+    ):
         raise ValueError("GPU UUID differs from the admitted device")
     dtype = torch.bfloat16 if args.dtype == "bf16" else torch.float16
     model = StackedModel(args.cell, args.baseline, args.layers, args.width, dtype)
