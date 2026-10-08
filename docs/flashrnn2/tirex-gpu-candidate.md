@@ -34,7 +34,11 @@ AB/BA E2E timing and high-concurrency throughput measurements.
 The [r2 failure report](tirex-gpu-r2-results.md) includes the checkpoint-weight
 layout diagnosis. The [r3 failure report](tirex-gpu-r3-results.md) includes
 the corrected-layout GPU comparison, independent 381-pair audit and raw
-tensors. The remaining numerical discrepancy is under investigation.
+tensors. A subsequent candidate uses CUDA libdevice `exp` and `log1p` for the
+TiRex pointwise path, matching the operation sequence in PyTorch's CUDA
+[log-sigmoid](https://github.com/pytorch/pytorch/blob/v2.4.0/aten/src/ATen/native/cuda/ActivationLogSigmoidKernel.cu)
+and sigmoid kernels. This is a source-level hypothesis, not a
+passing GPU result; the original numerical gate still applies.
 
 The prior [CPU reference](tirex-slstm-reference.md) validates the checkpoint's
 official Torch forecast. It does not establish GPU parity or a speedup.

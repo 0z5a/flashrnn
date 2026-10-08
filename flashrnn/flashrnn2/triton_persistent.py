@@ -86,19 +86,26 @@ def _sequence(
         if SLSTM:
             if TIREX:
                 f = tl.minimum(f, 15.0)
-            logf = tl.minimum(f, 0.0) - tl.log(1.0 + tl.exp(-tl.abs(f))) + m
+                logf = (
+                    tl.minimum(f, 0.0) - libdevice.log1p(libdevice.exp(-tl.abs(f))) + m
+                )
+            else:
+                logf = tl.minimum(f, 0.0) - tl.log(1.0 + tl.exp(-tl.abs(f))) + m
             next_m = tl.where((step == 0) & zero_normalizer, i, tl.maximum(i, logf))
-            igate = tl.exp(i - next_m)
-            fgate = tl.exp(logf - next_m)
             if TIREX:
-                igate = tl.minimum(igate, 1.0)
-                fgate = tl.minimum(fgate, 1.0)
+                igate = tl.minimum(libdevice.exp(i - next_m), 1.0)
+                fgate = tl.minimum(libdevice.exp(logf - next_m), 1.0)
+                ogate = 1.0 / (1.0 + libdevice.exp(-o))
+            else:
+                igate = tl.exp(i - next_m)
+                fgate = tl.exp(logf - next_m)
+                ogate = tl.sigmoid(o)
             c = fgate * c + igate * z_value
             if TIREX:
                 n = fgate * n + igate
             else:
                 n = tl.maximum(fgate * n + igate, 1.0)
-            hidden = tl.sigmoid(o) * c / n
+            hidden = ogate * c / n
             m = next_m
             if TIREX:
                 hidden = hidden.to(dtype).to(tl.float32)
