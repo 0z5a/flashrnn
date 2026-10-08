@@ -29,6 +29,8 @@ AB/BA E2E timing and high-concurrency throughput measurements.
 | Full forecast B1/B2/B4 parity, r2 | Reference | Failed 366/366 tensor pairs | — |
 | Repaired adapter isolated cell parity, r3 | Reference | Failed 5/15 tensor pairs | — |
 | Repaired adapter full forecast parity, r3 | Reference | Failed 302/366 tensor pairs | — |
+| CUDA-libdevice isolated cell parity, r4 | Reference | Passed 15/15 tensor pairs | — |
+| CUDA-libdevice full forecast parity, r4 | Reference | Failed 206/366 tensor pairs | — |
 | Paired full-model forecast E2E | Not timed | Not timed | — |
 
 The [r2 failure report](tirex-gpu-r2-results.md) includes the checkpoint-weight
@@ -37,8 +39,10 @@ the corrected-layout GPU comparison, independent 381-pair audit and raw
 tensors. A subsequent candidate uses CUDA libdevice `exp` and `log1p` for the
 TiRex pointwise path, matching the operation sequence in PyTorch's CUDA
 [log-sigmoid](https://github.com/pytorch/pytorch/blob/v2.4.0/aten/src/ATen/native/cuda/ActivationLogSigmoidKernel.cu)
-and sigmoid kernels. This is a source-level hypothesis, not a
-passing GPU result; the original numerical gate still applies.
+and sigmoid kernels. The [r4 result](tirex-gpu-r4-results.md) shows that all
+isolated-cell comparisons and the B2 full forecast now pass, while B1 and B4
+full forecasts remain outside the original budget. This is not a passing
+complete GPU gate.
 
 The prior [CPU reference](tirex-slstm-reference.md) validates the checkpoint's
 official Torch forecast. It does not establish GPU parity or a speedup.

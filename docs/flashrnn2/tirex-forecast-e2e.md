@@ -11,6 +11,8 @@ The separate `audit_tirex_gpu_gate.py` reads the saved gate PT tensors and recom
 The first pinned GPU qualification [failed numerically](tirex-gpu-r2-results.md)
 at all 381 required tensor pairs. The corrected-layout
 [r3 qualification](tirex-gpu-r3-results.md) still failed 307 of 381 pairs.
-A distinct passing GPU qualification is required; forecast speed and
+[r4 qualification](tirex-gpu-r4-results.md) reduced failures to 206 of 381;
+the B2 path passed exactly, but B1 and B4 full forecasts did not. A distinct
+passing GPU qualification is required; forecast speed and
 pretrained-model throughput remain unmeasured. No pretrained-model throughput
 claim follows from the separate synthetic RNN tables.
