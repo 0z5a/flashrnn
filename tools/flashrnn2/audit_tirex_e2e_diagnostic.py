@@ -20,8 +20,10 @@ def sha256(path):
 
 def identity(row):
     group = row["group"]
-    if row["scope"] == "forecast":
-        return f"G{group}/forecast/{row['tensor']}"
+    if row["scope"] in ("forecast_unhooked", "forecast_hooked"):
+        return f"G{group}/{row['scope']}/{row['tensor']}"
+    if row["scope"] == "hook_effect":
+        return f"G{group}/hook_effect/{row['arm']}/{row['tensor']}"
     if row["scope"] == "forecast_cell":
         return f"G{group}/L{row['layer']}/P{row['patch']}/{row['tensor']}"
     raise ValueError(f"unknown scope: {row['scope']}")
@@ -30,8 +32,15 @@ def identity(row):
 def required_ids():
     return {
         *(
-            f"G{group}/forecast/{name}"
+            f"G{group}/{scope}/{name}"
             for group in range(16)
+            for scope in ("forecast_unhooked", "forecast_hooked")
+            for name in ("quantiles", "median")
+        ),
+        *(
+            f"G{group}/hook_effect/{arm}/{name}"
+            for group in range(16)
+            for arm in ("reference", "candidate")
             for name in ("quantiles", "median")
         ),
         *(
@@ -47,15 +56,28 @@ def required_ids():
 def pairs(raw):
     for group, entry in enumerate(raw["groups"]):
         assert entry["group"] == group
-        reference, candidate = entry["reference"], entry["candidate"]
-        if reference["forecast"] is not None and candidate["forecast"] is not None:
-            assert len(reference["forecast"]) == len(candidate["forecast"]) == 2
-            for index, name in enumerate(("quantiles", "median")):
-                yield (
-                    f"G{group}/forecast/{name}",
-                    reference["forecast"][index],
-                    candidate["forecast"][index],
-                )
+        unhooked, hooked = entry["unhooked"], entry["hooked"]
+        for scope, outputs in (
+            ("forecast_unhooked", unhooked),
+            ("forecast_hooked", {arm: hooked[arm]["forecast"] for arm in hooked}),
+        ):
+            if outputs["reference"] is not None and outputs["candidate"] is not None:
+                assert len(outputs["reference"]) == len(outputs["candidate"]) == 2
+                for index, name in enumerate(("quantiles", "median")):
+                    yield (
+                        f"G{group}/{scope}/{name}",
+                        outputs["reference"][index],
+                        outputs["candidate"][index],
+                    )
+        for arm in ("reference", "candidate"):
+            if unhooked[arm] is not None and hooked[arm]["forecast"] is not None:
+                for index, name in enumerate(("quantiles", "median")):
+                    yield (
+                        f"G{group}/hook_effect/{arm}/{name}",
+                        unhooked[arm][index],
+                        hooked[arm]["forecast"][index],
+                    )
+        reference, candidate = hooked["reference"], hooked["candidate"]
         assert len(reference["cells"]) == len(candidate["cells"]) == 12
         for layer, (expected_calls, actual_calls) in enumerate(
             zip(reference["cells"], candidate["cells"])
@@ -81,7 +103,7 @@ def main():
     raw_path = args.diagnostic.with_suffix(".pt")
     raw = torch.load(raw_path, map_location="cpu", weights_only=True)
     required = required_ids()
-    assert len(required) == 1952
+    assert len(required) == 2048
 
     reported = {identity(row): row for row in report["comparisons"]}
     observed = {}
@@ -110,7 +132,7 @@ def main():
         == hashlib.sha256(
             torch.cat([entry["context"] for entry in raw["groups"]]).numpy().tobytes()
         ).hexdigest()
-        and len(reported) == len(report["comparisons"]) == 1952
+        and len(reported) == len(report["comparisons"]) == 2048
         and set(reported) == required
         and not missing
         and not unexpected
