@@ -38,5 +38,7 @@ payload files and has SHA256
 `6d39048eb99e5863281a9b014ee0e05e2c4e4af406e4776815a7d8a19215a20d`.
 
 This qualification permits a separate paired full-forecast E2E experiment.
-It is not a speed measurement. B1/B4 rows in that experiment will measure
-fallback dispatch overhead against Torch, not FlashRNN2 kernel speedup.
+It is not a speed measurement. Its B2 forecast used only the first two
+fixed series; a separate [B2/C32 E2E fixture failed its first numerical
+gate](tirex-e2e-r1-failure.md). B1/B4 rows, if run, measure fallback dispatch
+overhead against Torch, not FlashRNN2 kernel speedup.
