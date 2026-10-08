@@ -1,4 +1,4 @@
-"""Capture the exact B2/C32 TiRex E2E fixtures at every recurrent boundary."""
+"""Capture unhooked B2/C32 forecasts, then trace every recurrent boundary."""
 
 import argparse
 import copy
@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 import torch
-from tirex_e2e import contexts
+from tirex_e2e import burst, contexts
 from tirex_gpu_gate import forecast_with_cells
 from tirex_slstm_reference_gate import (
     SOURCE_REVISION,
@@ -28,14 +28,14 @@ FIXTURE_SHA256 = "1b7dbd6eafc2ab94e59c2df5c613cdfe93a9d12cc9e9d620c7c8905304bc83
 STATES = ("hidden", "cell", "normalizer", "stabilizer")
 
 
-def record_pairs(records, group, reference, candidate):
+def record_hooked_pairs(records, group, reference, candidate):
     assert len(reference["forecast"]) == len(candidate["forecast"]) == 2
     assert len(reference["cells"]) == len(candidate["cells"]) == 12
     for name, expected, actual in zip(
         ("quantiles", "median"), reference["forecast"], candidate["forecast"]
     ):
         records.append(
-            {"scope": "forecast", "group": group, "tensor": name}
+            {"scope": "forecast_hooked", "group": group, "tensor": name}
             | compare(actual, expected, BUDGET)
         )
     for layer, (expected_calls, actual_calls) in enumerate(
@@ -118,15 +118,13 @@ def main():
     fixtures = contexts(32, 2)
     fixture_sha = hashlib.sha256(torch.cat(fixtures).numpy().tobytes()).hexdigest()
     assert fixture_sha == FIXTURE_SHA256
-    raw = {"groups": []}
-    records = []
-    status = "INCOMPLETE"
-    try:
-        with torch.inference_mode():
-            for group, context in enumerate(fixtures):
-                entry = {
-                    "group": group,
-                    "context": context.clone(),
+    raw = {
+        "groups": [
+            {
+                "group": group,
+                "context": context.clone(),
+                "unhooked": {"reference": None, "candidate": None},
+                "hooked": {
                     "reference": {
                         "forecast": None,
                         "cells": [[] for _ in model.blocks],
@@ -135,17 +133,68 @@ def main():
                         "forecast": None,
                         "cells": [[] for _ in model.blocks],
                     },
-                }
-                raw["groups"].append(entry)
+                },
+            }
+            for group, context in enumerate(fixtures)
+        ]
+    }
+    records = []
+    status = "INCOMPLETE"
+    try:
+        with torch.inference_mode():
+            # Match the failed E2E order before installing any capture hooks.
+            for arm, selected in (("reference", model), ("candidate", candidate)):
+                outputs, _ = burst(selected, fixtures)
+                assert len(outputs) == 16
+                for group, pair in enumerate(outputs):
+                    assert len(pair) == 2
+                    raw["groups"][group]["unhooked"][arm] = tuple(
+                        value.detach().cpu().clone() for value in pair
+                    )
+            for group, entry in enumerate(raw["groups"]):
+                for name, expected, actual in zip(
+                    ("quantiles", "median"),
+                    entry["unhooked"]["reference"],
+                    entry["unhooked"]["candidate"],
+                ):
+                    records.append(
+                        {"scope": "forecast_unhooked", "group": group, "tensor": name}
+                        | compare(actual, expected, BUDGET)
+                    )
+
+            for group, context in enumerate(fixtures):
+                entry = raw["groups"][group]
                 for arm, selected in (("reference", model), ("candidate", candidate)):
                     outputs = forecast_with_cells(
-                        selected, context, entry[arm]["cells"]
+                        selected, context, entry["hooked"][arm]["cells"]
                     )
-                    entry[arm]["forecast"] = tuple(
+                    entry["hooked"][arm]["forecast"] = tuple(
                         output.detach().cpu().clone() for output in outputs
                     )
-                record_pairs(records, group, entry["reference"], entry["candidate"])
-        assert len(raw["groups"]) == 16 and len(records) == 16 * (2 + 12 * 2 * 5)
+                record_hooked_pairs(
+                    records,
+                    group,
+                    entry["hooked"]["reference"],
+                    entry["hooked"]["candidate"],
+                )
+                for arm in ("reference", "candidate"):
+                    for name, expected, actual in zip(
+                        ("quantiles", "median"),
+                        entry["unhooked"][arm],
+                        entry["hooked"][arm]["forecast"],
+                    ):
+                        records.append(
+                            {
+                                "scope": "hook_effect",
+                                "group": group,
+                                "arm": arm,
+                                "tensor": name,
+                            }
+                            | compare(actual, expected, BUDGET)
+                        )
+        assert len(raw["groups"]) == 16 and len(records) == 16 * (
+            2 + 2 + 4 + 12 * 2 * 5
+        )
         status = "PASS" if all(row["pass"] for row in records) else "FAIL_NUMERICAL"
     finally:
         torch.save(raw, raw_path)
@@ -153,7 +202,7 @@ def main():
             json.dumps(
                 {
                     "status": status,
-                    "scope": "Exact B2/C32 E2E fixtures; correctness only, no timing",
+                    "scope": "Exact unhooked B2/C32 E2E outputs, hooked layer traces and hook-effect controls; no timing claim",
                     "fixture_sha256": fixture_sha,
                     "groups": len(raw["groups"]),
                     "batch": 2,

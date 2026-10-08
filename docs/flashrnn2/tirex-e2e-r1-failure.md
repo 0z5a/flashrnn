@@ -27,6 +27,11 @@ No throughput or confidence interval is inferred from this failed run.
 The earlier [r5 qualification](tirex-gpu-r5-results.md) remains a valid
 381/381 result for its fixed inputs. Its B2 forecast used only the first two
 series, so it did not establish correctness for every series in this C32
-queue. The new diagnostic captures all 16 groups' forecast outputs and every
-cell output and four states across 12 blocks and two patches, then provides a
-separate NumPy replay. It is source only until a distinct GPU run completes.
+queue. The revised diagnostic first repeats the unhooked
+baseline-all-groups then candidate-all-groups order of the failed E2E run
+and saves every final output. It then captures all 16 groups' cell outputs
+and four states across 12 blocks and two patches with forward hooks.
+Separate comparisons measure whether the hooks change either arm's final
+output. A NumPy replay audits all 2,048 tensor pairs. The earlier hook-only
+diagnostic was not run; the revised diagnostic is source only until a
+distinct GPU run completes.
