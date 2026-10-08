@@ -101,6 +101,13 @@ def main():
         and observed[key]["pass"]
         != prior_flags[int(key.split("/")[0][1:]), key.split("/")[-1]]
     )
+    prior_flag_disagreements = sorted(
+        key
+        for key in required & reported.keys()
+        if "/forecast/" in key
+        and reported[key]["matches_prior_unhooked_flag"]
+        != (key not in prior_reproduction_changes)
+    )
     complete = (
         report["status"] == "DIAGNOSTIC_COMPLETE"
         and report["budget"] == 1e-4
@@ -117,11 +124,17 @@ def main():
             for entry in raw["targets"]
         ]
         == list(TARGETS)
+        and [
+            tuple(entry[k] for k in ("group", "layer", "patch", "step"))
+            for entry in report["targets"]
+        ]
+        == list(TARGETS)
         and len(reported) == len(report["comparisons"]) == 72
         and set(reported) == required
         and not missing
         and not unexpected
         and not disagreements
+        and not prior_flag_disagreements
         and all(row["context_equal"] for row in boundary.values())
         and all(
             report_entry["boundary_equal"]
@@ -144,6 +157,7 @@ def main():
                 "unexpected": unexpected,
                 "reported_independent_disagreements": disagreements,
                 "prior_unhooked_reproduction_changes": prior_reproduction_changes,
+                "prior_flag_disagreements": prior_flag_disagreements,
                 "boundary": boundary,
                 "comparisons": observed,
             },
