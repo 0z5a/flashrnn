@@ -15,7 +15,10 @@ at all 381 required tensor pairs. The corrected-layout
 the B2 path passed exactly, but B1 and B4 full forecasts did not. The
 [guarded r5 qualification](tirex-gpu-r5-results.md) passed 381 of 381 at the
 original budget, with B2 accelerated and B1/B4 using the official Torch cell.
-Forecast speed and pretrained-model throughput remain unmeasured. No
+[full-forecast r2 diagnostic](tirex-e2e-r2-diagnostic-results.md) shows that
+the original unhooked B2/C32 forecast fails eight of 32 output-tensor
+comparisons across 16 groups at the same budget. Forecast speed and
+pretrained-model throughput remain unmeasured. No
 pretrained-model throughput claim follows from the separate synthetic RNN tables.
 
 The qualified candidate enables FlashRNN2 only for B2 and retains the official
