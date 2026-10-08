@@ -27,13 +27,14 @@ AB/BA E2E timing and high-concurrency throughput measurements.
 |---|---:|---:|---:|
 | Per-cell BF16 state/output parity, r2 | Reference | Failed 15/15 tensor pairs | — |
 | Full forecast B1/B2/B4 parity, r2 | Reference | Failed 366/366 tensor pairs | — |
-| Repaired adapter parity | Reference | Pending new GPU qualification | — |
+| Repaired adapter isolated cell parity, r3 | Reference | Failed 5/15 tensor pairs | — |
+| Repaired adapter full forecast parity, r3 | Reference | Failed 302/366 tensor pairs | — |
 | Paired full-model forecast E2E | Not timed | Not timed | — |
 
-The [r2 failure report](tirex-gpu-r2-results.md) includes the unchanged
-budget, independent 381-pair audit, raw tensors, and a checkpoint-weight
-layout diagnosis. Correcting the recurrent layout has passed an offline
-matrix-contraction check only; it is not a GPU parity result.
+The [r2 failure report](tirex-gpu-r2-results.md) includes the checkpoint-weight
+layout diagnosis. The [r3 failure report](tirex-gpu-r3-results.md) includes
+the corrected-layout GPU comparison, independent 381-pair audit and raw
+tensors. The remaining numerical discrepancy is under investigation.
 
 The prior [CPU reference](tirex-slstm-reference.md) validates the checkpoint's
 official Torch forecast. It does not establish GPU parity or a speedup.
