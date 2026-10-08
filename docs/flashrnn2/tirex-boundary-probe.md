@@ -24,6 +24,15 @@ auditor checks all 72 tensor comparisons and the reported input/state
 equality flags. A forecast flag change relative to the prior diagnostic is
 reported explicitly. The unchanged budget is `1e-4 × (1 + |reference|)`.
 
+The first frozen auditor failed a CPU-only import preflight because it
+imported the GPU benchmark module, which imports Triton. No GPU science run
+started from that packet. The corrected auditor imports only CPU Torch and
+NumPy helpers. Its local fixture generator has the same parsed Python AST
+as the pinned benchmark generator (SHA256
+`4ec739a2abdfd229fb9f99bef635d215fc0f8a0a859872f9395235c8eb0154d5`),
+and it recomputes the fixture SHA256 from the generated tensors before
+accepting an audit. The GPU producer and six target cases are unchanged.
+
 This experiment separates upstream input/state differences from a
 same-input cell difference and checks whether a different incoming state is
 needed for the first output mismatch. It does not yet distinguish recurrent

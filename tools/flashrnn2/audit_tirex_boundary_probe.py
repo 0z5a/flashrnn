@@ -1,19 +1,38 @@
 """Independently audit the six TiRex recurrence boundary probes."""
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
 import torch
 from audit_tirex_gpu_gate import compare, digest
-from tirex_boundary_probe import (
-    DIAGNOSTIC_SHA256,
-    FIXTURE_SHA256,
-    STATE_NAMES,
-    TARGETS,
-)
-from tirex_e2e import contexts
 from tirex_slstm_reference_gate import SOURCE_REVISION, WEIGHT_SHA256
+
+DIAGNOSTIC_SHA256 = "0de5167a9a6f3ee89a468370e2d0f40886957195dc75c8145786d19fa6fd64aa"
+FIXTURE_SHA256 = "1b7dbd6eafc2ab94e59c2df5c613cdfe93a9d12cc9e9d620c7c8905304bc83c8"
+STATE_NAMES = ("hidden", "cell", "normalizer", "stabilizer")
+TARGETS = (
+    (1, 3, 1, 61),
+    (4, 3, 1, 59),
+    (6, 10, 1, 61),
+    (7, 9, 1, 61),
+    (8, 9, 0, 61),
+    (11, 3, 0, 61),
+)
+
+
+def contexts(concurrency: int, batch: int) -> list[torch.Tensor]:
+    t = torch.arange(128, dtype=torch.float32)
+    series = torch.stack(
+        [
+            (1 + 0.03 * index) * torch.sin(t / (7 + index % 5) + index / 3)
+            + 0.004 * (index + 1) * t
+            + 0.2 * torch.cos(t / (17 + index % 4))
+            for index in range(concurrency)
+        ]
+    )
+    return list(series.split(batch))
 
 
 def pairs(raw):
@@ -69,6 +88,7 @@ def main():
     }
     boundary = {}
     fixtures = contexts(32, 2)
+    fixture_sha = hashlib.sha256(torch.cat(fixtures).numpy().tobytes()).hexdigest()
     for entry in raw["targets"]:
         group = entry["group"]
         reference_gates, reference_state = entry["boundary"]["reference"]
@@ -112,6 +132,7 @@ def main():
         report["status"] == "DIAGNOSTIC_COMPLETE"
         and report["budget"] == 1e-4
         and report["fixture_sha256"] == FIXTURE_SHA256
+        and fixture_sha == FIXTURE_SHA256
         and report["checkpoint_sha256"] == WEIGHT_SHA256
         and report["source_revision"] == SOURCE_REVISION
         and report["previous_diagnostic_sha256"]
