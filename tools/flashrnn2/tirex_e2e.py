@@ -3,6 +3,7 @@
 import argparse
 import copy
 import hashlib
+import inspect
 import json
 import sys
 import time
@@ -19,7 +20,7 @@ from tirex_slstm_reference_gate import (
     sha256,
 )
 
-from flashrnn.flashrnn2.tirex_adapter import install_tirex_cells
+from flashrnn.flashrnn2.tirex_adapter import DISPATCH_POLICY, install_tirex_cells
 
 
 def contexts(concurrency: int, batch: int) -> list[torch.Tensor]:
@@ -86,6 +87,10 @@ def main():
         parser.error("TiRex GPU numerical gate has not passed")
     if gate["budget"] != 1e-4 or len(gate["comparisons"]) != 381:
         parser.error("complete TiRex gate at the pinned 1e-4 budget required")
+    if gate["dispatch_policy"] != DISPATCH_POLICY or gate["adapter_sha256"] != sha256(
+        Path(inspect.getfile(install_tirex_cells))
+    ):
+        parser.error("qualification used a different TiRex dispatch")
     if not all(row["pass"] for row in gate["comparisons"]):
         parser.error("TiRex gate contains failed tensor comparisons")
     if (
@@ -142,6 +147,8 @@ def main():
         "gate_raw_sha256": gate["raw_sha256"],
         "gate_audit_sha256": sha256(args.audit),
         "gate_budget": gate["budget"],
+        "dispatch_policy": DISPATCH_POLICY,
+        "adapter_sha256": gate["adapter_sha256"],
         "batch": args.batch,
         "concurrency": args.concurrency,
         "blocks": args.blocks,

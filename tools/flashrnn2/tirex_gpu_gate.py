@@ -2,6 +2,7 @@
 
 import argparse
 import copy
+import inspect
 import json
 import sys
 import traceback
@@ -20,7 +21,11 @@ from tirex_slstm_reference_gate import (
     sha256,
 )
 
-from flashrnn.flashrnn2.tirex_adapter import install_tirex_cells, slstm_cell
+from flashrnn.flashrnn2.tirex_adapter import (
+    DISPATCH_POLICY,
+    install_tirex_cells,
+    slstm_cell,
+)
 
 BUDGET = 1e-4
 
@@ -210,6 +215,8 @@ def main():
             "num_heads": num_heads,
             "head_dim": head_dim,
             "budget": BUDGET,
+            "dispatch_policy": DISPATCH_POLICY,
+            "adapter_sha256": sha256(Path(inspect.getfile(install_tirex_cells))),
             "raw_sha256": sha256(raw_path),
             "comparisons": records,
         }

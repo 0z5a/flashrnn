@@ -16,3 +16,8 @@ the B2 path passed exactly, but B1 and B4 full forecasts did not. A distinct
 passing GPU qualification is required; forecast speed and
 pretrained-model throughput remain unmeasured. No pretrained-model throughput
 claim follows from the separate synthetic RNN tables.
+
+The next candidate enables FlashRNN2 only for B2 and retains the official
+Torch cell at B1 and B4. If it passes the same complete gate, its E2E table
+will identify this dispatch for every batch. B1/B4 timing will measure the
+fallback overhead against Torch, not a FlashRNN2 kernel speedup.
