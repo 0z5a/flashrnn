@@ -20,7 +20,11 @@ from tirex_slstm_reference_gate import (
     sha256,
 )
 
-from flashrnn.flashrnn2.tirex_adapter import DISPATCH_POLICY, install_tirex_cells
+from flashrnn.flashrnn2.tirex_adapter import (
+    ACCELERATED_BATCHES,
+    DISPATCH_POLICY,
+    install_tirex_cells,
+)
 
 
 def contexts(concurrency: int, batch: int) -> list[torch.Tensor]:
@@ -148,6 +152,7 @@ def main():
         "gate_audit_sha256": sha256(args.audit),
         "gate_budget": gate["budget"],
         "dispatch_policy": DISPATCH_POLICY,
+        "accelerated_batches": ACCELERATED_BATCHES,
         "adapter_sha256": gate["adapter_sha256"],
         "batch": args.batch,
         "concurrency": args.concurrency,
