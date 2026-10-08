@@ -158,6 +158,7 @@ def main() -> None:
     result = {
         "status": "PASS" if passed else "FAIL_NUMERICAL" if complete else "INCOMPLETE",
         "gate_status": gate["status"],
+        "gate_sha256": digest(args.gate),
         "budget": BUDGET,
         "raw_sha256": raw_sha,
         "raw_sha_verified": gate["raw_sha256"] == raw_sha,

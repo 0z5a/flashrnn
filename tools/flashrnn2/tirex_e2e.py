@@ -67,6 +67,7 @@ def main():
     parser.add_argument("--model", type=Path, required=True)
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--gate", type=Path, required=True)
+    parser.add_argument("--audit", type=Path, required=True)
     parser.add_argument("--batch", type=int, required=True)
     parser.add_argument("--concurrency", type=int, required=True)
     parser.add_argument("--blocks", type=int, default=20)
@@ -94,6 +95,15 @@ def main():
         parser.error("qualification used a different checkpoint or source")
     if sha256(args.gate.with_suffix(".pt")) != gate["raw_sha256"]:
         parser.error("qualification raw tensor archive changed")
+    audit = json.loads(args.audit.read_text())
+    if (
+        audit["status"] != "PASS"
+        or audit["gate_sha256"] != sha256(args.gate)
+        or audit["raw_sha256"] != gate["raw_sha256"]
+        or audit["required_pairs"] != 381
+        or audit["observed_pairs"] != 381
+    ):
+        parser.error("independent NumPy audit of all gate tensors required")
     weight = args.model / "model.ckpt"
     if weight.stat().st_size != WEIGHT_BYTES or sha256(weight) != WEIGHT_SHA256:
         parser.error("checkpoint bytes or SHA do not match")
@@ -130,6 +140,7 @@ def main():
         "source_revision": SOURCE_REVISION,
         "gate_sha256": sha256(args.gate),
         "gate_raw_sha256": gate["raw_sha256"],
+        "gate_audit_sha256": sha256(args.audit),
         "gate_budget": gate["budget"],
         "batch": args.batch,
         "concurrency": args.concurrency,
