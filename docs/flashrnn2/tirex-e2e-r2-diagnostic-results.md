@@ -63,6 +63,26 @@ pass and the original unhooked path fails, the captured hooks do not explain
 this run's output failure. This does not establish a general cause for other
 inputs or implementations.
 
+A separate read of the saved raw output tensors locates the first **bitwise**
+difference in each affected group. Every earlier captured cell output in that
+group is bitwise identical. These are sequence steps within the indicated
+64-step patch; some first differences are still within the numerical budget.
+The [bitwise summary](evidence/tirex-e2e-diagnostic-r2/bitwise-first-divergence.json)
+binds this read to the raw PT SHA256 above.
+
+| Group | First different layer/patch | First different step | Different output elements there |
+|---|---|---:|---:|
+| G1 | L3/P1 | 61 | 4 |
+| G4 | L3/P1 | 59 | 1 |
+| G6 | L10/P1 | 61 | 21 |
+| G7 | L9/P1 | 61 | 21 |
+| G8 | L9/P0 | 61 | 10 |
+| G11 | L3/P0 | 61 | 3 |
+
+The late, input-dependent first differences make the corresponding recurrent
+matmul and pointwise operations the next diagnostic target. They do not yet
+identify which operation introduces the first difference.
+
 The prior [r5 gate](tirex-gpu-r5-results.md) remains 381/381 passing on its
 fixed first-two-series input. It does not qualify the new groups in this C32
 workload. The distinct [first E2E attempt](tirex-e2e-r1-failure.md) stopped
