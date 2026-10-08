@@ -32,6 +32,7 @@ baseline-all-groups then candidate-all-groups order of the failed E2E run
 and saves every final output. It then captures all 16 groups' cell outputs
 and four states across 12 blocks and two patches with forward hooks.
 Separate comparisons measure whether the hooks change either arm's final
-output. A NumPy replay audits all 2,048 tensor pairs. The earlier hook-only
-diagnostic was not run; the revised diagnostic is source only until a
-distinct GPU run completes.
+output. The earlier hook-only diagnostic was not run. The [distinct r2 GPU
+diagnostic](tirex-e2e-r2-diagnostic-results.md) saved and independently
+audited all 2,048 tensor pairs: eight original unhooked forecast pairs fail,
+and no hook-effect pair fails. It has no timing result.
