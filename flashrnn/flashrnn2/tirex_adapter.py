@@ -7,6 +7,9 @@ import torch
 from .tirex_layout import recurrent_layout
 from .triton_persistent import recurrence
 
+ACCELERATED_BATCHES = (2,)
+DISPATCH_POLICY = "FlashRNN2 B2; original TiRex Torch cell for other batches"
+
 
 def slstm_cell(
     input: torch.Tensor,
@@ -46,11 +49,16 @@ def slstm_cell(
 
 
 def install_tirex_cells(model: torch.nn.Module) -> None:
-    """Use the candidate recurrence in an already loaded TiRex model."""
+    """Use the qualified B2 candidate and retain TiRex's cell elsewhere."""
 
-    def forward(self, input: torch.Tensor, state: torch.Tensor | None):
-        return slstm_cell(input, state, self._recurrent_kernel_, self._bias_)
+    def dispatch(reference_forward):
+        def forward(self, input: torch.Tensor, state: torch.Tensor | None):
+            if input.shape[0] not in ACCELERATED_BATCHES:
+                return reference_forward(input, state)
+            return slstm_cell(input, state, self._recurrent_kernel_, self._bias_)
+
+        return forward
 
     for block in model.blocks:
         cell = block.slstm_layer.slstm_cell
-        cell.forward = MethodType(forward, cell)
+        cell.forward = MethodType(dispatch(cell.forward), cell)
