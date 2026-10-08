@@ -21,6 +21,11 @@ def main():
         raise ValueError("complete qualified paired timing required")
     if meta["gate_budget"] != 1e-4:
         raise ValueError("TiRex numerical gate used a different budget")
+    if (
+        meta["dispatch_policy"]
+        != "FlashRNN2 B2; original TiRex Torch cell for other batches"
+    ):
+        raise ValueError("unrecognized TiRex candidate dispatch")
     if sha256(args.input) != meta["raw_sha256"]:
         raise ValueError("timing raw SHA mismatch")
     for block, row in enumerate(rows):
@@ -54,6 +59,12 @@ def main():
         model=meta["model"],
         batch=meta["batch"],
         concurrency=meta["concurrency"],
+        candidate_path=(
+            "FlashRNN2"
+            if meta["batch"] in meta["accelerated_batches"]
+            else "TiRex Torch fallback"
+        ),
+        dispatch_policy=meta["dispatch_policy"],
         baseline_series_per_second=median(
             row["baseline"]["series_per_second"] for row in rows
         ),
@@ -71,9 +82,11 @@ def main():
         "",
         "The public 12-block model forecasts 64 time points in two patches. Throughput counts completed series/s; each batch processes queued requests from one arrival burst. The 95% interval bootstraps 20 within-process paired AB/BA blocks. Model loading, compilation, numerical qualification and warmup are excluded.",
         "",
-        "| Baseline | Batch | Concurrent series | Baseline series/s | FlashRNN2 series/s | Paired speedup [95% CI] |",
-        "|---|---:|---:|---:|---:|---:|",
-        f"| Official Torch | {meta['batch']} | {meta['concurrency']} | {summary['baseline_series_per_second']:.3f} | {summary['candidate_series_per_second']:.3f} | {summary['paired_speedup']:.3f}× [{low:.3f}, {high:.3f}] |",
+        f"Candidate dispatch: {meta['dispatch_policy']}. Fallback rows measure dispatch overhead, not FlashRNN2 kernel speedup.",
+        "",
+        "| Baseline | Candidate path | Batch | Concurrent series | Baseline series/s | Candidate series/s | Paired ratio [95% CI] |",
+        "|---|---|---:|---:|---:|---:|---:|",
+        f"| Official Torch | {summary['candidate_path']} | {meta['batch']} | {meta['concurrency']} | {summary['baseline_series_per_second']:.3f} | {summary['candidate_series_per_second']:.3f} | {summary['paired_speedup']:.3f}× [{low:.3f}, {high:.3f}] |",
     ]
     args.output.with_suffix(".md").write_text("\n".join(lines) + "\n")
 

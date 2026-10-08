@@ -21,3 +21,6 @@ The next candidate enables FlashRNN2 only for B2 and retains the official
 Torch cell at B1 and B4. If it passes the same complete gate, its E2E table
 will identify this dispatch for every batch. B1/B4 timing will measure the
 fallback overhead against Torch, not a FlashRNN2 kernel speedup.
+The analyzer carries the candidate path into both its JSON summary and the
+Markdown table, with B2 identified as FlashRNN2 and other batches identified
+as Torch fallback.
