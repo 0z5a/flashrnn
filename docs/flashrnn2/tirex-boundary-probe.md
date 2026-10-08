@@ -31,10 +31,21 @@ NumPy helpers. Its local fixture generator has the same parsed Python AST
 as the pinned benchmark generator (SHA256
 `4ec739a2abdfd229fb9f99bef635d215fc0f8a0a859872f9395235c8eb0154d5`),
 and it recomputes the fixture SHA256 from the generated tensors before
-accepting an audit. The GPU producer and six target cases are unchanged.
+accepting an audit.
+
+The next distinct attempt passed that import preflight but exited before
+producing a boundary report. The pinned TiRex cell passes its `state` as a
+keyword argument, while the probe's forward pre-hook unpacked it as a second
+positional argument. No boundary tensor pairs were completed. The corrected
+hook requests keyword arguments explicitly and a separate CPU-only preflight
+checks the same hook against `state=None` and a tensor state. On any later
+failure, the probe now saves the arrays captured so far and the failing phase
+before propagating the exception. Previous failed source and exit evidence
+remain separate from this revision.
 
 This experiment separates upstream input/state differences from a
 same-input cell difference and checks whether a different incoming state is
 needed for the first output mismatch. It does not yet distinguish recurrent
 matrix multiplication from pointwise arithmetic. No GPU result or timing is
-claimed by this source-only change.
+claimed by this source-only change. The corrected producer still needs CPU
+hook preflight, a fresh finite GPU run, and a complete independent audit.

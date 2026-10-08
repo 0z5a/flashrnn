@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 import torch
+from tirex_boundary_hook import capture_cell_inputs
 from tirex_e2e import contexts
 from tirex_slstm_reference_gate import (
     SOURCE_REVISION,
@@ -36,20 +37,9 @@ TARGETS = (
 STATE_NAMES = ("hidden", "cell", "normalizer", "stabilizer")
 
 
-def capture_boundary(model, context, layer):
-    inputs = []
-
-    def capture(module, args):
-        gates, state = args
-        inputs.append(
-            (
-                gates.detach().cpu().clone(),
-                None if state is None else state.detach().cpu().clone(),
-            )
-        )
-
+def capture_boundary(model, context, layer, inputs):
     cell = model.blocks[layer].slstm_layer.slstm_cell
-    hook = cell.register_forward_pre_hook(capture)
+    hook = cell.register_forward_pre_hook(capture_cell_inputs(inputs), with_kwargs=True)
     try:
         output = model.forecast(
             context,
@@ -145,116 +135,137 @@ def main():
     assert fixture_sha == FIXTURE_SHA256
     raw = {"targets": []}
     records = []
-    with torch.inference_mode():
-        for group, layer, patch, step in TARGETS:
-            entry = {
-                "group": group,
-                "layer": layer,
-                "patch": patch,
-                "step": step,
-                "context": fixtures[group].clone(),
-            }
-            reference_forecast, reference_inputs = capture_boundary(
-                reference, fixtures[group], layer
-            )
-            candidate_forecast, candidate_inputs = capture_boundary(
-                candidate, fixtures[group], layer
-            )
-            entry["forecast"] = {
-                "reference": reference_forecast,
-                "candidate": candidate_forecast,
-            }
-            entry["boundary"] = {
-                "reference": reference_inputs[patch],
-                "candidate": candidate_inputs[patch],
-            }
-            for name, expected, actual in zip(
-                ("quantiles", "median"), reference_forecast, candidate_forecast
-            ):
-                row = {"group": group, "scope": "forecast", "tensor": name} | compare(
-                    actual, expected, BUDGET
+    phase = "forecast"
+    try:
+        with torch.inference_mode():
+            for group, layer, patch, step in TARGETS:
+                entry = {
+                    "group": group,
+                    "layer": layer,
+                    "patch": patch,
+                    "step": step,
+                    "context": fixtures[group].clone(),
+                    "captures": {"reference": [], "candidate": []},
+                }
+                raw["targets"].append(entry)
+                phase = f"G{group}/reference_forecast"
+                reference_forecast, reference_inputs = capture_boundary(
+                    reference, fixtures[group], layer, entry["captures"]["reference"]
                 )
-                row["matches_prior_unhooked_flag"] = (
-                    row["pass"] == prior_flags[group, name]
+                entry["forecast"] = {"reference": reference_forecast}
+                phase = f"G{group}/candidate_forecast"
+                candidate_forecast, candidate_inputs = capture_boundary(
+                    candidate, fixtures[group], layer, entry["captures"]["candidate"]
                 )
-                records.append(row)
+                entry["forecast"]["candidate"] = candidate_forecast
+                entry["boundary"] = {
+                    "reference": reference_inputs[patch],
+                    "candidate": candidate_inputs[patch],
+                }
+                for name, expected, actual in zip(
+                    ("quantiles", "median"), reference_forecast, candidate_forecast
+                ):
+                    row = {
+                        "group": group,
+                        "scope": "forecast",
+                        "tensor": name,
+                    } | compare(actual, expected, BUDGET)
+                    row["matches_prior_unhooked_flag"] = (
+                        row["pass"] == prior_flags[group, name]
+                    )
+                    records.append(row)
 
-            reference_gates, reference_initial = reference_inputs[patch]
-            candidate_gates, candidate_initial = candidate_inputs[patch]
-            assert reference_gates.shape == candidate_gates.shape
-            state_equal = reference_initial is None and candidate_initial is None
-            if reference_initial is not None and candidate_initial is not None:
-                state_equal = torch.equal(reference_initial, candidate_initial)
-            entry["boundary_equal"] = {
-                "gates": torch.equal(reference_gates, candidate_gates),
-                "state": state_equal,
-            }
-            reference_cell = reference.blocks[layer].slstm_layer.slstm_cell
-            candidate_cell = candidate.blocks[layer].slstm_layer.slstm_cell
-            gates = reference_gates.to("cuda")
-            initial = (
-                None if reference_initial is None else reference_initial.to("cuda")
+                reference_gates, reference_initial = reference_inputs[patch]
+                candidate_gates, candidate_initial = candidate_inputs[patch]
+                assert reference_gates.shape == candidate_gates.shape
+                state_equal = reference_initial is None and candidate_initial is None
+                if reference_initial is not None and candidate_initial is not None:
+                    state_equal = torch.equal(reference_initial, candidate_initial)
+                entry["boundary_equal"] = {
+                    "gates": torch.equal(reference_gates, candidate_gates),
+                    "state": state_equal,
+                }
+                reference_cell = reference.blocks[layer].slstm_layer.slstm_cell
+                candidate_cell = candidate.blocks[layer].slstm_layer.slstm_cell
+                gates = reference_gates.to("cuda")
+                initial = (
+                    None if reference_initial is None else reference_initial.to("cuda")
+                )
+                phase = f"G{group}/prefix"
+                prefix_reference = reference_cell(gates[:, :step], initial)
+                prefix_candidate = candidate_cell(gates[:, :step], initial)
+                entry["prefix"] = {
+                    "reference": tuple(
+                        value.detach().cpu().clone() for value in prefix_reference
+                    ),
+                    "candidate": tuple(
+                        value.detach().cpu().clone() for value in prefix_candidate
+                    ),
+                }
+                compare_cell(
+                    records, "prefix", group, prefix_reference, prefix_candidate
+                )
+                phase = f"G{group}/isolated_step"
+                isolated_reference = reference_cell(
+                    gates[:, step : step + 1], prefix_reference[1]
+                )
+                isolated_candidate = candidate_cell(
+                    gates[:, step : step + 1], prefix_reference[1]
+                )
+                entry["isolated_step"] = {
+                    "reference": tuple(
+                        value.detach().cpu().clone() for value in isolated_reference
+                    ),
+                    "candidate": tuple(
+                        value.detach().cpu().clone() for value in isolated_candidate
+                    ),
+                }
+                compare_cell(
+                    records,
+                    "isolated_step",
+                    group,
+                    isolated_reference,
+                    isolated_candidate,
+                )
+                phase = f"G{group}/complete"
+        assert len(raw["targets"]) == 6 and len(records) == 6 * 12
+    finally:
+        error = sys.exc_info()[1]
+        torch.save(raw, raw_path)
+        args.output.write_text(
+            json.dumps(
+                {
+                    "status": "DIAGNOSTIC_COMPLETE" if error is None else "INCOMPLETE",
+                    "scope": "Six C32 boundary captures and shared-state one-step controls; no timing",
+                    "phase": phase,
+                    "failure": None
+                    if error is None
+                    else {"type": type(error).__name__, "message": str(error)},
+                    "budget": BUDGET,
+                    "fixture_sha256": fixture_sha,
+                    "checkpoint_sha256": WEIGHT_SHA256,
+                    "source_revision": SOURCE_REVISION,
+                    "adapter_sha256": adapter_sha,
+                    "qualification_gate_sha256": sha256(args.gate),
+                    "qualification_audit_sha256": sha256(args.audit),
+                    "previous_diagnostic_sha256": DIAGNOSTIC_SHA256,
+                    "raw_sha256": sha256(raw_path),
+                    "training_only_sklearn_import_shim": shim,
+                    "targets": [
+                        {
+                            k: v
+                            for k, v in entry.items()
+                            if k
+                            in ("group", "layer", "patch", "step", "boundary_equal")
+                        }
+                        for entry in raw["targets"]
+                    ],
+                    "comparisons": records,
+                },
+                indent=2,
             )
-            prefix_reference = reference_cell(gates[:, :step], initial)
-            prefix_candidate = candidate_cell(gates[:, :step], initial)
-            entry["prefix"] = {
-                "reference": tuple(
-                    value.detach().cpu().clone() for value in prefix_reference
-                ),
-                "candidate": tuple(
-                    value.detach().cpu().clone() for value in prefix_candidate
-                ),
-            }
-            compare_cell(records, "prefix", group, prefix_reference, prefix_candidate)
-            isolated_reference = reference_cell(
-                gates[:, step : step + 1], prefix_reference[1]
-            )
-            isolated_candidate = candidate_cell(
-                gates[:, step : step + 1], prefix_reference[1]
-            )
-            entry["isolated_step"] = {
-                "reference": tuple(
-                    value.detach().cpu().clone() for value in isolated_reference
-                ),
-                "candidate": tuple(
-                    value.detach().cpu().clone() for value in isolated_candidate
-                ),
-            }
-            compare_cell(
-                records, "isolated_step", group, isolated_reference, isolated_candidate
-            )
-            raw["targets"].append(entry)
-    assert len(raw["targets"]) == 6 and len(records) == 6 * 12
-    torch.save(raw, raw_path)
-    args.output.write_text(
-        json.dumps(
-            {
-                "status": "DIAGNOSTIC_COMPLETE",
-                "scope": "Six C32 boundary captures and shared-state one-step controls; no timing",
-                "budget": BUDGET,
-                "fixture_sha256": fixture_sha,
-                "checkpoint_sha256": WEIGHT_SHA256,
-                "source_revision": SOURCE_REVISION,
-                "adapter_sha256": adapter_sha,
-                "qualification_gate_sha256": sha256(args.gate),
-                "qualification_audit_sha256": sha256(args.audit),
-                "previous_diagnostic_sha256": DIAGNOSTIC_SHA256,
-                "raw_sha256": sha256(raw_path),
-                "training_only_sklearn_import_shim": shim,
-                "targets": [
-                    {
-                        k: v
-                        for k, v in entry.items()
-                        if k in ("group", "layer", "patch", "step", "boundary_equal")
-                    }
-                    for entry in raw["targets"]
-                ],
-                "comparisons": records,
-            },
-            indent=2,
+            + "\n"
         )
-        + "\n"
-    )
 
 
 if __name__ == "__main__":
