@@ -139,9 +139,8 @@ def main() -> None:
         for key in required & observed.keys() & reported.keys()
         if observed[key]["pass"] != reported[key]["pass"]
     )
-    complete = (
-        gate["status"] == "PASS"
-        and gate["budget"] == BUDGET
+    structure_complete = (
+        gate["budget"] == BUDGET
         and gate["checkpoint_sha256"] == WEIGHT_SHA256
         and gate["source_revision"] == SOURCE_REVISION
         and gate["raw_sha256"] == raw_sha
@@ -150,14 +149,28 @@ def main() -> None:
         and not missing
         and not unexpected
     )
+    independent_pass = all(row["pass"] for row in observed.values())
+    producer_pass = all(row["pass"] for row in gate["comparisons"])
     passed = (
-        complete
+        structure_complete
+        and gate["status"] == "PASS"
+        and producer_pass
+        and independent_pass
         and not report_mismatch
-        and all(row["pass"] for row in observed.values())
+    )
+    status = (
+        "PASS"
+        if passed
+        else "FAIL_NUMERICAL"
+        if structure_complete and gate["status"] in ("PASS", "FAIL_NUMERICAL")
+        else "INCOMPLETE"
     )
     result = {
-        "status": "PASS" if passed else "FAIL_NUMERICAL" if complete else "INCOMPLETE",
+        "status": status,
+        "structure_complete": structure_complete,
         "gate_status": gate["status"],
+        "producer_pass": producer_pass,
+        "independent_pass": independent_pass,
         "gate_sha256": digest(args.gate),
         "budget": BUDGET,
         "raw_sha256": raw_sha,
