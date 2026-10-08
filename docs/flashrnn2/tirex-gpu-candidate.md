@@ -31,7 +31,7 @@ AB/BA E2E timing and high-concurrency throughput measurements.
 | Repaired adapter full forecast parity, r3 | Reference | Failed 302/366 tensor pairs | — |
 | CUDA-libdevice isolated cell parity, r4 | Reference | Passed 15/15 tensor pairs | — |
 | CUDA-libdevice full forecast parity, r4 | Reference | Failed 206/366 tensor pairs | — |
-| B2-only candidate, Torch fallback for other batches, r5 | Reference | GPU qualification pending | — |
+| B2-only candidate, Torch fallback for other batches, r5 | Reference | Passed 381/381 tensor pairs; B2 alone accelerated | — |
 | Paired full-model forecast E2E | Not timed | Not timed | — |
 
 The [r2 failure report](tirex-gpu-r2-results.md) includes the checkpoint-weight
@@ -45,12 +45,12 @@ isolated-cell comparisons and the B2 full forecast now pass, while B1 and B4
 full forecasts remain outside the original budget. This is not a passing
 complete GPU gate.
 
-The next adapter dispatches B2 to the CUDA-libdevice candidate and retains
+The qualified adapter dispatches B2 to the CUDA-libdevice candidate and retains
 the original TiRex Torch cell for all other batch sizes. B1 and B4 will not
-be reported as FlashRNN2-accelerated. This source change has no GPU result
-yet: the full 381-pair gate and independent audit must pass before any
-forecast timing. The gate records the dispatch and adapter source hash so
-the timing runner cannot reuse a qualification from another adapter.
+be reported as FlashRNN2-accelerated. Its [r5 GPU qualification](tirex-gpu-r5-results.md)
+passed the full 381-pair gate and independent audit. Forecast timing remains
+unmeasured. The gate records the dispatch and adapter source hash so the
+timing runner cannot reuse a qualification from another adapter.
 
 The prior [CPU reference](tirex-slstm-reference.md) validates the checkpoint's
 official Torch forecast. It does not establish GPU parity or a speedup.

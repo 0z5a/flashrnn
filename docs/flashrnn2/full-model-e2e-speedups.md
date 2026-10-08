@@ -22,7 +22,7 @@ Separate fixed-weight synthetic controls report [34 H100 FP16 LSTM/sLSTM rows ag
 | xLSTM mLSTM 164M | `mlstm_kernels` | — | — | Unmeasured |
 | xLSTM mLSTM 7B | `mlstm_kernels`; full checkpoint not downloaded | — | — | Unmeasured |
 | Mixed mLSTM/sLSTM 2.1M | Author xLSTM CUDA | — | — | Unmeasured |
-| TiRex sLSTM 35M forecast | Author FlashRNN CUDA and ONNX; forecast/s, not tok/s | — | — | Unmeasured |
+| TiRex sLSTM 35M forecast | Official Torch; [B2-only GPU numerical gate passed](tirex-gpu-r5-results.md), B1/B4 use Torch fallback; forecast/s, not tok/s | — | — | E2E unmeasured |
 | KDA / signed Complex KDA 1.3B | Author fused kernels; BF16 numerical gate pending | — | — | Unmeasured |
 
 The [model coverage registry](model-coverage.md) links each checkpoint's completed CPU evidence and retained numerical failures. Baselines in this table are targets for qualification, not claims that those kernels already ran. Request concurrency and model batch are separate axes; unsupported pairs must be recorded rather than silently replaced by another workload.

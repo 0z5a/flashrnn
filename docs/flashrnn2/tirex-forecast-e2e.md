@@ -12,14 +12,15 @@ The first pinned GPU qualification [failed numerically](tirex-gpu-r2-results.md)
 at all 381 required tensor pairs. The corrected-layout
 [r3 qualification](tirex-gpu-r3-results.md) still failed 307 of 381 pairs.
 [r4 qualification](tirex-gpu-r4-results.md) reduced failures to 206 of 381;
-the B2 path passed exactly, but B1 and B4 full forecasts did not. A distinct
-passing GPU qualification is required; forecast speed and
-pretrained-model throughput remain unmeasured. No pretrained-model throughput
-claim follows from the separate synthetic RNN tables.
+the B2 path passed exactly, but B1 and B4 full forecasts did not. The
+[guarded r5 qualification](tirex-gpu-r5-results.md) passed 381 of 381 at the
+original budget, with B2 accelerated and B1/B4 using the official Torch cell.
+Forecast speed and pretrained-model throughput remain unmeasured. No
+pretrained-model throughput claim follows from the separate synthetic RNN tables.
 
-The next candidate enables FlashRNN2 only for B2 and retains the official
-Torch cell at B1 and B4. If it passes the same complete gate, its E2E table
-will identify this dispatch for every batch. B1/B4 timing will measure the
+The qualified candidate enables FlashRNN2 only for B2 and retains the official
+Torch cell at B1 and B4. Its E2E table will identify this dispatch for every
+batch. B1/B4 timing will measure the
 fallback overhead against Torch, not a FlashRNN2 kernel speedup.
 The analyzer carries the candidate path into both its JSON summary and the
 Markdown table, with B2 identified as FlashRNN2 and other batches identified
