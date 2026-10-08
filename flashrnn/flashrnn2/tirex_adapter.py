@@ -4,6 +4,7 @@ from types import MethodType
 
 import torch
 
+from .tirex_layout import recurrent_layout
 from .triton_persistent import recurrence
 
 
@@ -28,7 +29,7 @@ def slstm_cell(
 
     # Preserve the checkpoint's raw gate slots; the projection names differ.
     wx = input.reshape(batch, steps, 4, heads, width).to(torch.bfloat16)
-    r = recurrent_kernel.reshape(heads, width, 4, width).permute(2, 0, 1, 3)
+    r = recurrent_layout(recurrent_kernel)
     b = bias.reshape(heads, 4, width).permute(1, 0, 2)
     initial = state.reshape(4, batch, 1, heads, width).to(torch.bfloat16)
     history, final = recurrence(

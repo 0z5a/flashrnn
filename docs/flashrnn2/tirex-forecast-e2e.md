@@ -8,4 +8,8 @@ Choose B from 1, 2, and 4, with concurrent-series count C divisible by B. All C 
 
 The separate `audit_tirex_gpu_gate.py` reads the saved gate PT tensors and recomputes all 381 comparisons with NumPy float64 arithmetic. Torch only decodes the PT storage. It checks the raw checksum, pinned checkpoint/source, original tolerance, complete scope and reported pass flags. The timing runner requires a passing audit JSON tied to the exact gate and raw hashes. Preserve that JSON alongside the gate PT/JSON and actual process exits.
 
-GPU qualification and speed results are pending. No pretrained-model throughput claim follows from the separate synthetic RNN tables.
+The first pinned GPU qualification [failed numerically](tirex-gpu-r2-results.md)
+at all 381 required tensor pairs. A repaired adapter still needs a distinct
+passing GPU qualification; forecast speed and pretrained-model throughput
+remain unmeasured. No pretrained-model throughput claim follows from the
+separate synthetic RNN tables.
