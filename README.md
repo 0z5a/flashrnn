@@ -30,7 +30,14 @@ To install FlashRNN, simply use:
 pip install flashrnn
 ``` 
 
-Your hardware needs to support CUDA Compute Capability $8.0$ or later. Make sure, you have an up to date `g++` compiler installed. We recommend to use `conda` with an environment derived from the provided `environment_pt240cu124.yaml`:
+The base package provides the functional `flashrnn_torch` backend. It returns
+all recurrent states, supports autograd and chunk continuation, and uses the
+input device without loading project CUDA extensions. See the
+[Torch backend contract and validation](docs/flashrnn2/torch-backend.md).
+
+For the existing CUDA/Triton backends, install `pip install 'flashrnn[gpu]'`.
+These GPU backends need CUDA Compute Capability $8.0$ or later and a compatible
+`g++` compiler. An example environment is provided in `environment_pt240cu124.yaml`:
 ```bash
 conda env create -n flashrnn -f environment_pt240cu124.yaml
 ```
@@ -56,6 +63,21 @@ os.environ['FLASHRNN_EXTRA_INCLUDE_PATHS']='/usr/local/include/cuda/:/usr/includ
 
 
 ## Using FlashRNN
+
+The pure Torch entry point keeps gradients attached to the supplied tensors:
+
+```python
+from flashrnn import flashrnn_torch
+
+history, carry = flashrnn_torch(wx, recurrent, bias, initial, cell="lstm")
+# Pass carry as initial for the next sequence chunk.
+```
+
+All four tensors must have the same floating dtype and device. The default
+`mathematical` policy preserves the input dtype. The explicit
+`numerics="fp32_state_bf16_mma"` policy requires FP32 inputs and rounds both
+recurrent weights and hidden operands through BF16, retaining FP32 states and
+outputs. This is an arithmetic reference, not a dedicated GPU kernel.
 
 FlashRNN employs a functional structure, none of the parameters are tied to the `flashrnn` function. To apply it simply use:
 ```python
@@ -112,4 +134,3 @@ Apache-2.0 (see `LICENSE` file)
 -  Merrill, W., Petty, J., & Sabharwal, A. (2024). The illusion of state in state-space models. In Proceedings of the Forty-first International Conference on Machine Learning. Retrieved from https://openreview.net/forum?id=QZgo9JZpLq
 
 - Dao, T., Fu, D., Ermon, S., Rudra, A., & Ré, C. (2022). FlashAttention: Fast and memory-efficient exact attention with IO-awareness. In S. Koyejo, S. Mohamed, A. Agarwal, D. Belgrave, K. Cho, & A. Oh (Eds.), Advances in Neural Information Processing Systems (Vol. 35, pp. 16344–16359). Curran Associates, Inc. Retrieved from https://proceedings.neurips.cc/paper_files/paper/2022/file/67d57c32e20fd0a7a302cb81d36e40d5-Paper-Conference.pdf
-
