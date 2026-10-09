@@ -22,6 +22,18 @@ def main() -> None:
             hashlib.file_digest(handle, "sha256").hexdigest()
             == meta["qualification_sha256"]
         )
+    if "qualification_audit_sha256" in meta:
+        audit_path = args.input.with_suffix(".qualification.audit.json")
+        audit = json.loads(audit_path.read_text())
+        if (
+            hashlib.sha256(audit_path.read_bytes()).hexdigest()
+            != meta["qualification_audit_sha256"]
+            or audit["status"] != "PASS"
+            or audit["failed_elements"] != 0
+            or audit["raw_sha256"] != meta["qualification_sha256"]
+            or audit["tensor_pairs"] != meta["qualification_audit_tensor_pairs"]
+        ):
+            raise ValueError("independent qualification audit differs")
     rows = [json.loads(line) for line in args.input.read_text().splitlines()]
     if meta["status"] != "PASS" or len(rows) < 20:
         raise ValueError("complete qualified timing required")
@@ -104,7 +116,7 @@ def main() -> None:
         "",
         f"Fixed random weights and request IDs in {meta['dtype']}; this is a full {meta['model']['layers']}-layer model workload, not a pretrained checkpoint or autoregressive generation result. Throughput is completed sequence responses/s. Timed scope includes host-to-device IDs, embedding, recurrence, readout, device-to-host logits and queued groups. Compilation, model construction and qualification are excluded.",
         "",
-        "| Cell | Baseline | Batch | Concurrent requests | Baseline responses/s | FlashRNN2 responses/s | Paired speedup [95% CI] | Qualification |",
+        f"| Cell | Baseline | Batch | Concurrent requests | Baseline responses/s | {meta['candidate']} responses/s | Paired speedup [95% CI] | Qualification |",
         "| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |",
         f"| {meta['model']['cell']} | {meta['baseline']} | {batch} | {concurrency} | {base_rate:.3f} | {candidate_rate:.3f} | {summary['paired_speedup']:.3f}× [{low:.3f}, {high:.3f}] | {'Diagnostic: cuDNN weights not proven packed' if packed is False else 'Qualified'} |",
     ]
