@@ -107,7 +107,11 @@ def _sequence(
             if TIREX or XLSTM:
                 igate = tl.minimum(libdevice.exp(i - next_m), 1.0)
                 fgate = tl.minimum(libdevice.exp(logf - next_m), 1.0)
-                ogate = 1.0 / (1.0 + libdevice.exp(-o))
+                if TIREX:
+                    # Approximate reciprocals can cross a BF16 rounding boundary.
+                    ogate = tl.div_rn(1.0, 1.0 + libdevice.exp(-o))
+                else:
+                    ogate = 1.0 / (1.0 + libdevice.exp(-o))
             else:
                 igate = tl.exp(i - next_m)
                 fgate = tl.exp(logf - next_m)
@@ -119,6 +123,8 @@ def _sequence(
                 n = tl.maximum(fgate * n + igate, 1.0)
             if XLSTM:
                 hidden = ogate * (c / n)
+            elif TIREX:
+                hidden = tl.div_rn(ogate * c, n)
             else:
                 hidden = ogate * c / n
             m = next_m
