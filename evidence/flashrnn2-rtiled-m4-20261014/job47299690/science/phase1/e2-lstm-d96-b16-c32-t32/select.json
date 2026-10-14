@@ -1,0 +1,259 @@
+{
+  "mode": "select",
+  "case": {
+    "name": "e2-lstm-d96-b16-c32-t32",
+    "lane": 3,
+    "cell": "lstm",
+    "width": 96,
+    "batch": 16,
+    "concurrency": 32,
+    "steps": 32,
+    "roles": {
+      "baseline": [
+        {
+          "kind": "single",
+          "warps": 4
+        },
+        {
+          "kind": "single",
+          "warps": 8
+        }
+      ],
+      "k2": [
+        {
+          "kind": "rtiled",
+          "slice_width": 64,
+          "warps": 4,
+          "pad_k": false
+        },
+        {
+          "kind": "rtiled",
+          "slice_width": 64,
+          "warps": 4,
+          "pad_k": true
+        },
+        {
+          "kind": "rtiled",
+          "slice_width": 64,
+          "warps": 8,
+          "pad_k": false
+        },
+        {
+          "kind": "rtiled",
+          "slice_width": 64,
+          "warps": 8,
+          "pad_k": true
+        }
+      ],
+      "kmid": [
+        {
+          "kind": "rtiled",
+          "slice_width": 32,
+          "warps": 4,
+          "pad_k": false
+        },
+        {
+          "kind": "rtiled",
+          "slice_width": 32,
+          "warps": 4,
+          "pad_k": true
+        },
+        {
+          "kind": "rtiled",
+          "slice_width": 32,
+          "warps": 8,
+          "pad_k": false
+        },
+        {
+          "kind": "rtiled",
+          "slice_width": 32,
+          "warps": 8,
+          "pad_k": true
+        }
+      ]
+    }
+  },
+  "identity": {
+    "gpu": "NVIDIA H100",
+    "capability": [
+      9,
+      0
+    ],
+    "triton": "3.6.0",
+    "torch": "2.4.0a0+gite3b9b71",
+    "cuda": "11.8",
+    "source": {
+      "tools/rtiled_m4.py": "429a244753fc846288c845b443928676ee4eedde4b86e7167393e158ea384116",
+      "flashrnn/flashrnn2/triton_rtiled.py": "5e822255adcd00c00c19c5aa217dfff268634e3b4e3c8ccb4ba5cc76b97eed12",
+      "flashrnn/flashrnn2/triton_persistent.py": "c83a6255f01e1db30e5ea6bc9a50f5f7a6d24cffe26b7bd8a89faffe7b2148e1",
+      "flashrnn/flashrnn2/tilelang_rtiled.py": "1e776015693e0cdfd65a0cb1b9affbee9b250208bbf682ec95cfd404df20f042",
+      "flashrnn/flashrnn2/reference.py": "9b6351ded119b071f6d7bc749e9a20269dde09c9a536cb6094afd6961c1d8260",
+      "flashrnn/flashrnn2/execution_policy.py": "ccf7e487dfc106c14aa07e38ba46ab18361f5893d4c979c928a62b0adf0cdc45",
+      "flashrnn/flashrnn2/state_contract.py": "b99311ca231c478860b55ecae216e88ecb3a55f9d8aa212428b82157f8b9485e"
+    }
+  },
+  "split": 0,
+  "candidates": {
+    "baseline": {
+      "qualification": {
+        "{\"kind\": \"single\", \"warps\": 4}": "PASS",
+        "{\"kind\": \"single\", \"warps\": 8}": "PASS"
+      },
+      "median_ms": {
+        "{\"kind\": \"single\", \"warps\": 4}": 1.059035,
+        "{\"kind\": \"single\", \"warps\": 8}": 0.962291
+      },
+      "raw_ms": {
+        "{\"kind\": \"single\", \"warps\": 4}": [
+          1.059035,
+          1.066214,
+          1.054325,
+          1.059312,
+          1.057464,
+          1.053764,
+          1.054437,
+          1.06617
+        ],
+        "{\"kind\": \"single\", \"warps\": 8}": [
+          0.964229,
+          0.96627,
+          0.960061,
+          0.960663,
+          0.962655,
+          0.962291,
+          0.956062,
+          0.961025
+        ]
+      },
+      "selected": {
+        "kind": "single",
+        "warps": 8
+      }
+    },
+    "k2": {
+      "qualification": {
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 4}": "PASS",
+        "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 64, \"warps\": 4}": "PASS",
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 8}": "PASS",
+        "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 64, \"warps\": 8}": "PASS"
+      },
+      "median_ms": {
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 4}": 1.164499,
+        "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 64, \"warps\": 4}": 1.359275,
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 8}": 1.151175,
+        "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 64, \"warps\": 8}": 1.180793
+      },
+      "raw_ms": {
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 4}": [
+          1.169602,
+          1.168838,
+          1.165891,
+          1.158788,
+          1.164499,
+          1.161376,
+          1.16128,
+          1.160385
+        ],
+        "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 64, \"warps\": 4}": [
+          1.359275,
+          1.354277,
+          1.368633,
+          1.353245,
+          1.353634,
+          1.359776,
+          1.349659,
+          1.37141
+        ],
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 8}": [
+          2.16962,
+          1.161032,
+          1.15475,
+          1.145916,
+          1.146826,
+          1.149116,
+          1.151175,
+          1.144397
+        ],
+        "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 64, \"warps\": 8}": [
+          1.18978,
+          1.18449,
+          1.170384,
+          1.185551,
+          1.180793,
+          1.165674,
+          1.16989,
+          1.179066
+        ]
+      },
+      "selected": {
+        "kind": "rtiled",
+        "pad_k": false,
+        "slice_width": 64,
+        "warps": 8
+      }
+    },
+    "kmid": {
+      "qualification": {
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 4}": "PASS",
+        "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 32, \"warps\": 4}": "PASS",
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 8}": "PASS",
+        "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 32, \"warps\": 8}": "PASS"
+      },
+      "median_ms": {
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 4}": 1.063211,
+        "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 32, \"warps\": 4}": 1.089454,
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 8}": 1.171069,
+        "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 32, \"warps\": 8}": 1.154432
+      },
+      "raw_ms": {
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 4}": [
+          1.082413,
+          1.06712,
+          1.066209,
+          1.053352,
+          1.05857,
+          1.053388,
+          1.048126,
+          1.063211
+        ],
+        "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 32, \"warps\": 4}": [
+          1.090313,
+          1.089525,
+          1.081632,
+          1.091439,
+          1.088514,
+          1.089454,
+          1.087467,
+          1.087268
+        ],
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 8}": [
+          1.175296,
+          1.165744,
+          1.166326,
+          1.175728,
+          1.171069,
+          1.167794,
+          1.164429,
+          1.173271
+        ],
+        "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 32, \"warps\": 8}": [
+          1.154432,
+          1.151533,
+          1.145843,
+          1.158587,
+          1.156493,
+          1.157275,
+          1.148824,
+          1.15128
+        ]
+      },
+      "selected": {
+        "kind": "rtiled",
+        "pad_k": false,
+        "slice_width": 32,
+        "warps": 4
+      }
+    }
+  },
+  "status": "SELECTED"
+}

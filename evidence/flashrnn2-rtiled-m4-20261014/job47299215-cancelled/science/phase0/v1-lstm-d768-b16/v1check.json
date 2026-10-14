@@ -1,0 +1,28 @@
+{
+  "mode": "v1check",
+  "cell": "lstm",
+  "width": 768,
+  "batch": 16,
+  "identity": {
+    "gpu": "NVIDIA H100",
+    "capability": [
+      9,
+      0
+    ],
+    "triton": "3.6.0",
+    "torch": "2.4.0a0+gite3b9b71",
+    "cuda": "11.8",
+    "source": {
+      "tools/rtiled_m4.py": "e5e26677d8b9959bdc940fcc20d99692f63b3d07ce23cbfb6b49df43f2414c5c",
+      "flashrnn/flashrnn2/triton_rtiled.py": "5e822255adcd00c00c19c5aa217dfff268634e3b4e3c8ccb4ba5cc76b97eed12",
+      "flashrnn/flashrnn2/triton_persistent.py": "c83a6255f01e1db30e5ea6bc9a50f5f7a6d24cffe26b7bd8a89faffe7b2148e1",
+      "flashrnn/flashrnn2/tilelang_rtiled.py": "1e776015693e0cdfd65a0cb1b9affbee9b250208bbf682ec95cfd404df20f042",
+      "flashrnn/flashrnn2/reference.py": "9b6351ded119b071f6d7bc749e9a20269dde09c9a536cb6094afd6961c1d8260",
+      "flashrnn/flashrnn2/execution_policy.py": "ccf7e487dfc106c14aa07e38ba46ab18361f5893d4c979c928a62b0adf0cdc45",
+      "flashrnn/flashrnn2/state_contract.py": "b99311ca231c478860b55ecae216e88ecb3a55f9d8aa212428b82157f8b9485e"
+    }
+  },
+  "status": "BASELINE_UNAVAILABLE",
+  "error": "Traceback (most recent call last):\n  File \"/gpfs/scratch/ehpc390/tueb043681/flashrnn2-rtiled-m4-20261014-v1/source/tools/rtiled_m4.py\", line 281, in mode_v1check\n    y = arm(wx, r, b, init)\n        ^^^^^^^^^^^^^^^^^^^\n  File \"/gpfs/scratch/ehpc390/tueb043681/flashrnn2-rtiled-m4-20261014-v1/source/tools/rtiled_m4.py\", line 188, in run\n    history, _ = v1[\"flashrnn\"](wx, r, b, init, config=config)\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/gpfs/scratch/ehpc390/tueb043681/paper-baselines-20261013-v1/pinned/flashrnn/flashrnn/flashrnn.py\", line 1135, in flashrnn\n    h, last_h = kernel(Wx, states, R, b)\n                ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/gpfs/scratch/ehpc390/tueb043681/paper-baselines-20261013-v1/pinned/flashrnn/flashrnn/flashrnn.py\", line 1050, in fn\n    states = FlashRNNFuncGeneratorFused(\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/gpfs/scratch/ehpc390/tueb043681/paper-baselines-20261013-v1/pinned/flashrnn/flashrnn/flashrnn.py\", line 689, in FlashRNNFuncGeneratorFused\n    class FlashRNNFunctionFused(torch.autograd.Function):\n  File \"/gpfs/scratch/ehpc390/tueb043681/paper-baselines-20261013-v1/pinned/flashrnn/flashrnn/flashrnn.py\", line 693, in FlashRNNFunctionFused\n    torch.amp.custom_fwd(\n    ^^^^^^^^^^^^^^^^^^^^\nAttributeError: module 'torch.amp' has no attribute 'custom_fwd'\n",
+  "seconds": 70.84664511680603
+}

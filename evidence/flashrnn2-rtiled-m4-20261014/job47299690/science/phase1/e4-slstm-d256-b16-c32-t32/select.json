@@ -1,0 +1,84 @@
+{
+  "mode": "select",
+  "case": {
+    "name": "e4-slstm-d256-b16-c32-t32",
+    "lane": 2,
+    "cell": "slstm",
+    "width": 256,
+    "batch": 16,
+    "concurrency": 32,
+    "steps": 32,
+    "roles": {
+      "candidate": [
+        {
+          "kind": "tilelang",
+          "slice_width": 64
+        },
+        {
+          "kind": "tilelang",
+          "slice_width": 32
+        }
+      ]
+    }
+  },
+  "identity": {
+    "gpu": "NVIDIA H100",
+    "capability": [
+      9,
+      0
+    ],
+    "triton": "3.6.0",
+    "torch": "2.4.0a0+gite3b9b71",
+    "cuda": "11.8",
+    "source": {
+      "tools/rtiled_m4.py": "429a244753fc846288c845b443928676ee4eedde4b86e7167393e158ea384116",
+      "flashrnn/flashrnn2/triton_rtiled.py": "5e822255adcd00c00c19c5aa217dfff268634e3b4e3c8ccb4ba5cc76b97eed12",
+      "flashrnn/flashrnn2/triton_persistent.py": "c83a6255f01e1db30e5ea6bc9a50f5f7a6d24cffe26b7bd8a89faffe7b2148e1",
+      "flashrnn/flashrnn2/tilelang_rtiled.py": "1e776015693e0cdfd65a0cb1b9affbee9b250208bbf682ec95cfd404df20f042",
+      "flashrnn/flashrnn2/reference.py": "9b6351ded119b071f6d7bc749e9a20269dde09c9a536cb6094afd6961c1d8260",
+      "flashrnn/flashrnn2/execution_policy.py": "ccf7e487dfc106c14aa07e38ba46ab18361f5893d4c979c928a62b0adf0cdc45",
+      "flashrnn/flashrnn2/state_contract.py": "b99311ca231c478860b55ecae216e88ecb3a55f9d8aa212428b82157f8b9485e"
+    },
+    "tilelang": "0.1.15"
+  },
+  "split": 0,
+  "candidates": {
+    "candidate": {
+      "qualification": {
+        "{\"kind\": \"tilelang\", \"slice_width\": 64}": "PASS",
+        "{\"kind\": \"tilelang\", \"slice_width\": 32}": "PASS"
+      },
+      "median_ms": {
+        "{\"kind\": \"tilelang\", \"slice_width\": 64}": 2.338088,
+        "{\"kind\": \"tilelang\", \"slice_width\": 32}": 1.654876
+      },
+      "raw_ms": {
+        "{\"kind\": \"tilelang\", \"slice_width\": 64}": [
+          2.340816,
+          2.338088,
+          2.341672,
+          2.328432,
+          2.339813,
+          2.32971,
+          2.33725,
+          2.320205
+        ],
+        "{\"kind\": \"tilelang\", \"slice_width\": 32}": [
+          1.654876,
+          1.663167,
+          1.650471,
+          1.65768,
+          1.656882,
+          1.654345,
+          1.646593,
+          1.651043
+        ]
+      },
+      "selected": {
+        "kind": "tilelang",
+        "slice_width": 32
+      }
+    }
+  },
+  "status": "SELECTED"
+}
