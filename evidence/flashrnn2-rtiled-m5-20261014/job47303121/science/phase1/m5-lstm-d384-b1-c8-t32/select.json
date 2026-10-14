@@ -1,0 +1,296 @@
+{
+  "mode": "select",
+  "case": {
+    "name": "m5-lstm-d384-b1-c8-t32",
+    "lane": 2,
+    "cell": "lstm",
+    "width": 384,
+    "batch": 1,
+    "concurrency": 8,
+    "steps": 32,
+    "roles": {
+      "tk": [
+        {
+          "kind": "tk",
+          "slice_width": 32
+        }
+      ],
+      "tilelang_v2": [
+        {
+          "kind": "tilelang_v2",
+          "slice_width": 32
+        }
+      ],
+      "triton": [
+        {
+          "kind": "rtiled",
+          "slice_width": 16,
+          "warps": 4,
+          "pad_k": false
+        },
+        {
+          "kind": "rtiled",
+          "slice_width": 16,
+          "warps": 4,
+          "pad_k": true
+        },
+        {
+          "kind": "rtiled",
+          "slice_width": 16,
+          "warps": 8,
+          "pad_k": false
+        },
+        {
+          "kind": "rtiled",
+          "slice_width": 16,
+          "warps": 8,
+          "pad_k": true
+        },
+        {
+          "kind": "rtiled",
+          "slice_width": 32,
+          "warps": 4,
+          "pad_k": false
+        },
+        {
+          "kind": "rtiled",
+          "slice_width": 32,
+          "warps": 4,
+          "pad_k": true
+        },
+        {
+          "kind": "rtiled",
+          "slice_width": 32,
+          "warps": 8,
+          "pad_k": false
+        },
+        {
+          "kind": "rtiled",
+          "slice_width": 32,
+          "warps": 8,
+          "pad_k": true
+        },
+        {
+          "kind": "rtiled",
+          "slice_width": 64,
+          "warps": 4,
+          "pad_k": false
+        },
+        {
+          "kind": "rtiled",
+          "slice_width": 64,
+          "warps": 8,
+          "pad_k": false
+        }
+      ]
+    }
+  },
+  "identity": {
+    "gpu": "NVIDIA H100",
+    "capability": [
+      9,
+      0
+    ],
+    "triton": "3.6.0",
+    "torch": "2.4.0a0+gite3b9b71",
+    "cuda": "11.8",
+    "source": {
+      "tools/rtiled_m4.py": "e3c5089456a40ff6078728ee111d133d81d04e6bcd9ed3c09c73fd4e76d1cefd",
+      "flashrnn/flashrnn2/triton_rtiled.py": "5e822255adcd00c00c19c5aa217dfff268634e3b4e3c8ccb4ba5cc76b97eed12",
+      "flashrnn/flashrnn2/triton_persistent.py": "c83a6255f01e1db30e5ea6bc9a50f5f7a6d24cffe26b7bd8a89faffe7b2148e1",
+      "flashrnn/flashrnn2/tilelang_rtiled.py": "e907cd33389524878ba534354e68fddc026ff6c29f572e020754de9809775f27",
+      "flashrnn/flashrnn2/reference.py": "9b6351ded119b071f6d7bc749e9a20269dde09c9a536cb6094afd6961c1d8260",
+      "flashrnn/flashrnn2/tk_rtiled.cu": "b4a98ae0e42aa1132470f0f18d257c0bdfd6b2346d31606a2b1c2204e040c9b0",
+      "flashrnn/flashrnn2/tk_rtiled.py": "88fbdd79e775866a05ae7b0ce90e8eb0d1c9cb63f92ef0003cf86d45dd6fc4ce",
+      "flashrnn/flashrnn2/execution_policy.py": "ccf7e487dfc106c14aa07e38ba46ab18361f5893d4c979c928a62b0adf0cdc45",
+      "flashrnn/flashrnn2/state_contract.py": "b99311ca231c478860b55ecae216e88ecb3a55f9d8aa212428b82157f8b9485e"
+    },
+    "tilelang": "0.1.15"
+  },
+  "split": 0,
+  "candidates": {
+    "tk": {
+      "qualification": {
+        "{\"kind\": \"tk\", \"slice_width\": 32}": "PASS"
+      },
+      "median_ms": {
+        "{\"kind\": \"tk\", \"slice_width\": 32}": 5.076254
+      },
+      "raw_ms": {
+        "{\"kind\": \"tk\", \"slice_width\": 32}": [
+          5.083115,
+          5.076219,
+          5.076254,
+          5.084033,
+          5.068032,
+          5.087721,
+          5.067801,
+          5.068845
+        ]
+      },
+      "selected": {
+        "kind": "tk",
+        "slice_width": 32
+      }
+    },
+    "tilelang_v2": {
+      "qualification": {
+        "{\"kind\": \"tilelang_v2\", \"slice_width\": 32}": "PASS"
+      },
+      "median_ms": {
+        "{\"kind\": \"tilelang_v2\", \"slice_width\": 32}": 4.439953
+      },
+      "raw_ms": {
+        "{\"kind\": \"tilelang_v2\", \"slice_width\": 32}": [
+          4.437579,
+          4.444542,
+          4.436142,
+          4.422723,
+          4.43097,
+          4.444407,
+          4.44247,
+          4.439953
+        ]
+      },
+      "selected": {
+        "kind": "tilelang_v2",
+        "slice_width": 32
+      }
+    },
+    "triton": {
+      "qualification": {
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 16, \"warps\": 4}": "PASS",
+        "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 16, \"warps\": 4}": "PASS",
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 16, \"warps\": 8}": "PASS",
+        "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 16, \"warps\": 8}": "PASS",
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 4}": "PASS",
+        "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 32, \"warps\": 4}": "PASS",
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 8}": "PASS",
+        "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 32, \"warps\": 8}": "PASS",
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 4}": "PASS",
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 8}": "PASS"
+      },
+      "median_ms": {
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 16, \"warps\": 4}": 5.630331,
+        "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 16, \"warps\": 4}": 6.581208,
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 16, \"warps\": 8}": 7.03877,
+        "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 16, \"warps\": 8}": 7.947908,
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 4}": 4.665353,
+        "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 32, \"warps\": 4}": 5.380427,
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 8}": 5.545527,
+        "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 32, \"warps\": 8}": 6.024495,
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 4}": 5.612843,
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 8}": 5.492358
+      },
+      "raw_ms": {
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 16, \"warps\": 4}": [
+          5.645975,
+          5.617336,
+          5.630331,
+          5.630076,
+          5.725027,
+          5.605698,
+          5.603172,
+          6.173606
+        ],
+        "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 16, \"warps\": 4}": [
+          6.596562,
+          6.581208,
+          6.547823,
+          6.549947,
+          6.65589,
+          6.535433,
+          6.543118,
+          6.906266
+        ],
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 16, \"warps\": 8}": [
+          7.104228,
+          7.038473,
+          7.060535,
+          7.03877,
+          7.033418,
+          7.034443,
+          7.018845,
+          7.300684
+        ],
+        "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 16, \"warps\": 8}": [
+          8.001958,
+          7.942638,
+          7.955586,
+          8.013816,
+          7.932299,
+          7.945862,
+          7.923357,
+          7.947908
+        ],
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 4}": [
+          4.682545,
+          4.665213,
+          4.665353,
+          4.707879,
+          4.68375,
+          4.650311,
+          4.656845,
+          4.662939
+        ],
+        "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 32, \"warps\": 4}": [
+          5.408964,
+          5.379414,
+          5.380427,
+          5.38278,
+          5.367763,
+          5.363779,
+          5.375435,
+          5.384261
+        ],
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 8}": [
+          5.565679,
+          5.556381,
+          5.549946,
+          5.537751,
+          5.536808,
+          5.53641,
+          5.523633,
+          5.545527
+        ],
+        "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 32, \"warps\": 8}": [
+          6.027113,
+          6.023808,
+          6.013586,
+          6.027865,
+          6.024495,
+          6.009998,
+          6.020617,
+          6.027712
+        ],
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 4}": [
+          5.627528,
+          5.612843,
+          5.607683,
+          5.633661,
+          5.617548,
+          5.608529,
+          5.608776,
+          5.591745
+        ],
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 8}": [
+          5.492358,
+          5.492602,
+          5.480552,
+          5.466603,
+          5.528459,
+          5.473178,
+          5.472632,
+          5.555579
+        ]
+      },
+      "selected": {
+        "kind": "rtiled",
+        "pad_k": false,
+        "slice_width": 32,
+        "warps": 4
+      }
+    }
+  },
+  "status": "SELECTED"
+}

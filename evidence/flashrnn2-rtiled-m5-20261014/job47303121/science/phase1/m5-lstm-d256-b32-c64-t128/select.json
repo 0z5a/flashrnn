@@ -1,0 +1,288 @@
+{
+  "mode": "select",
+  "case": {
+    "name": "m5-lstm-d256-b32-c64-t128",
+    "lane": 1,
+    "cell": "lstm",
+    "width": 256,
+    "batch": 32,
+    "concurrency": 64,
+    "steps": 128,
+    "roles": {
+      "tk": [
+        {
+          "kind": "tk",
+          "slice_width": 16
+        },
+        {
+          "kind": "tk",
+          "slice_width": 32
+        },
+        {
+          "kind": "tk",
+          "slice_width": 64
+        }
+      ],
+      "tilelang_v2": [
+        {
+          "kind": "tilelang_v2",
+          "slice_width": 16
+        },
+        {
+          "kind": "tilelang_v2",
+          "slice_width": 32
+        },
+        {
+          "kind": "tilelang_v2",
+          "slice_width": 64
+        }
+      ],
+      "triton": [
+        {
+          "kind": "rtiled",
+          "slice_width": 16,
+          "warps": 4,
+          "pad_k": false
+        },
+        {
+          "kind": "rtiled",
+          "slice_width": 16,
+          "warps": 8,
+          "pad_k": false
+        },
+        {
+          "kind": "rtiled",
+          "slice_width": 32,
+          "warps": 4,
+          "pad_k": false
+        },
+        {
+          "kind": "rtiled",
+          "slice_width": 32,
+          "warps": 8,
+          "pad_k": false
+        },
+        {
+          "kind": "rtiled",
+          "slice_width": 64,
+          "warps": 4,
+          "pad_k": false
+        },
+        {
+          "kind": "rtiled",
+          "slice_width": 64,
+          "warps": 8,
+          "pad_k": false
+        }
+      ]
+    }
+  },
+  "identity": {
+    "gpu": "NVIDIA H100",
+    "capability": [
+      9,
+      0
+    ],
+    "triton": "3.6.0",
+    "torch": "2.4.0a0+gite3b9b71",
+    "cuda": "11.8",
+    "source": {
+      "tools/rtiled_m4.py": "e3c5089456a40ff6078728ee111d133d81d04e6bcd9ed3c09c73fd4e76d1cefd",
+      "flashrnn/flashrnn2/triton_rtiled.py": "5e822255adcd00c00c19c5aa217dfff268634e3b4e3c8ccb4ba5cc76b97eed12",
+      "flashrnn/flashrnn2/triton_persistent.py": "c83a6255f01e1db30e5ea6bc9a50f5f7a6d24cffe26b7bd8a89faffe7b2148e1",
+      "flashrnn/flashrnn2/tilelang_rtiled.py": "e907cd33389524878ba534354e68fddc026ff6c29f572e020754de9809775f27",
+      "flashrnn/flashrnn2/reference.py": "9b6351ded119b071f6d7bc749e9a20269dde09c9a536cb6094afd6961c1d8260",
+      "flashrnn/flashrnn2/tk_rtiled.cu": "b4a98ae0e42aa1132470f0f18d257c0bdfd6b2346d31606a2b1c2204e040c9b0",
+      "flashrnn/flashrnn2/tk_rtiled.py": "88fbdd79e775866a05ae7b0ce90e8eb0d1c9cb63f92ef0003cf86d45dd6fc4ce",
+      "flashrnn/flashrnn2/execution_policy.py": "ccf7e487dfc106c14aa07e38ba46ab18361f5893d4c979c928a62b0adf0cdc45",
+      "flashrnn/flashrnn2/state_contract.py": "b99311ca231c478860b55ecae216e88ecb3a55f9d8aa212428b82157f8b9485e"
+    },
+    "tilelang": "0.1.15"
+  },
+  "split": 0,
+  "candidates": {
+    "tk": {
+      "qualification": {
+        "{\"kind\": \"tk\", \"slice_width\": 16}": "PASS",
+        "{\"kind\": \"tk\", \"slice_width\": 32}": "PASS",
+        "{\"kind\": \"tk\", \"slice_width\": 64}": "PASS"
+      },
+      "median_ms": {
+        "{\"kind\": \"tk\", \"slice_width\": 16}": 2.986593,
+        "{\"kind\": \"tk\", \"slice_width\": 32}": 4.210531,
+        "{\"kind\": \"tk\", \"slice_width\": 64}": 6.952004
+      },
+      "raw_ms": {
+        "{\"kind\": \"tk\", \"slice_width\": 16}": [
+          2.990414,
+          2.992179,
+          2.994383,
+          2.986593,
+          2.969016,
+          2.9789,
+          2.984044,
+          2.939589
+        ],
+        "{\"kind\": \"tk\", \"slice_width\": 32}": [
+          4.211184,
+          4.203306,
+          4.219447,
+          4.210531,
+          4.218636,
+          4.203724,
+          4.204683,
+          4.161475
+        ],
+        "{\"kind\": \"tk\", \"slice_width\": 64}": [
+          6.952681,
+          6.943967,
+          6.982574,
+          6.956625,
+          6.952004,
+          6.942581,
+          6.941852,
+          6.776533
+        ]
+      },
+      "selected": {
+        "kind": "tk",
+        "slice_width": 16
+      }
+    },
+    "tilelang_v2": {
+      "qualification": {
+        "{\"kind\": \"tilelang_v2\", \"slice_width\": 16}": "PASS",
+        "{\"kind\": \"tilelang_v2\", \"slice_width\": 32}": "PASS",
+        "{\"kind\": \"tilelang_v2\", \"slice_width\": 64}": "PASS"
+      },
+      "median_ms": {
+        "{\"kind\": \"tilelang_v2\", \"slice_width\": 16}": 2.727633,
+        "{\"kind\": \"tilelang_v2\", \"slice_width\": 32}": 3.38943,
+        "{\"kind\": \"tilelang_v2\", \"slice_width\": 64}": 5.563306
+      },
+      "raw_ms": {
+        "{\"kind\": \"tilelang_v2\", \"slice_width\": 16}": [
+          2.753241,
+          2.723137,
+          2.736503,
+          2.732689,
+          2.727633,
+          2.727148,
+          2.722639,
+          2.718215
+        ],
+        "{\"kind\": \"tilelang_v2\", \"slice_width\": 32}": [
+          3.393391,
+          3.37963,
+          3.390349,
+          3.389377,
+          3.394809,
+          3.38943,
+          3.380497,
+          3.382915
+        ],
+        "{\"kind\": \"tilelang_v2\", \"slice_width\": 64}": [
+          5.566425,
+          5.559161,
+          5.563163,
+          5.578486,
+          5.563306,
+          5.558066,
+          5.563851,
+          5.561329
+        ]
+      },
+      "selected": {
+        "kind": "tilelang_v2",
+        "slice_width": 16
+      }
+    },
+    "triton": {
+      "qualification": {
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 16, \"warps\": 4}": "PASS",
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 16, \"warps\": 8}": "PASS",
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 4}": "PASS",
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 8}": "PASS",
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 4}": "PASS",
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 8}": "PASS"
+      },
+      "median_ms": {
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 16, \"warps\": 4}": 4.326162,
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 16, \"warps\": 8}": 4.838374,
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 4}": 3.773948,
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 8}": 3.960718,
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 4}": 4.136922,
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 8}": 4.03932
+      },
+      "raw_ms": {
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 16, \"warps\": 4}": [
+          4.442384,
+          4.48602,
+          4.306698,
+          4.326162,
+          4.266849,
+          4.297722,
+          4.292579,
+          4.339673
+        ],
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 16, \"warps\": 8}": [
+          4.996485,
+          4.94376,
+          4.834901,
+          4.865656,
+          4.822126,
+          4.835328,
+          4.838374,
+          4.832819
+        ],
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 4}": [
+          3.887292,
+          3.843174,
+          4.037008,
+          3.769527,
+          3.772122,
+          3.773948,
+          3.771073,
+          3.767772
+        ],
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 8}": [
+          4.09053,
+          4.020037,
+          4.133354,
+          3.956141,
+          3.960718,
+          3.947095,
+          3.955239,
+          3.94113
+        ],
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 4}": [
+          4.184699,
+          4.189442,
+          4.224192,
+          4.136922,
+          4.131799,
+          4.118427,
+          4.125896,
+          4.123522
+        ],
+        "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 8}": [
+          4.067178,
+          4.096961,
+          4.075321,
+          4.034894,
+          4.017635,
+          3.998605,
+          4.009871,
+          4.03932
+        ]
+      },
+      "selected": {
+        "kind": "rtiled",
+        "pad_k": false,
+        "slice_width": 32,
+        "warps": 4
+      }
+    }
+  },
+  "status": "SELECTED"
+}

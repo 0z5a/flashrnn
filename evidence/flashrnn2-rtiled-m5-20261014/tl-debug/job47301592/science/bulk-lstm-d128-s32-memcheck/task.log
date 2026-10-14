@@ -1,0 +1,992 @@
+unload bsc/1.0 (PATH, MANPATH)
+unload UCX/1.15.0 (PATH, LD_LIBRARY_PATH, LIBRARY_PATH, C_INCLUDE_PATH,
+CPLUS_INCLUDE_PATH) 
+remove mkl/2023.2.0 (LD_LIBRARY_PATH)
+remove impi/2021.10.0 (PATH, MANPATH, LD_LIBRARY_PATH)
+load GCC/11.4.0 (PATH, LD_LIBRARY_PATH, LIBRARY_PATH, C_INCLUDE_PATH,
+CPLUS_INCLUDE_PATH, CC, FC, F90, F77, CXX, OMPI_FC, OMPI_F90, OMPI_F77,
+OMPI_CC, OMPI_CXX) 
+load impi/2021.11 (PATH, MANPATH, LD_LIBRARY_PATH)
+load mkl/2024.0 (LD_LIBRARY_PATH)
+ ------------------------------------------------------------------------------------------ 
+|                                     WARNING                                              |
+|                                                                                          |
+| NVPCX uses its own implementation of MPI that does not offer srun support.               |
+| Programs compiled with NVPCX must use 'mpirun --bind-to none' instead of 'srun'.         |
+| Remember to also add 'export SLURM_CPU_BIND=none' in your job scripts.                   |
+ ------------------------------------------------------------------------------------------ 
+load OPENBLAS/0.3.27 (LD_LIBRARY_PATH, LIBRARY_PATH, PKG_CONFIG_PATH)
+load CUDNN/9.0.0/cuda11 (LD_LIBRARY_PATH, LIBRARY_PATH, C_INCLUDE_PATH,
+CPLUS_INCLUDE_PATH, CUDNN_LIB_DIR, CUDNN_LIBRARY, CUDNN_INCLUDE_DIR) 
+load TENSORRT/10.0.0/cuda11 (PATH, LD_LIBRARY_PATH, LIBRARY_PATH,
+C_INCLUDE_PATH, CPLUS_INCLUDE_PATH) 
+load HDF5/1.14.1-2 (PATH, LD_LIBRARY_PATH, LIBRARY_PATH, C_INCLUDE_PATH,
+CPLUS_INCLUDE_PATH, HDF5_DIR, HDF5_ROOT) 
+load PYTHON/3.11.5 (PATH, MANPATH, LD_LIBRARY_PATH, LIBRARY_PATH,
+PKG_CONFIG_PATH, C_INCLUDE_PATH, CPLUS_INCLUDE_PATH, PYTHONHOME, PYTHONPATH) 
+load NCCL/2.19.4 (LD_LIBRARY_PATH, LIBRARY_PATH, C_INCLUDE_PATH,
+CPLUS_INCLUDE_PATH) 
+========= COMPUTE-SANITIZER
+========= Illegal barrier arrive operation
+=========     at tl::mbarrier_wait(unsigned long &, int)+0x1110 in barrier.h:47
+=========     by thread (0,0,0) in block (0,0,0)
+=========         Device Frame: Barrier::wait(unsigned int) const+0x1070 in barrier.h:239
+=========         Device Frame: main_kernel+0x1070 in tvm_kernels.cu:71
+=========     Saved host backtrace up to driver entry point at kernel launch time
+=========         Host Frame:  [0x36413b] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::CppCall(tvm::ffi::FunctionObj const*, tvm::ffi::AnyView const, int, tvm::ffi::Any*) [0x36d7d3] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::SafeCall(void*, TVMFFIAny const*, int, tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>*) [0x36c6f9] in libtvm_runtime.so
+=========         Host Frame: __tvm_ffi_main [0x4fd6] in executable.so
+=========         Host Frame:  [0x13f6fe] in libtvm_ffi.so
+=========         Host Frame:  [0x13f07b] in libtvm_ffi.so
+=========         Host Frame:  [0xbebf0] in core.cpython-311-x86_64-linux-gnu.so
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_MakeTpCall in call.c:214 [0x1e51f4] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:4774 [0x242a5b] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6802] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyEval_EvalCode in ceval.c:1154 [0x2bf283] in libpython3.11.so.1.0
+=========         Host Frame: run_eval_code_obj in pythonrun.c:1712 [0x2d3d73] in libpython3.11.so.1.0
+=========         Host Frame: run_mod in pythonrun.c:1733 [0x2d3cfa] in libpython3.11.so.1.0
+=========         Host Frame: pyrun_file in pythonrun.c:1628 [0x2d4520] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_SimpleFileObject in pythonrun.c:440 [0x2d4243] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_AnyFileObject in pythonrun.c:79 [0x2d3ea2] in libpython3.11.so.1.0
+=========         Host Frame: Py_RunMain in main.c:680 [0x2dbcb0] in libpython3.11.so.1.0
+=========         Host Frame: Py_BytesMain in main.c:734 [0x2db8c8] in libpython3.11.so.1.0
+=========         Host Frame: __libc_start_call_main [0x295cf] in libc.so.6
+=========         Host Frame: __libc_start_main [0x2967f] in libc.so.6
+=========         Host Frame: _start [0x1074] in python3
+=========         Host Frame: __call__ in module.py:299
+=========         Host Frame: func in tvm_ffi.py:339
+=========         Host Frame: __call__ in kernel.py:222
+=========         Host Frame: recurrence_v2 in tilelang_rtiled.py:337
+=========         Host Frame: main in rtiled_tl_debug.py:37
+========= 
+========= Illegal barrier arrive operation
+=========     at tl::mbarrier_wait(unsigned long &, int)+0x1110 in barrier.h:47
+=========     by thread (1,0,0) in block (0,0,0)
+=========         Device Frame: Barrier::wait(unsigned int) const+0x1070 in barrier.h:239
+=========         Device Frame: main_kernel+0x1070 in tvm_kernels.cu:71
+=========     Saved host backtrace up to driver entry point at kernel launch time
+=========         Host Frame:  [0x36413b] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::CppCall(tvm::ffi::FunctionObj const*, tvm::ffi::AnyView const, int, tvm::ffi::Any*) [0x36d7d3] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::SafeCall(void*, TVMFFIAny const*, int, tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>*) [0x36c6f9] in libtvm_runtime.so
+=========         Host Frame: __tvm_ffi_main [0x4fd6] in executable.so
+=========         Host Frame:  [0x13f6fe] in libtvm_ffi.so
+=========         Host Frame:  [0x13f07b] in libtvm_ffi.so
+=========         Host Frame:  [0xbebf0] in core.cpython-311-x86_64-linux-gnu.so
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_MakeTpCall in call.c:214 [0x1e51f4] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:4774 [0x242a5b] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6802] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyEval_EvalCode in ceval.c:1154 [0x2bf283] in libpython3.11.so.1.0
+=========         Host Frame: run_eval_code_obj in pythonrun.c:1712 [0x2d3d73] in libpython3.11.so.1.0
+=========         Host Frame: run_mod in pythonrun.c:1733 [0x2d3cfa] in libpython3.11.so.1.0
+=========         Host Frame: pyrun_file in pythonrun.c:1628 [0x2d4520] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_SimpleFileObject in pythonrun.c:440 [0x2d4243] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_AnyFileObject in pythonrun.c:79 [0x2d3ea2] in libpython3.11.so.1.0
+=========         Host Frame: Py_RunMain in main.c:680 [0x2dbcb0] in libpython3.11.so.1.0
+=========         Host Frame: Py_BytesMain in main.c:734 [0x2db8c8] in libpython3.11.so.1.0
+=========         Host Frame: __libc_start_call_main [0x295cf] in libc.so.6
+=========         Host Frame: __libc_start_main [0x2967f] in libc.so.6
+=========         Host Frame: _start [0x1074] in python3
+=========         Host Frame: __call__ in module.py:299
+=========         Host Frame: func in tvm_ffi.py:339
+=========         Host Frame: __call__ in kernel.py:222
+=========         Host Frame: recurrence_v2 in tilelang_rtiled.py:337
+=========         Host Frame: main in rtiled_tl_debug.py:37
+========= 
+========= Illegal barrier arrive operation
+=========     at tl::mbarrier_wait(unsigned long &, int)+0x1110 in barrier.h:47
+=========     by thread (2,0,0) in block (0,0,0)
+=========         Device Frame: Barrier::wait(unsigned int) const+0x1070 in barrier.h:239
+=========         Device Frame: main_kernel+0x1070 in tvm_kernels.cu:71
+=========     Saved host backtrace up to driver entry point at kernel launch time
+=========         Host Frame:  [0x36413b] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::CppCall(tvm::ffi::FunctionObj const*, tvm::ffi::AnyView const, int, tvm::ffi::Any*) [0x36d7d3] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::SafeCall(void*, TVMFFIAny const*, int, tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>*) [0x36c6f9] in libtvm_runtime.so
+=========         Host Frame: __tvm_ffi_main [0x4fd6] in executable.so
+=========         Host Frame:  [0x13f6fe] in libtvm_ffi.so
+=========         Host Frame:  [0x13f07b] in libtvm_ffi.so
+=========         Host Frame:  [0xbebf0] in core.cpython-311-x86_64-linux-gnu.so
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_MakeTpCall in call.c:214 [0x1e51f4] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:4774 [0x242a5b] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6802] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyEval_EvalCode in ceval.c:1154 [0x2bf283] in libpython3.11.so.1.0
+=========         Host Frame: run_eval_code_obj in pythonrun.c:1712 [0x2d3d73] in libpython3.11.so.1.0
+=========         Host Frame: run_mod in pythonrun.c:1733 [0x2d3cfa] in libpython3.11.so.1.0
+=========         Host Frame: pyrun_file in pythonrun.c:1628 [0x2d4520] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_SimpleFileObject in pythonrun.c:440 [0x2d4243] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_AnyFileObject in pythonrun.c:79 [0x2d3ea2] in libpython3.11.so.1.0
+=========         Host Frame: Py_RunMain in main.c:680 [0x2dbcb0] in libpython3.11.so.1.0
+=========         Host Frame: Py_BytesMain in main.c:734 [0x2db8c8] in libpython3.11.so.1.0
+=========         Host Frame: __libc_start_call_main [0x295cf] in libc.so.6
+=========         Host Frame: __libc_start_main [0x2967f] in libc.so.6
+=========         Host Frame: _start [0x1074] in python3
+=========         Host Frame: __call__ in module.py:299
+=========         Host Frame: func in tvm_ffi.py:339
+=========         Host Frame: __call__ in kernel.py:222
+=========         Host Frame: recurrence_v2 in tilelang_rtiled.py:337
+=========         Host Frame: main in rtiled_tl_debug.py:37
+========= 
+========= Illegal barrier arrive operation
+=========     at tl::mbarrier_wait(unsigned long &, int)+0x1110 in barrier.h:47
+=========     by thread (3,0,0) in block (0,0,0)
+=========         Device Frame: Barrier::wait(unsigned int) const+0x1070 in barrier.h:239
+=========         Device Frame: main_kernel+0x1070 in tvm_kernels.cu:71
+=========     Saved host backtrace up to driver entry point at kernel launch time
+=========         Host Frame:  [0x36413b] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::CppCall(tvm::ffi::FunctionObj const*, tvm::ffi::AnyView const, int, tvm::ffi::Any*) [0x36d7d3] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::SafeCall(void*, TVMFFIAny const*, int, tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>*) [0x36c6f9] in libtvm_runtime.so
+=========         Host Frame: __tvm_ffi_main [0x4fd6] in executable.so
+=========         Host Frame:  [0x13f6fe] in libtvm_ffi.so
+=========         Host Frame:  [0x13f07b] in libtvm_ffi.so
+=========         Host Frame:  [0xbebf0] in core.cpython-311-x86_64-linux-gnu.so
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_MakeTpCall in call.c:214 [0x1e51f4] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:4774 [0x242a5b] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6802] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyEval_EvalCode in ceval.c:1154 [0x2bf283] in libpython3.11.so.1.0
+=========         Host Frame: run_eval_code_obj in pythonrun.c:1712 [0x2d3d73] in libpython3.11.so.1.0
+=========         Host Frame: run_mod in pythonrun.c:1733 [0x2d3cfa] in libpython3.11.so.1.0
+=========         Host Frame: pyrun_file in pythonrun.c:1628 [0x2d4520] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_SimpleFileObject in pythonrun.c:440 [0x2d4243] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_AnyFileObject in pythonrun.c:79 [0x2d3ea2] in libpython3.11.so.1.0
+=========         Host Frame: Py_RunMain in main.c:680 [0x2dbcb0] in libpython3.11.so.1.0
+=========         Host Frame: Py_BytesMain in main.c:734 [0x2db8c8] in libpython3.11.so.1.0
+=========         Host Frame: __libc_start_call_main [0x295cf] in libc.so.6
+=========         Host Frame: __libc_start_main [0x2967f] in libc.so.6
+=========         Host Frame: _start [0x1074] in python3
+=========         Host Frame: __call__ in module.py:299
+=========         Host Frame: func in tvm_ffi.py:339
+=========         Host Frame: __call__ in kernel.py:222
+=========         Host Frame: recurrence_v2 in tilelang_rtiled.py:337
+=========         Host Frame: main in rtiled_tl_debug.py:37
+========= 
+========= Illegal barrier arrive operation
+=========     at tl::mbarrier_wait(unsigned long &, int)+0x1110 in barrier.h:47
+=========     by thread (4,0,0) in block (0,0,0)
+=========         Device Frame: Barrier::wait(unsigned int) const+0x1070 in barrier.h:239
+=========         Device Frame: main_kernel+0x1070 in tvm_kernels.cu:71
+=========     Saved host backtrace up to driver entry point at kernel launch time
+=========         Host Frame:  [0x36413b] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::CppCall(tvm::ffi::FunctionObj const*, tvm::ffi::AnyView const, int, tvm::ffi::Any*) [0x36d7d3] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::SafeCall(void*, TVMFFIAny const*, int, tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>*) [0x36c6f9] in libtvm_runtime.so
+=========         Host Frame: __tvm_ffi_main [0x4fd6] in executable.so
+=========         Host Frame:  [0x13f6fe] in libtvm_ffi.so
+=========         Host Frame:  [0x13f07b] in libtvm_ffi.so
+=========         Host Frame:  [0xbebf0] in core.cpython-311-x86_64-linux-gnu.so
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_MakeTpCall in call.c:214 [0x1e51f4] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:4774 [0x242a5b] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6802] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyEval_EvalCode in ceval.c:1154 [0x2bf283] in libpython3.11.so.1.0
+=========         Host Frame: run_eval_code_obj in pythonrun.c:1712 [0x2d3d73] in libpython3.11.so.1.0
+=========         Host Frame: run_mod in pythonrun.c:1733 [0x2d3cfa] in libpython3.11.so.1.0
+=========         Host Frame: pyrun_file in pythonrun.c:1628 [0x2d4520] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_SimpleFileObject in pythonrun.c:440 [0x2d4243] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_AnyFileObject in pythonrun.c:79 [0x2d3ea2] in libpython3.11.so.1.0
+=========         Host Frame: Py_RunMain in main.c:680 [0x2dbcb0] in libpython3.11.so.1.0
+=========         Host Frame: Py_BytesMain in main.c:734 [0x2db8c8] in libpython3.11.so.1.0
+=========         Host Frame: __libc_start_call_main [0x295cf] in libc.so.6
+=========         Host Frame: __libc_start_main [0x2967f] in libc.so.6
+=========         Host Frame: _start [0x1074] in python3
+=========         Host Frame: __call__ in module.py:299
+=========         Host Frame: func in tvm_ffi.py:339
+=========         Host Frame: __call__ in kernel.py:222
+=========         Host Frame: recurrence_v2 in tilelang_rtiled.py:337
+=========         Host Frame: main in rtiled_tl_debug.py:37
+========= 
+========= Illegal barrier arrive operation
+=========     at tl::mbarrier_wait(unsigned long &, int)+0x1110 in barrier.h:47
+=========     by thread (5,0,0) in block (0,0,0)
+=========         Device Frame: Barrier::wait(unsigned int) const+0x1070 in barrier.h:239
+=========         Device Frame: main_kernel+0x1070 in tvm_kernels.cu:71
+=========     Saved host backtrace up to driver entry point at kernel launch time
+=========         Host Frame:  [0x36413b] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::CppCall(tvm::ffi::FunctionObj const*, tvm::ffi::AnyView const, int, tvm::ffi::Any*) [0x36d7d3] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::SafeCall(void*, TVMFFIAny const*, int, tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>*) [0x36c6f9] in libtvm_runtime.so
+=========         Host Frame: __tvm_ffi_main [0x4fd6] in executable.so
+=========         Host Frame:  [0x13f6fe] in libtvm_ffi.so
+=========         Host Frame:  [0x13f07b] in libtvm_ffi.so
+=========         Host Frame:  [0xbebf0] in core.cpython-311-x86_64-linux-gnu.so
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_MakeTpCall in call.c:214 [0x1e51f4] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:4774 [0x242a5b] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6802] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyEval_EvalCode in ceval.c:1154 [0x2bf283] in libpython3.11.so.1.0
+=========         Host Frame: run_eval_code_obj in pythonrun.c:1712 [0x2d3d73] in libpython3.11.so.1.0
+=========         Host Frame: run_mod in pythonrun.c:1733 [0x2d3cfa] in libpython3.11.so.1.0
+=========         Host Frame: pyrun_file in pythonrun.c:1628 [0x2d4520] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_SimpleFileObject in pythonrun.c:440 [0x2d4243] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_AnyFileObject in pythonrun.c:79 [0x2d3ea2] in libpython3.11.so.1.0
+=========         Host Frame: Py_RunMain in main.c:680 [0x2dbcb0] in libpython3.11.so.1.0
+=========         Host Frame: Py_BytesMain in main.c:734 [0x2db8c8] in libpython3.11.so.1.0
+=========         Host Frame: __libc_start_call_main [0x295cf] in libc.so.6
+=========         Host Frame: __libc_start_main [0x2967f] in libc.so.6
+=========         Host Frame: _start [0x1074] in python3
+=========         Host Frame: __call__ in module.py:299
+=========         Host Frame: func in tvm_ffi.py:339
+=========         Host Frame: __call__ in kernel.py:222
+=========         Host Frame: recurrence_v2 in tilelang_rtiled.py:337
+=========         Host Frame: main in rtiled_tl_debug.py:37
+========= 
+========= Illegal barrier arrive operation
+=========     at tl::mbarrier_wait(unsigned long &, int)+0x1110 in barrier.h:47
+=========     by thread (6,0,0) in block (0,0,0)
+=========         Device Frame: Barrier::wait(unsigned int) const+0x1070 in barrier.h:239
+=========         Device Frame: main_kernel+0x1070 in tvm_kernels.cu:71
+=========     Saved host backtrace up to driver entry point at kernel launch time
+=========         Host Frame:  [0x36413b] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::CppCall(tvm::ffi::FunctionObj const*, tvm::ffi::AnyView const, int, tvm::ffi::Any*) [0x36d7d3] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::SafeCall(void*, TVMFFIAny const*, int, tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>*) [0x36c6f9] in libtvm_runtime.so
+=========         Host Frame: __tvm_ffi_main [0x4fd6] in executable.so
+=========         Host Frame:  [0x13f6fe] in libtvm_ffi.so
+=========         Host Frame:  [0x13f07b] in libtvm_ffi.so
+=========         Host Frame:  [0xbebf0] in core.cpython-311-x86_64-linux-gnu.so
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_MakeTpCall in call.c:214 [0x1e51f4] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:4774 [0x242a5b] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6802] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyEval_EvalCode in ceval.c:1154 [0x2bf283] in libpython3.11.so.1.0
+=========         Host Frame: run_eval_code_obj in pythonrun.c:1712 [0x2d3d73] in libpython3.11.so.1.0
+=========         Host Frame: run_mod in pythonrun.c:1733 [0x2d3cfa] in libpython3.11.so.1.0
+=========         Host Frame: pyrun_file in pythonrun.c:1628 [0x2d4520] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_SimpleFileObject in pythonrun.c:440 [0x2d4243] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_AnyFileObject in pythonrun.c:79 [0x2d3ea2] in libpython3.11.so.1.0
+=========         Host Frame: Py_RunMain in main.c:680 [0x2dbcb0] in libpython3.11.so.1.0
+=========         Host Frame: Py_BytesMain in main.c:734 [0x2db8c8] in libpython3.11.so.1.0
+=========         Host Frame: __libc_start_call_main [0x295cf] in libc.so.6
+=========         Host Frame: __libc_start_main [0x2967f] in libc.so.6
+=========         Host Frame: _start [0x1074] in python3
+=========         Host Frame: __call__ in module.py:299
+=========         Host Frame: func in tvm_ffi.py:339
+=========         Host Frame: __call__ in kernel.py:222
+=========         Host Frame: recurrence_v2 in tilelang_rtiled.py:337
+=========         Host Frame: main in rtiled_tl_debug.py:37
+========= 
+========= Illegal barrier arrive operation
+=========     at tl::mbarrier_wait(unsigned long &, int)+0x1110 in barrier.h:47
+=========     by thread (7,0,0) in block (0,0,0)
+=========         Device Frame: Barrier::wait(unsigned int) const+0x1070 in barrier.h:239
+=========         Device Frame: main_kernel+0x1070 in tvm_kernels.cu:71
+=========     Saved host backtrace up to driver entry point at kernel launch time
+=========         Host Frame:  [0x36413b] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::CppCall(tvm::ffi::FunctionObj const*, tvm::ffi::AnyView const, int, tvm::ffi::Any*) [0x36d7d3] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::SafeCall(void*, TVMFFIAny const*, int, tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>*) [0x36c6f9] in libtvm_runtime.so
+=========         Host Frame: __tvm_ffi_main [0x4fd6] in executable.so
+=========         Host Frame:  [0x13f6fe] in libtvm_ffi.so
+=========         Host Frame:  [0x13f07b] in libtvm_ffi.so
+=========         Host Frame:  [0xbebf0] in core.cpython-311-x86_64-linux-gnu.so
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_MakeTpCall in call.c:214 [0x1e51f4] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:4774 [0x242a5b] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6802] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyEval_EvalCode in ceval.c:1154 [0x2bf283] in libpython3.11.so.1.0
+=========         Host Frame: run_eval_code_obj in pythonrun.c:1712 [0x2d3d73] in libpython3.11.so.1.0
+=========         Host Frame: run_mod in pythonrun.c:1733 [0x2d3cfa] in libpython3.11.so.1.0
+=========         Host Frame: pyrun_file in pythonrun.c:1628 [0x2d4520] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_SimpleFileObject in pythonrun.c:440 [0x2d4243] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_AnyFileObject in pythonrun.c:79 [0x2d3ea2] in libpython3.11.so.1.0
+=========         Host Frame: Py_RunMain in main.c:680 [0x2dbcb0] in libpython3.11.so.1.0
+=========         Host Frame: Py_BytesMain in main.c:734 [0x2db8c8] in libpython3.11.so.1.0
+=========         Host Frame: __libc_start_call_main [0x295cf] in libc.so.6
+=========         Host Frame: __libc_start_main [0x2967f] in libc.so.6
+=========         Host Frame: _start [0x1074] in python3
+=========         Host Frame: __call__ in module.py:299
+=========         Host Frame: func in tvm_ffi.py:339
+=========         Host Frame: __call__ in kernel.py:222
+=========         Host Frame: recurrence_v2 in tilelang_rtiled.py:337
+=========         Host Frame: main in rtiled_tl_debug.py:37
+========= 
+========= Illegal barrier arrive operation
+=========     at tl::mbarrier_wait(unsigned long &, int)+0x1110 in barrier.h:47
+=========     by thread (8,0,0) in block (0,0,0)
+=========         Device Frame: Barrier::wait(unsigned int) const+0x1070 in barrier.h:239
+=========         Device Frame: main_kernel+0x1070 in tvm_kernels.cu:71
+=========     Saved host backtrace up to driver entry point at kernel launch time
+=========         Host Frame:  [0x36413b] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::CppCall(tvm::ffi::FunctionObj const*, tvm::ffi::AnyView const, int, tvm::ffi::Any*) [0x36d7d3] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::SafeCall(void*, TVMFFIAny const*, int, tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>*) [0x36c6f9] in libtvm_runtime.so
+=========         Host Frame: __tvm_ffi_main [0x4fd6] in executable.so
+=========         Host Frame:  [0x13f6fe] in libtvm_ffi.so
+=========         Host Frame:  [0x13f07b] in libtvm_ffi.so
+=========         Host Frame:  [0xbebf0] in core.cpython-311-x86_64-linux-gnu.so
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_MakeTpCall in call.c:214 [0x1e51f4] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:4774 [0x242a5b] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6802] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyEval_EvalCode in ceval.c:1154 [0x2bf283] in libpython3.11.so.1.0
+=========         Host Frame: run_eval_code_obj in pythonrun.c:1712 [0x2d3d73] in libpython3.11.so.1.0
+=========         Host Frame: run_mod in pythonrun.c:1733 [0x2d3cfa] in libpython3.11.so.1.0
+=========         Host Frame: pyrun_file in pythonrun.c:1628 [0x2d4520] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_SimpleFileObject in pythonrun.c:440 [0x2d4243] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_AnyFileObject in pythonrun.c:79 [0x2d3ea2] in libpython3.11.so.1.0
+=========         Host Frame: Py_RunMain in main.c:680 [0x2dbcb0] in libpython3.11.so.1.0
+=========         Host Frame: Py_BytesMain in main.c:734 [0x2db8c8] in libpython3.11.so.1.0
+=========         Host Frame: __libc_start_call_main [0x295cf] in libc.so.6
+=========         Host Frame: __libc_start_main [0x2967f] in libc.so.6
+=========         Host Frame: _start [0x1074] in python3
+=========         Host Frame: __call__ in module.py:299
+=========         Host Frame: func in tvm_ffi.py:339
+=========         Host Frame: __call__ in kernel.py:222
+=========         Host Frame: recurrence_v2 in tilelang_rtiled.py:337
+=========         Host Frame: main in rtiled_tl_debug.py:37
+========= 
+========= Illegal barrier arrive operation
+=========     at tl::mbarrier_wait(unsigned long &, int)+0x1110 in barrier.h:47
+=========     by thread (9,0,0) in block (0,0,0)
+=========         Device Frame: Barrier::wait(unsigned int) const+0x1070 in barrier.h:239
+=========         Device Frame: main_kernel+0x1070 in tvm_kernels.cu:71
+=========     Saved host backtrace up to driver entry point at kernel launch time
+=========         Host Frame:  [0x36413b] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::CppCall(tvm::ffi::FunctionObj const*, tvm::ffi::AnyView const, int, tvm::ffi::Any*) [0x36d7d3] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::SafeCall(void*, TVMFFIAny const*, int, tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>*) [0x36c6f9] in libtvm_runtime.so
+=========         Host Frame: __tvm_ffi_main [0x4fd6] in executable.so
+=========         Host Frame:  [0x13f6fe] in libtvm_ffi.so
+=========         Host Frame:  [0x13f07b] in libtvm_ffi.so
+=========         Host Frame:  [0xbebf0] in core.cpython-311-x86_64-linux-gnu.so
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_MakeTpCall in call.c:214 [0x1e51f4] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:4774 [0x242a5b] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6802] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyEval_EvalCode in ceval.c:1154 [0x2bf283] in libpython3.11.so.1.0
+=========         Host Frame: run_eval_code_obj in pythonrun.c:1712 [0x2d3d73] in libpython3.11.so.1.0
+=========         Host Frame: run_mod in pythonrun.c:1733 [0x2d3cfa] in libpython3.11.so.1.0
+=========         Host Frame: pyrun_file in pythonrun.c:1628 [0x2d4520] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_SimpleFileObject in pythonrun.c:440 [0x2d4243] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_AnyFileObject in pythonrun.c:79 [0x2d3ea2] in libpython3.11.so.1.0
+=========         Host Frame: Py_RunMain in main.c:680 [0x2dbcb0] in libpython3.11.so.1.0
+=========         Host Frame: Py_BytesMain in main.c:734 [0x2db8c8] in libpython3.11.so.1.0
+=========         Host Frame: __libc_start_call_main [0x295cf] in libc.so.6
+=========         Host Frame: __libc_start_main [0x2967f] in libc.so.6
+=========         Host Frame: _start [0x1074] in python3
+=========         Host Frame: __call__ in module.py:299
+=========         Host Frame: func in tvm_ffi.py:339
+=========         Host Frame: __call__ in kernel.py:222
+=========         Host Frame: recurrence_v2 in tilelang_rtiled.py:337
+=========         Host Frame: main in rtiled_tl_debug.py:37
+========= 
+========= Illegal barrier arrive operation
+=========     at tl::mbarrier_wait(unsigned long &, int)+0x1110 in barrier.h:47
+=========     by thread (10,0,0) in block (0,0,0)
+=========         Device Frame: Barrier::wait(unsigned int) const+0x1070 in barrier.h:239
+=========         Device Frame: main_kernel+0x1070 in tvm_kernels.cu:71
+=========     Saved host backtrace up to driver entry point at kernel launch time
+=========         Host Frame:  [0x36413b] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::CppCall(tvm::ffi::FunctionObj const*, tvm::ffi::AnyView const, int, tvm::ffi::Any*) [0x36d7d3] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::SafeCall(void*, TVMFFIAny const*, int, tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>*) [0x36c6f9] in libtvm_runtime.so
+=========         Host Frame: __tvm_ffi_main [0x4fd6] in executable.so
+=========         Host Frame:  [0x13f6fe] in libtvm_ffi.so
+=========         Host Frame:  [0x13f07b] in libtvm_ffi.so
+=========         Host Frame:  [0xbebf0] in core.cpython-311-x86_64-linux-gnu.so
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_MakeTpCall in call.c:214 [0x1e51f4] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:4774 [0x242a5b] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6802] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyEval_EvalCode in ceval.c:1154 [0x2bf283] in libpython3.11.so.1.0
+=========         Host Frame: run_eval_code_obj in pythonrun.c:1712 [0x2d3d73] in libpython3.11.so.1.0
+=========         Host Frame: run_mod in pythonrun.c:1733 [0x2d3cfa] in libpython3.11.so.1.0
+=========         Host Frame: pyrun_file in pythonrun.c:1628 [0x2d4520] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_SimpleFileObject in pythonrun.c:440 [0x2d4243] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_AnyFileObject in pythonrun.c:79 [0x2d3ea2] in libpython3.11.so.1.0
+=========         Host Frame: Py_RunMain in main.c:680 [0x2dbcb0] in libpython3.11.so.1.0
+=========         Host Frame: Py_BytesMain in main.c:734 [0x2db8c8] in libpython3.11.so.1.0
+=========         Host Frame: __libc_start_call_main [0x295cf] in libc.so.6
+=========         Host Frame: __libc_start_main [0x2967f] in libc.so.6
+=========         Host Frame: _start [0x1074] in python3
+=========         Host Frame: __call__ in module.py:299
+=========         Host Frame: func in tvm_ffi.py:339
+=========         Host Frame: __call__ in kernel.py:222
+=========         Host Frame: recurrence_v2 in tilelang_rtiled.py:337
+=========         Host Frame: main in rtiled_tl_debug.py:37
+========= 
+========= Illegal barrier arrive operation
+=========     at tl::mbarrier_wait(unsigned long &, int)+0x1110 in barrier.h:47
+=========     by thread (11,0,0) in block (0,0,0)
+=========         Device Frame: Barrier::wait(unsigned int) const+0x1070 in barrier.h:239
+=========         Device Frame: main_kernel+0x1070 in tvm_kernels.cu:71
+=========     Saved host backtrace up to driver entry point at kernel launch time
+=========         Host Frame:  [0x36413b] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::CppCall(tvm::ffi::FunctionObj const*, tvm::ffi::AnyView const, int, tvm::ffi::Any*) [0x36d7d3] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::SafeCall(void*, TVMFFIAny const*, int, tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>*) [0x36c6f9] in libtvm_runtime.so
+=========         Host Frame: __tvm_ffi_main [0x4fd6] in executable.so
+=========         Host Frame:  [0x13f6fe] in libtvm_ffi.so
+=========         Host Frame:  [0x13f07b] in libtvm_ffi.so
+=========         Host Frame:  [0xbebf0] in core.cpython-311-x86_64-linux-gnu.so
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_MakeTpCall in call.c:214 [0x1e51f4] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:4774 [0x242a5b] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6802] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyEval_EvalCode in ceval.c:1154 [0x2bf283] in libpython3.11.so.1.0
+=========         Host Frame: run_eval_code_obj in pythonrun.c:1712 [0x2d3d73] in libpython3.11.so.1.0
+=========         Host Frame: run_mod in pythonrun.c:1733 [0x2d3cfa] in libpython3.11.so.1.0
+=========         Host Frame: pyrun_file in pythonrun.c:1628 [0x2d4520] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_SimpleFileObject in pythonrun.c:440 [0x2d4243] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_AnyFileObject in pythonrun.c:79 [0x2d3ea2] in libpython3.11.so.1.0
+=========         Host Frame: Py_RunMain in main.c:680 [0x2dbcb0] in libpython3.11.so.1.0
+=========         Host Frame: Py_BytesMain in main.c:734 [0x2db8c8] in libpython3.11.so.1.0
+=========         Host Frame: __libc_start_call_main [0x295cf] in libc.so.6
+=========         Host Frame: __libc_start_main [0x2967f] in libc.so.6
+=========         Host Frame: _start [0x1074] in python3
+=========         Host Frame: __call__ in module.py:299
+=========         Host Frame: func in tvm_ffi.py:339
+=========         Host Frame: __call__ in kernel.py:222
+=========         Host Frame: recurrence_v2 in tilelang_rtiled.py:337
+=========         Host Frame: main in rtiled_tl_debug.py:37
+========= 
+========= Illegal barrier arrive operation
+=========     at tl::mbarrier_wait(unsigned long &, int)+0x1110 in barrier.h:47
+=========     by thread (12,0,0) in block (0,0,0)
+=========         Device Frame: Barrier::wait(unsigned int) const+0x1070 in barrier.h:239
+=========         Device Frame: main_kernel+0x1070 in tvm_kernels.cu:71
+=========     Saved host backtrace up to driver entry point at kernel launch time
+=========         Host Frame:  [0x36413b] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::CppCall(tvm::ffi::FunctionObj const*, tvm::ffi::AnyView const, int, tvm::ffi::Any*) [0x36d7d3] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::SafeCall(void*, TVMFFIAny const*, int, tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>*) [0x36c6f9] in libtvm_runtime.so
+=========         Host Frame: __tvm_ffi_main [0x4fd6] in executable.so
+=========         Host Frame:  [0x13f6fe] in libtvm_ffi.so
+=========         Host Frame:  [0x13f07b] in libtvm_ffi.so
+=========         Host Frame:  [0xbebf0] in core.cpython-311-x86_64-linux-gnu.so
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_MakeTpCall in call.c:214 [0x1e51f4] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:4774 [0x242a5b] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6802] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyEval_EvalCode in ceval.c:1154 [0x2bf283] in libpython3.11.so.1.0
+=========         Host Frame: run_eval_code_obj in pythonrun.c:1712 [0x2d3d73] in libpython3.11.so.1.0
+=========         Host Frame: run_mod in pythonrun.c:1733 [0x2d3cfa] in libpython3.11.so.1.0
+=========         Host Frame: pyrun_file in pythonrun.c:1628 [0x2d4520] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_SimpleFileObject in pythonrun.c:440 [0x2d4243] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_AnyFileObject in pythonrun.c:79 [0x2d3ea2] in libpython3.11.so.1.0
+=========         Host Frame: Py_RunMain in main.c:680 [0x2dbcb0] in libpython3.11.so.1.0
+=========         Host Frame: Py_BytesMain in main.c:734 [0x2db8c8] in libpython3.11.so.1.0
+=========         Host Frame: __libc_start_call_main [0x295cf] in libc.so.6
+=========         Host Frame: __libc_start_main [0x2967f] in libc.so.6
+=========         Host Frame: _start [0x1074] in python3
+=========         Host Frame: __call__ in module.py:299
+=========         Host Frame: func in tvm_ffi.py:339
+=========         Host Frame: __call__ in kernel.py:222
+=========         Host Frame: recurrence_v2 in tilelang_rtiled.py:337
+=========         Host Frame: main in rtiled_tl_debug.py:37
+========= 
+========= Illegal barrier arrive operation
+=========     at tl::mbarrier_wait(unsigned long &, int)+0x1110 in barrier.h:47
+=========     by thread (13,0,0) in block (0,0,0)
+=========         Device Frame: Barrier::wait(unsigned int) const+0x1070 in barrier.h:239
+=========         Device Frame: main_kernel+0x1070 in tvm_kernels.cu:71
+=========     Saved host backtrace up to driver entry point at kernel launch time
+=========         Host Frame:  [0x36413b] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::CppCall(tvm::ffi::FunctionObj const*, tvm::ffi::AnyView const, int, tvm::ffi::Any*) [0x36d7d3] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::SafeCall(void*, TVMFFIAny const*, int, tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>*) [0x36c6f9] in libtvm_runtime.so
+=========         Host Frame: __tvm_ffi_main [0x4fd6] in executable.so
+=========         Host Frame:  [0x13f6fe] in libtvm_ffi.so
+=========         Host Frame:  [0x13f07b] in libtvm_ffi.so
+=========         Host Frame:  [0xbebf0] in core.cpython-311-x86_64-linux-gnu.so
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_MakeTpCall in call.c:214 [0x1e51f4] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:4774 [0x242a5b] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6802] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyEval_EvalCode in ceval.c:1154 [0x2bf283] in libpython3.11.so.1.0
+=========         Host Frame: run_eval_code_obj in pythonrun.c:1712 [0x2d3d73] in libpython3.11.so.1.0
+=========         Host Frame: run_mod in pythonrun.c:1733 [0x2d3cfa] in libpython3.11.so.1.0
+=========         Host Frame: pyrun_file in pythonrun.c:1628 [0x2d4520] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_SimpleFileObject in pythonrun.c:440 [0x2d4243] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_AnyFileObject in pythonrun.c:79 [0x2d3ea2] in libpython3.11.so.1.0
+=========         Host Frame: Py_RunMain in main.c:680 [0x2dbcb0] in libpython3.11.so.1.0
+=========         Host Frame: Py_BytesMain in main.c:734 [0x2db8c8] in libpython3.11.so.1.0
+=========         Host Frame: __libc_start_call_main [0x295cf] in libc.so.6
+=========         Host Frame: __libc_start_main [0x2967f] in libc.so.6
+=========         Host Frame: _start [0x1074] in python3
+=========         Host Frame: __call__ in module.py:299
+=========         Host Frame: func in tvm_ffi.py:339
+=========         Host Frame: __call__ in kernel.py:222
+=========         Host Frame: recurrence_v2 in tilelang_rtiled.py:337
+=========         Host Frame: main in rtiled_tl_debug.py:37
+========= 
+========= Illegal barrier arrive operation
+=========     at tl::mbarrier_wait(unsigned long &, int)+0x1110 in barrier.h:47
+=========     by thread (14,0,0) in block (0,0,0)
+=========         Device Frame: Barrier::wait(unsigned int) const+0x1070 in barrier.h:239
+=========         Device Frame: main_kernel+0x1070 in tvm_kernels.cu:71
+=========     Saved host backtrace up to driver entry point at kernel launch time
+=========         Host Frame:  [0x36413b] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::CppCall(tvm::ffi::FunctionObj const*, tvm::ffi::AnyView const, int, tvm::ffi::Any*) [0x36d7d3] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::SafeCall(void*, TVMFFIAny const*, int, tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>*) [0x36c6f9] in libtvm_runtime.so
+=========         Host Frame: __tvm_ffi_main [0x4fd6] in executable.so
+=========         Host Frame:  [0x13f6fe] in libtvm_ffi.so
+=========         Host Frame:  [0x13f07b] in libtvm_ffi.so
+=========         Host Frame:  [0xbebf0] in core.cpython-311-x86_64-linux-gnu.so
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_MakeTpCall in call.c:214 [0x1e51f4] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:4774 [0x242a5b] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6802] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyEval_EvalCode in ceval.c:1154 [0x2bf283] in libpython3.11.so.1.0
+=========         Host Frame: run_eval_code_obj in pythonrun.c:1712 [0x2d3d73] in libpython3.11.so.1.0
+=========         Host Frame: run_mod in pythonrun.c:1733 [0x2d3cfa] in libpython3.11.so.1.0
+=========         Host Frame: pyrun_file in pythonrun.c:1628 [0x2d4520] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_SimpleFileObject in pythonrun.c:440 [0x2d4243] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_AnyFileObject in pythonrun.c:79 [0x2d3ea2] in libpython3.11.so.1.0
+=========         Host Frame: Py_RunMain in main.c:680 [0x2dbcb0] in libpython3.11.so.1.0
+=========         Host Frame: Py_BytesMain in main.c:734 [0x2db8c8] in libpython3.11.so.1.0
+=========         Host Frame: __libc_start_call_main [0x295cf] in libc.so.6
+=========         Host Frame: __libc_start_main [0x2967f] in libc.so.6
+=========         Host Frame: _start [0x1074] in python3
+=========         Host Frame: __call__ in module.py:299
+=========         Host Frame: func in tvm_ffi.py:339
+=========         Host Frame: __call__ in kernel.py:222
+=========         Host Frame: recurrence_v2 in tilelang_rtiled.py:337
+=========         Host Frame: main in rtiled_tl_debug.py:37
+========= 
+========= Illegal barrier arrive operation
+=========     at tl::mbarrier_wait(unsigned long &, int)+0x1110 in barrier.h:47
+=========     by thread (15,0,0) in block (0,0,0)
+=========         Device Frame: Barrier::wait(unsigned int) const+0x1070 in barrier.h:239
+=========         Device Frame: main_kernel+0x1070 in tvm_kernels.cu:71
+=========     Saved host backtrace up to driver entry point at kernel launch time
+=========         Host Frame:  [0x36413b] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::CppCall(tvm::ffi::FunctionObj const*, tvm::ffi::AnyView const, int, tvm::ffi::Any*) [0x36d7d3] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::SafeCall(void*, TVMFFIAny const*, int, tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>*) [0x36c6f9] in libtvm_runtime.so
+=========         Host Frame: __tvm_ffi_main [0x4fd6] in executable.so
+=========         Host Frame:  [0x13f6fe] in libtvm_ffi.so
+=========         Host Frame:  [0x13f07b] in libtvm_ffi.so
+=========         Host Frame:  [0xbebf0] in core.cpython-311-x86_64-linux-gnu.so
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_MakeTpCall in call.c:214 [0x1e51f4] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:4774 [0x242a5b] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6802] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyEval_EvalCode in ceval.c:1154 [0x2bf283] in libpython3.11.so.1.0
+=========         Host Frame: run_eval_code_obj in pythonrun.c:1712 [0x2d3d73] in libpython3.11.so.1.0
+=========         Host Frame: run_mod in pythonrun.c:1733 [0x2d3cfa] in libpython3.11.so.1.0
+=========         Host Frame: pyrun_file in pythonrun.c:1628 [0x2d4520] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_SimpleFileObject in pythonrun.c:440 [0x2d4243] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_AnyFileObject in pythonrun.c:79 [0x2d3ea2] in libpython3.11.so.1.0
+=========         Host Frame: Py_RunMain in main.c:680 [0x2dbcb0] in libpython3.11.so.1.0
+=========         Host Frame: Py_BytesMain in main.c:734 [0x2db8c8] in libpython3.11.so.1.0
+=========         Host Frame: __libc_start_call_main [0x295cf] in libc.so.6
+=========         Host Frame: __libc_start_main [0x2967f] in libc.so.6
+=========         Host Frame: _start [0x1074] in python3
+=========         Host Frame: __call__ in module.py:299
+=========         Host Frame: func in tvm_ffi.py:339
+=========         Host Frame: __call__ in kernel.py:222
+=========         Host Frame: recurrence_v2 in tilelang_rtiled.py:337
+=========         Host Frame: main in rtiled_tl_debug.py:37
+========= 
+========= Illegal barrier arrive operation
+=========     at tl::mbarrier_wait(unsigned long &, int)+0x1110 in barrier.h:47
+=========     by thread (16,0,0) in block (0,0,0)
+=========         Device Frame: Barrier::wait(unsigned int) const+0x1070 in barrier.h:239
+=========         Device Frame: main_kernel+0x1070 in tvm_kernels.cu:71
+=========     Saved host backtrace up to driver entry point at kernel launch time
+=========         Host Frame:  [0x36413b] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::CppCall(tvm::ffi::FunctionObj const*, tvm::ffi::AnyView const, int, tvm::ffi::Any*) [0x36d7d3] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::SafeCall(void*, TVMFFIAny const*, int, tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>*) [0x36c6f9] in libtvm_runtime.so
+=========         Host Frame: __tvm_ffi_main [0x4fd6] in executable.so
+=========         Host Frame:  [0x13f6fe] in libtvm_ffi.so
+=========         Host Frame:  [0x13f07b] in libtvm_ffi.so
+=========         Host Frame:  [0xbebf0] in core.cpython-311-x86_64-linux-gnu.so
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_MakeTpCall in call.c:214 [0x1e51f4] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:4774 [0x242a5b] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6802] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyEval_EvalCode in ceval.c:1154 [0x2bf283] in libpython3.11.so.1.0
+=========         Host Frame: run_eval_code_obj in pythonrun.c:1712 [0x2d3d73] in libpython3.11.so.1.0
+=========         Host Frame: run_mod in pythonrun.c:1733 [0x2d3cfa] in libpython3.11.so.1.0
+=========         Host Frame: pyrun_file in pythonrun.c:1628 [0x2d4520] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_SimpleFileObject in pythonrun.c:440 [0x2d4243] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_AnyFileObject in pythonrun.c:79 [0x2d3ea2] in libpython3.11.so.1.0
+=========         Host Frame: Py_RunMain in main.c:680 [0x2dbcb0] in libpython3.11.so.1.0
+=========         Host Frame: Py_BytesMain in main.c:734 [0x2db8c8] in libpython3.11.so.1.0
+=========         Host Frame: __libc_start_call_main [0x295cf] in libc.so.6
+=========         Host Frame: __libc_start_main [0x2967f] in libc.so.6
+=========         Host Frame: _start [0x1074] in python3
+=========         Host Frame: __call__ in module.py:299
+=========         Host Frame: func in tvm_ffi.py:339
+=========         Host Frame: __call__ in kernel.py:222
+=========         Host Frame: recurrence_v2 in tilelang_rtiled.py:337
+=========         Host Frame: main in rtiled_tl_debug.py:37
+========= 
+========= Illegal barrier arrive operation
+=========     at tl::mbarrier_wait(unsigned long &, int)+0x1110 in barrier.h:47
+=========     by thread (17,0,0) in block (0,0,0)
+=========         Device Frame: Barrier::wait(unsigned int) const+0x1070 in barrier.h:239
+=========         Device Frame: main_kernel+0x1070 in tvm_kernels.cu:71
+=========     Saved host backtrace up to driver entry point at kernel launch time
+=========         Host Frame:  [0x36413b] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::CppCall(tvm::ffi::FunctionObj const*, tvm::ffi::AnyView const, int, tvm::ffi::Any*) [0x36d7d3] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::SafeCall(void*, TVMFFIAny const*, int, tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>*) [0x36c6f9] in libtvm_runtime.so
+=========         Host Frame: __tvm_ffi_main [0x4fd6] in executable.so
+=========         Host Frame:  [0x13f6fe] in libtvm_ffi.so
+=========         Host Frame:  [0x13f07b] in libtvm_ffi.so
+=========         Host Frame:  [0xbebf0] in core.cpython-311-x86_64-linux-gnu.so
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_MakeTpCall in call.c:214 [0x1e51f4] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:4774 [0x242a5b] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6802] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyEval_EvalCode in ceval.c:1154 [0x2bf283] in libpython3.11.so.1.0
+=========         Host Frame: run_eval_code_obj in pythonrun.c:1712 [0x2d3d73] in libpython3.11.so.1.0
+=========         Host Frame: run_mod in pythonrun.c:1733 [0x2d3cfa] in libpython3.11.so.1.0
+=========         Host Frame: pyrun_file in pythonrun.c:1628 [0x2d4520] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_SimpleFileObject in pythonrun.c:440 [0x2d4243] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_AnyFileObject in pythonrun.c:79 [0x2d3ea2] in libpython3.11.so.1.0
+=========         Host Frame: Py_RunMain in main.c:680 [0x2dbcb0] in libpython3.11.so.1.0
+=========         Host Frame: Py_BytesMain in main.c:734 [0x2db8c8] in libpython3.11.so.1.0
+=========         Host Frame: __libc_start_call_main [0x295cf] in libc.so.6
+=========         Host Frame: __libc_start_main [0x2967f] in libc.so.6
+=========         Host Frame: _start [0x1074] in python3
+=========         Host Frame: __call__ in module.py:299
+=========         Host Frame: func in tvm_ffi.py:339
+=========         Host Frame: __call__ in kernel.py:222
+=========         Host Frame: recurrence_v2 in tilelang_rtiled.py:337
+=========         Host Frame: main in rtiled_tl_debug.py:37
+========= 
+========= Illegal barrier arrive operation
+=========     at tl::mbarrier_wait(unsigned long &, int)+0x1110 in barrier.h:47
+=========     by thread (18,0,0) in block (0,0,0)
+=========         Device Frame: Barrier::wait(unsigned int) const+0x1070 in barrier.h:239
+=========         Device Frame: main_kernel+0x1070 in tvm_kernels.cu:71
+=========     Saved host backtrace up to driver entry point at kernel launch time
+=========         Host Frame:  [0x36413b] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::CppCall(tvm::ffi::FunctionObj const*, tvm::ffi::AnyView const, int, tvm::ffi::Any*) [0x36d7d3] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::SafeCall(void*, TVMFFIAny const*, int, tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>*) [0x36c6f9] in libtvm_runtime.so
+=========         Host Frame: __tvm_ffi_main [0x4fd6] in executable.so
+=========         Host Frame:  [0x13f6fe] in libtvm_ffi.so
+=========         Host Frame:  [0x13f07b] in libtvm_ffi.so
+=========         Host Frame:  [0xbebf0] in core.cpython-311-x86_64-linux-gnu.so
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_MakeTpCall in call.c:214 [0x1e51f4] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:4774 [0x242a5b] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6802] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyEval_EvalCode in ceval.c:1154 [0x2bf283] in libpython3.11.so.1.0
+=========         Host Frame: run_eval_code_obj in pythonrun.c:1712 [0x2d3d73] in libpython3.11.so.1.0
+=========         Host Frame: run_mod in pythonrun.c:1733 [0x2d3cfa] in libpython3.11.so.1.0
+=========         Host Frame: pyrun_file in pythonrun.c:1628 [0x2d4520] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_SimpleFileObject in pythonrun.c:440 [0x2d4243] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_AnyFileObject in pythonrun.c:79 [0x2d3ea2] in libpython3.11.so.1.0
+=========         Host Frame: Py_RunMain in main.c:680 [0x2dbcb0] in libpython3.11.so.1.0
+=========         Host Frame: Py_BytesMain in main.c:734 [0x2db8c8] in libpython3.11.so.1.0
+=========         Host Frame: __libc_start_call_main [0x295cf] in libc.so.6
+=========         Host Frame: __libc_start_main [0x2967f] in libc.so.6
+=========         Host Frame: _start [0x1074] in python3
+=========         Host Frame: __call__ in module.py:299
+=========         Host Frame: func in tvm_ffi.py:339
+=========         Host Frame: __call__ in kernel.py:222
+=========         Host Frame: recurrence_v2 in tilelang_rtiled.py:337
+=========         Host Frame: main in rtiled_tl_debug.py:37
+========= 
+========= Illegal barrier arrive operation
+=========     at tl::mbarrier_wait(unsigned long &, int)+0x1110 in barrier.h:47
+=========     by thread (19,0,0) in block (0,0,0)
+=========         Device Frame: Barrier::wait(unsigned int) const+0x1070 in barrier.h:239
+=========         Device Frame: main_kernel+0x1070 in tvm_kernels.cu:71
+=========     Saved host backtrace up to driver entry point at kernel launch time
+=========         Host Frame:  [0x36413b] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::CppCall(tvm::ffi::FunctionObj const*, tvm::ffi::AnyView const, int, tvm::ffi::Any*) [0x36d7d3] in libtvm_runtime.so
+=========         Host Frame: tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>::SafeCall(void*, TVMFFIAny const*, int, tvm::ffi::details::FunctionObjImpl<tvm::ffi::Function::FromPacked<tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&>(tvm::runtime::detail::PackFuncVoidAddr_<8, tvm::runtime::CUDAWrappedFunc>(tvm::runtime::CUDAWrappedFunc, std::vector<tvm::runtime::detail::ArgConvertCode, std::allocator<tvm::runtime::detail::ArgConvertCode> > const&)::{lambda(tvm::ffi::PackedArgs, tvm::ffi::Any*)#1}&)::{lambda(tvm::ffi::AnyView const*, int, tvm::ffi::Any*)#1}>*) [0x36c6f9] in libtvm_runtime.so
+=========         Host Frame: __tvm_ffi_main [0x4fd6] in executable.so
+=========         Host Frame:  [0x13f6fe] in libtvm_ffi.so
+=========         Host Frame:  [0x13f07b] in libtvm_ffi.so
+=========         Host Frame:  [0xbebf0] in core.cpython-311-x86_64-linux-gnu.so
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6953] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_Call_Prepend in call.c:482 [0x1e6060] in libpython3.11.so.1.0
+=========         Host Frame: slot_tp_call in typeobject.c:7623 [0x2a3d6f] in libpython3.11.so.1.0
+=========         Host Frame: _PyObject_MakeTpCall in call.c:214 [0x1e51f4] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:4774 [0x242a5b] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyObject_Call [0x1e6802] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_EvalFrameDefault in ceval.c:5381 [0x2461be] in libpython3.11.so.1.0
+=========         Host Frame: _PyEval_Vector in ceval.c:6439 [0x2416f6] in libpython3.11.so.1.0
+=========         Host Frame: PyEval_EvalCode in ceval.c:1154 [0x2bf283] in libpython3.11.so.1.0
+=========         Host Frame: run_eval_code_obj in pythonrun.c:1712 [0x2d3d73] in libpython3.11.so.1.0
+=========         Host Frame: run_mod in pythonrun.c:1733 [0x2d3cfa] in libpython3.11.so.1.0
+=========         Host Frame: pyrun_file in pythonrun.c:1628 [0x2d4520] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_SimpleFileObject in pythonrun.c:440 [0x2d4243] in libpython3.11.so.1.0
+=========         Host Frame: _PyRun_AnyFileObject in pythonrun.c:79 [0x2d3ea2] in libpython3.11.so.1.0
+=========         Host Frame: Py_RunMain in main.c:680 [0x2dbcb0] in libpython3.11.so.1.0
+=========         Host Frame: Py_BytesMain in main.c:734 [0x2db8c8] in libpython3.11.so.1.0
+=========         Host Frame: __libc_start_call_main [0x295cf] in libc.so.6
+=========         Host Frame: __libc_start_main [0x2967f] in libc.so.6
+=========         Host Frame: _start [0x1074] in python3
+=========         Host Frame: __call__ in module.py:299
+=========         Host Frame: func in tvm_ffi.py:339
+=========         Host Frame: __call__ in kernel.py:222
+=========         Host Frame: recurrence_v2 in tilelang_rtiled.py:337
+=========         Host Frame: main in rtiled_tl_debug.py:37
+========= 
+{"variant": "bulk", "status": "ERROR", "hidden_max_abs": null, "carry_max_abs": null}
+========= ERROR SUMMARY: 257 errors
+========= ERROR SUMMARY: 237 errors were not printed. Use --print-limit option to adjust the number of printed errors

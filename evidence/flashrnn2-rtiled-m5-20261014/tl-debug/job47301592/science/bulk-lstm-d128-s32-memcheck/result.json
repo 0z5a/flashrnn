@@ -1,0 +1,12 @@
+{
+  "variant": "bulk",
+  "cell": "lstm",
+  "width": 128,
+  "slice": 32,
+  "batch": 3,
+  "steps": 17,
+  "heads": 2,
+  "out": "/gpfs/scratch/ehpc390/tueb043681/flashrnn2-rtiled-tldbg-20261014-v1/science/bulk-lstm-d128-s32-memcheck/result.json",
+  "status": "ERROR",
+  "error": "Traceback (most recent call last):\n  File \"/gpfs/scratch/ehpc390/tueb043681/flashrnn2-rtiled-tldbg-20261014-v1/source/tools/rtiled_tl_debug.py\", line 37, in main\n    y, fin = tilelang_rtiled.recurrence_v2(*vals, a.cell, slice_width=a.slice, exchange=a.variant)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/gpfs/scratch/ehpc390/tueb043681/flashrnn2-rtiled-tldbg-20261014-v1/source/flashrnn/flashrnn2/tilelang_rtiled.py\", line 337, in recurrence_v2\n    _KERNELS_V2[key](wx.contiguous(), recurrent.contiguous(), bias.contiguous(), initial.float().contiguous(), zero,\n  File \"/gpfs/scratch/ehpc390/tueb043681/flashrnn2-tilelang-assets-20261014-v1/site/tilelang/jit/kernel.py\", line 222, in __call__\n    return self.torch_function(*args, **kwds)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/gpfs/scratch/ehpc390/tueb043681/flashrnn2-tilelang-assets-20261014-v1/site/tilelang/jit/adapter/tvm_ffi.py\", line 339, in func\n    executable(*tensor_list)\n  File \"/gpfs/scratch/ehpc390/tueb043681/flashrnn2-tilelang-assets-20261014-v1/site/tvm_ffi/module.py\", line 299, in __call__\n    return self.main(*args)\n           ^^^^^^^^^^^^^^^^\n  File \"python/tvm_ffi/cython/function.pxi\", line 968, in tvm_ffi.core.Function.__call__\n  File \"<unknown>\", line 0, in __tvm_ffi_main\n  File \"/project/3rdparty/tvm/src/runtime/cuda/cuda_module.cc\", line 367, in void tvm::runtime::CUDAWrappedFunc::operator()(tvm::ffi::PackedArgs, tvm::ffi::Any*, void**) const\ntvm.error.InternalError: CUDALaunch Error: CUDA_ERROR_LAUNCH_FAILED\n grid=(4,2,1),  block=(128,1,1) dyn_smem_bytes=49152\n\n"
+}

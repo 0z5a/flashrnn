@@ -1,0 +1,86 @@
+{
+  "mode": "cellcheck",
+  "backend": "tilelang_v2",
+  "cell": "lstm",
+  "width": 192,
+  "slice_width": 32,
+  "identity": {
+    "gpu": "NVIDIA H100",
+    "capability": [
+      9,
+      0
+    ],
+    "triton": "3.6.0",
+    "torch": "2.4.0a0+gite3b9b71",
+    "cuda": "11.8",
+    "source": {
+      "tools/rtiled_m4.py": "e3c5089456a40ff6078728ee111d133d81d04e6bcd9ed3c09c73fd4e76d1cefd",
+      "flashrnn/flashrnn2/triton_rtiled.py": "5e822255adcd00c00c19c5aa217dfff268634e3b4e3c8ccb4ba5cc76b97eed12",
+      "flashrnn/flashrnn2/triton_persistent.py": "c83a6255f01e1db30e5ea6bc9a50f5f7a6d24cffe26b7bd8a89faffe7b2148e1",
+      "flashrnn/flashrnn2/tilelang_rtiled.py": "e907cd33389524878ba534354e68fddc026ff6c29f572e020754de9809775f27",
+      "flashrnn/flashrnn2/reference.py": "9b6351ded119b071f6d7bc749e9a20269dde09c9a536cb6094afd6961c1d8260",
+      "flashrnn/flashrnn2/tk_rtiled.cu": "b4a98ae0e42aa1132470f0f18d257c0bdfd6b2346d31606a2b1c2204e040c9b0",
+      "flashrnn/flashrnn2/tk_rtiled.py": "88fbdd79e775866a05ae7b0ce90e8eb0d1c9cb63f92ef0003cf86d45dd6fc4ce",
+      "flashrnn/flashrnn2/execution_policy.py": "ccf7e487dfc106c14aa07e38ba46ab18361f5893d4c979c928a62b0adf0cdc45",
+      "flashrnn/flashrnn2/state_contract.py": "b99311ca231c478860b55ecae216e88ecb3a55f9d8aa212428b82157f8b9485e"
+    },
+    "tilelang": "0.1.15"
+  },
+  "budget": "fixture_math.CELL_BUDGET",
+  "cases": [
+    {
+      "batch": 3,
+      "steps": 17,
+      "heads": 2,
+      "mode": "warm",
+      "checks": {
+        "hidden": {
+          "pass_": true,
+          "max_abs": 3.8805195989921604e-05,
+          "failed_elements": 0,
+          "worst_normalized": 0.00931848808234725,
+          "bitwise": false
+        },
+        "carry": {
+          "pass_": true,
+          "max_abs": 4.4054639817756036e-07,
+          "failed_elements": 0,
+          "worst_normalized": 0.00018137434908124908,
+          "bitwise": false
+        }
+      },
+      "repeat_20_bitwise": null,
+      "vs_triton_hidden_max_abs": 3.0517578125e-05,
+      "vs_triton_hidden_bitwise": false,
+      "status": "PASS"
+    },
+    {
+      "batch": 16,
+      "steps": 128,
+      "heads": 1,
+      "mode": "warm",
+      "checks": {
+        "hidden": {
+          "pass_": true,
+          "max_abs": 6.0552124456103584e-05,
+          "failed_elements": 0,
+          "worst_normalized": 0.012753689366440278,
+          "bitwise": false
+        },
+        "carry": {
+          "pass_": true,
+          "max_abs": 2.5147344630271906e-07,
+          "failed_elements": 0,
+          "worst_normalized": 8.741185039200957e-05,
+          "bitwise": false
+        }
+      },
+      "repeat_20_bitwise": true,
+      "vs_triton_hidden_max_abs": 6.103515625e-05,
+      "vs_triton_hidden_bitwise": false,
+      "status": "PASS"
+    }
+  ],
+  "status": "AVAILABLE",
+  "seconds": 8.10533356666565
+}

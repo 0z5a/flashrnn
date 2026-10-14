@@ -45,7 +45,12 @@ Phase 0 of each batch checks every (backend, cell, D, S) in
 (B,T,H) = (3,17,2) and (16,128,1)) and requires 20 bit-identical repeats.
 
 * ThunderKittens: 20/20 configurations available (job 47301466).
-* TileLang v2: <!-- TL_QUAL -->
+* TileLang v2: the first check of job 47301466 failed (see below). After the fix,
+  20/20 configurations available in job 47302393 and again in job 47303121.
+  Job 47302393 then timed nothing: its selection phase ran without the TileLang
+  environment (the driver keyed it on an arm name `tilelang`, the arms are
+  `tilelang_v2`), so no comparison qualified. Job 47303121 repeated the batch
+  with that fixed.
 
 ## ThunderKittens vs Triton R tiling (job 47301466, name 32)
 
@@ -110,9 +115,132 @@ the classifier. At D = 384 and 512, where only S = 32 fits, it is slower or
 level at the kernel level (0.888×–1.009×); in the classifier LSTM is 0.876×–1.009×
 and sLSTM 1.015×–1.222×.
 
-## ThunderKittens vs TileLang (job 47302393, name 36)
+## ThunderKittens vs TileLang (job 47303121, name 37)
 
-<!-- TK_VS_TL -->
+One ACC node `as05r1b22`, 18 min 2 s; 400/400 starts passed; 80/80 comparisons
+complete; raw archive verified (2505 files). Same protocol as job 47301466.
+Speedup = baseline time / candidate time.
+
+### ThunderKittens (candidate) vs TileLang v2 (baseline)
+
+Kernel level (T=1024, H=1):
+
+| Cell | D | B | Baseline | Candidate (k) | Baseline ms/call | Candidate ms/call | µs/step base → cand | Speedup [95% CI] |
+| --- | ---: | ---: | --- | --- | ---: | ---: | --- | --- |
+| LSTM | 192 | 16 | TileLang v2 S=16 | ThunderKittens S=16 (12) | 2.182 | 2.623 | 2.13 → 2.56 | 0.832 [0.831, 0.832] |
+| LSTM | 192 | 64 | TileLang v2 S=16 | ThunderKittens S=16 (12) | 2.416 | 2.952 | 2.36 → 2.88 | 0.818 [0.818, 0.819] |
+| LSTM | 256 | 16 | TileLang v2 S=16 | ThunderKittens S=16 (16) | 2.559 | 2.971 | 2.50 → 2.90 | 0.861 [0.861, 0.862] |
+| LSTM | 256 | 64 | TileLang v2 S=16 | ThunderKittens S=16 (16) | 2.574 | 3.039 | 2.51 → 2.97 | 0.849 [0.846, 0.852] |
+| LSTM | 384 | 16 | TileLang v2 S=32 | ThunderKittens S=32 (12) | 3.512 | 4.978 | 3.43 → 4.86 | 0.707 [0.706, 0.709] |
+| LSTM | 384 | 64 | TileLang v2 S=32 | ThunderKittens S=32 (12) | 3.719 | 5.213 | 3.63 → 5.09 | 0.713 [0.713, 0.713] |
+| LSTM | 512 | 16 | TileLang v2 S=32 | ThunderKittens S=32 (16) | 4.126 | 5.392 | 4.03 → 5.27 | 0.766 [0.764, 0.767] |
+| LSTM | 512 | 64 | TileLang v2 S=32 | ThunderKittens S=32 (16) | 4.082 | 5.383 | 3.99 → 5.26 | 0.758 [0.757, 0.759] |
+| sLSTM | 192 | 16 | TileLang v2 S=16 | ThunderKittens S=16 (12) | 2.024 | 2.356 | 1.98 → 2.30 | 0.858 [0.858, 0.859] |
+| sLSTM | 192 | 64 | TileLang v2 S=16 | ThunderKittens S=16 (12) | 2.252 | 2.676 | 2.20 → 2.61 | 0.840 [0.838, 0.843] |
+| sLSTM | 256 | 16 | TileLang v2 S=16 | ThunderKittens S=16 (16) | 2.361 | 2.747 | 2.31 → 2.68 | 0.860 [0.858, 0.861] |
+| sLSTM | 256 | 64 | TileLang v2 S=16 | ThunderKittens S=16 (16) | 2.379 | 2.819 | 2.32 → 2.75 | 0.845 [0.841, 0.848] |
+| sLSTM | 384 | 16 | TileLang v2 S=32 | ThunderKittens S=32 (12) | 3.149 | 5.334 | 3.08 → 5.21 | 0.591 [0.590, 0.591] |
+| sLSTM | 384 | 64 | TileLang v2 S=32 | ThunderKittens S=32 (12) | 3.338 | 5.557 | 3.26 → 5.43 | 0.601 [0.600, 0.601] |
+| sLSTM | 512 | 16 | TileLang v2 S=32 | ThunderKittens S=32 (16) | 3.784 | 5.653 | 3.70 → 5.52 | 0.670 [0.668, 0.671] |
+| sLSTM | 512 | 64 | TileLang v2 S=32 | ThunderKittens S=32 (16) | 3.734 | 5.662 | 3.65 → 5.53 | 0.660 [0.659, 0.662] |
+
+Classifier (model level, includes each launch path):
+
+| Cell | D | B / C / T | Baseline | Candidate (k) | Baseline ms | Candidate ms | Speedup [95% CI] |
+| --- | ---: | --- | --- | --- | ---: | ---: | --- |
+| LSTM | 192 | 1 / 8 / 32 | TileLang v2 S=16 | ThunderKittens S=16 (12) | 3.049 | 3.268 | 0.931 [0.929, 0.934] |
+| LSTM | 192 | 16 / 32 / 32 | TileLang v2 S=16 | ThunderKittens S=16 (12) | 0.893 | 0.975 | 0.914 [0.912, 0.917] |
+| LSTM | 192 | 32 / 64 / 128 | TileLang v2 S=16 | ThunderKittens S=16 (12) | 2.446 | 2.747 | 0.894 [0.891, 0.899] |
+| LSTM | 256 | 1 / 8 / 32 | TileLang v2 S=16 | ThunderKittens S=16 (16) | 3.323 | 3.556 | 0.937 [0.934, 0.940] |
+| LSTM | 256 | 16 / 32 / 32 | TileLang v2 S=16 | ThunderKittens S=16 (16) | 0.944 | 1.030 | 0.915 [0.912, 0.918] |
+| LSTM | 256 | 32 / 64 / 128 | TileLang v2 S=16 | ThunderKittens S=16 (16) | 2.848 | 3.098 | 0.920 [0.918, 0.921] |
+| LSTM | 384 | 1 / 8 / 32 | TileLang v2 S=32 | ThunderKittens S=32 (12) | 4.394 | 5.001 | 0.877 [0.875, 0.878] |
+| LSTM | 384 | 16 / 32 / 32 | TileLang v2 S=32 | ThunderKittens S=32 (12) | 1.222 | 1.451 | 0.843 [0.841, 0.844] |
+| LSTM | 384 | 32 / 64 / 128 | TileLang v2 S=32 | ThunderKittens S=32 (12) | 3.815 | 4.668 | 0.816 [0.815, 0.817] |
+| LSTM | 512 | 1 / 8 / 32 | TileLang v2 S=32 | ThunderKittens S=32 (16) | 5.092 | 5.557 | 0.917 [0.915, 0.919] |
+| LSTM | 512 | 16 / 32 / 32 | TileLang v2 S=32 | ThunderKittens S=32 (16) | 1.380 | 1.589 | 0.867 [0.865, 0.868] |
+| LSTM | 512 | 32 / 64 / 128 | TileLang v2 S=32 | ThunderKittens S=32 (16) | 4.536 | 5.536 | 0.820 [0.817, 0.823] |
+| sLSTM | 192 | 1 / 8 / 32 | TileLang v2 S=16 | ThunderKittens S=16 (12) | 3.143 | 3.316 | 0.953 [0.947, 0.959] |
+| sLSTM | 192 | 16 / 32 / 32 | TileLang v2 S=16 | ThunderKittens S=16 (12) | 0.931 | 1.001 | 0.934 [0.926, 0.945] |
+| sLSTM | 192 | 32 / 64 / 128 | TileLang v2 S=16 | ThunderKittens S=16 (12) | 2.360 | 2.578 | 0.913 [0.912, 0.914] |
+| sLSTM | 256 | 1 / 8 / 32 | TileLang v2 S=16 | ThunderKittens S=16 (16) | 3.438 | 3.602 | 0.959 [0.954, 0.965] |
+| sLSTM | 256 | 16 / 32 / 32 | TileLang v2 S=16 | ThunderKittens S=16 (16) | 0.972 | 1.047 | 0.933 [0.929, 0.938] |
+| sLSTM | 256 | 32 / 64 / 128 | TileLang v2 S=16 | ThunderKittens S=16 (16) | 2.725 | 2.949 | 0.924 [0.922, 0.925] |
+| sLSTM | 384 | 1 / 8 / 32 | TileLang v2 S=32 | ThunderKittens S=32 (12) | 4.302 | 4.781 | 0.897 [0.890, 0.902] |
+| sLSTM | 384 | 16 / 32 / 32 | TileLang v2 S=32 | ThunderKittens S=32 (12) | 1.190 | 1.455 | 0.817 [0.814, 0.821] |
+| sLSTM | 384 | 32 / 64 / 128 | TileLang v2 S=32 | ThunderKittens S=32 (12) | 3.502 | 4.517 | 0.777 [0.774, 0.781] |
+| sLSTM | 512 | 1 / 8 / 32 | TileLang v2 S=32 | ThunderKittens S=32 (16) | 4.987 | 5.384 | 0.927 [0.926, 0.929] |
+| sLSTM | 512 | 16 / 32 / 32 | TileLang v2 S=32 | ThunderKittens S=32 (16) | 1.357 | 1.620 | 0.836 [0.834, 0.838] |
+| sLSTM | 512 | 32 / 64 / 128 | TileLang v2 S=32 | ThunderKittens S=32 (16) | 4.281 | 5.698 | 0.752 [0.751, 0.753] |
+
+### TileLang v2 (candidate) vs Triton R tiling (baseline)
+
+Kernel level (T=1024, H=1):
+
+| Cell | D | B | Baseline | Candidate (k) | Baseline ms/call | Candidate ms/call | µs/step base → cand | Speedup [95% CI] |
+| --- | ---: | ---: | --- | --- | ---: | ---: | --- | --- |
+| LSTM | 192 | 16 | Triton S=32, 4 warps, padded K | TileLang v2 S=16 (12) | 3.890 | 2.238 | 3.80 → 2.19 | 1.735 [1.733, 1.737] |
+| LSTM | 192 | 64 | Triton S=32, 8 warps, padded K | TileLang v2 S=16 (12) | 4.262 | 2.300 | 4.16 → 2.25 | 1.851 [1.843, 1.856] |
+| LSTM | 256 | 16 | Triton S=32, 8 warps | TileLang v2 S=16 (16) | 4.259 | 2.510 | 4.16 → 2.45 | 1.693 [1.689, 1.696] |
+| LSTM | 256 | 64 | Triton S=64, 8 warps | TileLang v2 S=16 (16) | 4.549 | 2.698 | 4.44 → 2.63 | 1.687 [1.685, 1.689] |
+| LSTM | 384 | 16 | Triton S=32, 4 warps | TileLang v2 S=32 (12) | 4.421 | 3.574 | 4.32 → 3.49 | 1.236 [1.231, 1.240] |
+| LSTM | 384 | 64 | Triton S=32, 4 warps | TileLang v2 S=32 (12) | 4.617 | 3.550 | 4.51 → 3.47 | 1.300 [1.297, 1.302] |
+| LSTM | 512 | 16 | Triton S=32, 4 warps | TileLang v2 S=32 (16) | 5.120 | 4.057 | 5.00 → 3.96 | 1.262 [1.259, 1.265] |
+| LSTM | 512 | 64 | Triton S=32, 4 warps | TileLang v2 S=32 (16) | 5.545 | 4.275 | 5.42 → 4.17 | 1.297 [1.294, 1.298] |
+| sLSTM | 192 | 16 | Triton S=32, 4 warps | TileLang v2 S=16 (12) | 3.436 | 2.072 | 3.36 → 2.02 | 1.658 [1.655, 1.662] |
+| sLSTM | 192 | 64 | Triton S=32, 4 warps | TileLang v2 S=16 (12) | 3.952 | 2.145 | 3.86 → 2.10 | 1.836 [1.829, 1.843] |
+| sLSTM | 256 | 16 | Triton S=64, 4 warps | TileLang v2 S=16 (16) | 4.169 | 2.316 | 4.07 → 2.26 | 1.795 [1.791, 1.798] |
+| sLSTM | 256 | 64 | Triton S=16, 4 warps | TileLang v2 S=16 (16) | 4.403 | 2.490 | 4.30 → 2.43 | 1.768 [1.766, 1.771] |
+| sLSTM | 384 | 16 | Triton S=32, 8 warps | TileLang v2 S=32 (12) | 5.164 | 3.208 | 5.04 → 3.13 | 1.607 [1.603, 1.611] |
+| sLSTM | 384 | 64 | Triton S=32, 8 warps | TileLang v2 S=32 (12) | 5.333 | 3.199 | 5.21 → 3.12 | 1.666 [1.661, 1.670] |
+| sLSTM | 512 | 16 | Triton S=32, 4 warps | TileLang v2 S=32 (16) | 5.300 | 3.721 | 5.18 → 3.63 | 1.425 [1.421, 1.430] |
+| sLSTM | 512 | 64 | Triton S=32, 8 warps | TileLang v2 S=32 (16) | 5.680 | 3.909 | 5.55 → 3.82 | 1.454 [1.451, 1.457] |
+
+Classifier (model level, includes each launch path):
+
+| Cell | D | B / C / T | Baseline | Candidate (k) | Baseline ms | Candidate ms | Speedup [95% CI] |
+| --- | ---: | --- | --- | --- | ---: | ---: | --- |
+| LSTM | 192 | 1 / 8 / 32 | Triton S=32, 4 warps, padded K | TileLang v2 S=16 (12) | 4.450 | 3.108 | 1.435 [1.429, 1.442] |
+| LSTM | 192 | 16 / 32 / 32 | Triton S=32, 4 warps, padded K | TileLang v2 S=16 (12) | 1.300 | 0.908 | 1.430 [1.421, 1.442] |
+| LSTM | 192 | 32 / 64 / 128 | Triton S=32, 4 warps, padded K | TileLang v2 S=16 (12) | 3.681 | 2.416 | 1.517 [1.514, 1.520] |
+| LSTM | 256 | 1 / 8 / 32 | Triton S=32, 4 warps | TileLang v2 S=16 (16) | 4.741 | 3.446 | 1.382 [1.377, 1.388] |
+| LSTM | 256 | 16 / 32 / 32 | Triton S=32, 4 warps | TileLang v2 S=16 (16) | 1.322 | 0.971 | 1.365 [1.354, 1.383] |
+| LSTM | 256 | 32 / 64 / 128 | Triton S=32, 4 warps | TileLang v2 S=16 (16) | 3.892 | 2.761 | 1.405 [1.403, 1.408] |
+| LSTM | 384 | 1 / 8 / 32 | Triton S=32, 4 warps | TileLang v2 S=32 (12) | 4.722 | 4.350 | 1.098 [1.085, 1.118] |
+| LSTM | 384 | 16 / 32 / 32 | Triton S=32, 4 warps | TileLang v2 S=32 (12) | 1.322 | 1.247 | 1.064 [1.044, 1.081] |
+| LSTM | 384 | 32 / 64 / 128 | Triton S=32, 4 warps | TileLang v2 S=32 (12) | 4.102 | 3.907 | 1.053 [1.051, 1.054] |
+| LSTM | 512 | 1 / 8 / 32 | Triton S=32, 4 warps | TileLang v2 S=32 (16) | 5.471 | 4.923 | 1.112 [1.110, 1.115] |
+| LSTM | 512 | 16 / 32 / 32 | Triton S=32, 4 warps | TileLang v2 S=32 (16) | 1.525 | 1.387 | 1.102 [1.098, 1.107] |
+| LSTM | 512 | 32 / 64 / 128 | Triton S=32, 4 warps | TileLang v2 S=32 (16) | 5.658 | 4.737 | 1.193 [1.192, 1.194] |
+| sLSTM | 192 | 1 / 8 / 32 | Triton S=32, 4 warps | TileLang v2 S=16 (12) | 4.788 | 3.216 | 1.499 [1.480, 1.520] |
+| sLSTM | 192 | 16 / 32 / 32 | Triton S=32, 4 warps | TileLang v2 S=16 (12) | 1.403 | 0.957 | 1.473 [1.464, 1.483] |
+| sLSTM | 192 | 32 / 64 / 128 | Triton S=32, 4 warps | TileLang v2 S=16 (12) | 3.415 | 2.317 | 1.466 [1.463, 1.469] |
+| sLSTM | 256 | 1 / 8 / 32 | Triton S=64, 4 warps | TileLang v2 S=16 (16) | 5.263 | 3.564 | 1.485 [1.473, 1.500] |
+| sLSTM | 256 | 16 / 32 / 32 | Triton S=16, 4 warps | TileLang v2 S=16 (16) | 1.427 | 0.997 | 1.429 [1.419, 1.440] |
+| sLSTM | 256 | 32 / 64 / 128 | Triton S=16, 4 warps | TileLang v2 S=16 (16) | 3.929 | 2.646 | 1.483 [1.481, 1.486] |
+| sLSTM | 384 | 1 / 8 / 32 | Triton S=32, 8 warps | TileLang v2 S=32 (12) | 5.866 | 4.294 | 1.371 [1.362, 1.379] |
+| sLSTM | 384 | 16 / 32 / 32 | Triton S=32, 8 warps | TileLang v2 S=32 (12) | 1.599 | 1.218 | 1.313 [1.310, 1.318] |
+| sLSTM | 384 | 32 / 64 / 128 | Triton S=32, 8 warps | TileLang v2 S=32 (12) | 4.988 | 3.575 | 1.394 [1.392, 1.396] |
+| sLSTM | 512 | 1 / 8 / 32 | Triton S=32, 4 warps | TileLang v2 S=32 (16) | 5.926 | 4.821 | 1.229 [1.225, 1.235] |
+| sLSTM | 512 | 16 / 32 / 32 | Triton S=32, 4 warps | TileLang v2 S=32 (16) | 1.643 | 1.383 | 1.192 [1.190, 1.195] |
+| sLSTM | 512 | 32 / 64 / 128 | Triton S=32, 4 warps | TileLang v2 S=32 (16) | 5.940 | 4.461 | 1.331 [1.329, 1.332] |
+
+Summary:
+
+* With the same algorithm, this TileLang implementation is faster than this
+  ThunderKittens implementation in all 40 comparisons: ThunderKittens runs at
+  0.591×–0.861× of TileLang's speed per kernel call and 0.752×–0.959× in the
+  classifier. The gap is largest where both use S = 32 (D = 384 and 512).
+* TileLang v2 is faster than Triton R tiling in all 40 comparisons: 1.236×–1.851×
+  at the kernel level and 1.053×–1.517× in the classifier, including D = 384 and
+  512 where ThunderKittens was not faster than Triton.
+* These compare two implementations written for this iteration, not the ceiling
+  of either framework. The ThunderKittens kernel is hand-written CUDA with
+  ThunderKittens tiles and WGMMA; TileLang generates its own layouts, pipeline
+  and synchronization from a higher-level description. The remaining recorded
+  differences (barrier-arming idiom, two vs one block barrier before the
+  exchange) favour ThunderKittens, so they do not explain the gap.
+
 
 ## TileLang v2 failure and fix
 
