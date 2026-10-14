@@ -11,6 +11,7 @@ from pathlib import Path
 import torch
 from tirex_e2e import burst, contexts
 from tirex_gpu_gate import forecast_with_cells
+from tirex_qualification import current_manifest, require_manifest
 from tirex_slstm_reference_gate import (
     SOURCE_REVISION,
     WEIGHT_BYTES,
@@ -77,6 +78,8 @@ def main():
 
     gate = json.loads(args.gate.read_text())
     audit = json.loads(args.audit.read_text())
+    manifest = current_manifest(args.source)
+    require_manifest(gate, manifest)
     adapter_sha = sha256(Path(inspect.getfile(install_tirex_cells)))
     assert gate["status"] == audit["status"] == "PASS"
     assert gate["budget"] == BUDGET and len(gate["comparisons"]) == 381
@@ -202,6 +205,7 @@ def main():
             json.dumps(
                 {
                     "status": status,
+                    "execution_manifest": manifest,
                     "scope": "Exact unhooked B2/C32 E2E outputs, hooked layer traces and hook-effect controls; no timing claim",
                     "fixture_sha256": fixture_sha,
                     "groups": len(raw["groups"]),

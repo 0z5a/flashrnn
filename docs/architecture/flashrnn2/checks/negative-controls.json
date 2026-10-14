@@ -1,0 +1,47 @@
+{
+  "status": "PASS",
+  "checks": [
+    {
+      "case": "input consumer before input ready",
+      "rejected": true,
+      "errors": [
+        "Consumer before producer completion: f3_p_ready->f3_p_consume",
+        "Consumer before producer completion: f3_p_state_ready->f3_p_consume",
+        "Buffer use before ready: candidate_U_slot"
+      ]
+    },
+    {
+      "case": "input slot reused before all consumers finish",
+      "rejected": true,
+      "errors": [
+        "Consumer before producer completion: f3_p_consume->f3_p_reuse",
+        "Buffer overwrite before all consumers finish: candidate_U_slot"
+      ]
+    },
+    {
+      "case": "chunk carry A overwritten while next chunk still consumes it",
+      "rejected": true,
+      "errors": [
+        "Consumer before producer completion: chunk_1->chunk_2",
+        "Buffer overwrite before all consumers finish: carry_A_version_0",
+        "Buffer use before ready: carry_B_version_1"
+      ]
+    },
+    {
+      "case": "next MMA scheduled before previous state ready",
+      "rejected": true,
+      "errors": [
+        "Consumer before producer completion: f3_s0_ready->f3_s1_mma"
+      ]
+    },
+    {
+      "case": "time-unrolled recurrent cycle",
+      "rejected": true,
+      "errors": [
+        "Consumer before producer completion: f3_s2_ready->f3_s0_mma",
+        "Time-unrolled schedule is cyclic"
+      ]
+    }
+  ],
+  "scope": "diagram constraints only; no kernel qualification"
+}

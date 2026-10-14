@@ -1,0 +1,387 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" id="fig02_state_residency" width="1920" height="1860" viewBox="0 0 1920 1860" role="img" aria-labelledby="fig02_state_residency_accessible_title fig02_state_residency_accessible_desc" font-family="Arial">
+  <title id="fig02_state_residency_accessible_title">State residency: scope, storage and lifetime</title>
+  <desc id="fig02_state_residency_accessible_desc">A CTA scope contains register fragments, shared exchange and compute resources, with global weights, inputs and outputs below. Six lifetime rows identify load, ready, consume, carry and output boundaries. Full physical object mapping is explicitly TBD.</desc>
+  <defs>
+    <marker id="arrow_compute" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10 5 L 0 10 Z" fill="#3568A0" />
+    </marker>
+    <marker id="arrow_input" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10 5 L 0 10 Z" fill="#187E77" />
+    </marker>
+    <marker id="arrow_output" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10 5 L 0 10 Z" fill="#187E77" />
+    </marker>
+    <marker id="arrow_feedback" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10 5 L 0 10 Z" fill="#7556A6" />
+    </marker>
+  </defs>
+  <rect id="background" x="0" y="0" width="1920" height="1860" fill="#FFFFFF" />
+  <g id="f2_cta" data-claim="I004" data-kind="scope" data-status="implemented">
+    <rect id="f2_cta_boundary" x="48" y="180" width="1824" height="610" rx="14" fill="#FFFFFF" stroke="#667085" stroke-width="2" stroke-dasharray="none" />
+    <text id="f2_cta_label" x="72" y="228" font-size="36" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="I004" data-role="panel">
+      <tspan x="72" y="228.0">Execution scope: one CTA / batch tile / head</tspan>
+    </text>
+    <text id="f2_cta_subtitle" x="72" y="274" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I004" data-role="secondary">
+      <tspan x="72" y="274.0">Storage spaces below are distinct from the execution scope.</tspan>
+    </text>
+  </g>
+  <g id="f2_life" data-claim="I004 I006 I007 I009" data-kind="scope" data-status="implemented">
+    <rect id="f2_life_boundary" x="48" y="1050" width="1824" height="558" rx="14" fill="#FFFFFF" stroke="#667085" stroke-width="2" stroke-dasharray="none" />
+    <text id="f2_life_label" x="72" y="1098" font-size="36" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="I004 I006 I007 I009" data-role="panel">
+      <tspan x="72" y="1098.0">Lifetime within one chunk (logical order; not to scale)</tspan>
+    </text>
+  </g>
+  <g id="f2_reg_mma" data-claim="I014" data-kind="compute" data-status="implemented">
+    <path id="f2_reg_mma_path" d="M 331 340 L 331 302 L 1604 302 L 1604 340" fill="none" stroke="#3568A0" stroke-width="2.5" stroke-dasharray="none" marker-end="url(#arrow_compute)" stroke-linejoin="round" />
+  </g>
+  <g id="f2_shared_mma" data-claim="I014" data-kind="compute" data-status="implemented">
+    <path id="f2_shared_mma_path" d="M 1222 430 L 1374 430" fill="none" stroke="#3568A0" stroke-width="2.5" stroke-dasharray="none" marker-end="url(#arrow_compute)" stroke-linejoin="round" />
+  </g>
+  <g id="f2_weights_load" data-claim="I004" data-kind="input" data-status="implemented">
+    <path id="f2_weights_load_path" d="M 84 927 L 64 927 L 64 470 L 84 470" fill="none" stroke="#187E77" stroke-width="2.5" stroke-dasharray="none" marker-end="url(#arrow_input)" stroke-linejoin="round" />
+  </g>
+  <g id="f2_input_load" data-claim="I004" data-kind="input" data-status="implemented">
+    <path id="f2_input_load_path" d="M 1222 927 L 1284 927 L 1284 610 L 1574 610 L 1574 520" fill="none" stroke="#187E77" stroke-width="2.5" stroke-dasharray="none" marker-end="url(#arrow_input)" stroke-linejoin="round" />
+  </g>
+  <g id="f2_output_store" data-claim="I006 I007" data-kind="output" data-status="implemented">
+    <path id="f2_output_store_path" d="M 1804 520 L 1804 584 L 1888 584 L 1888 812 L 1604 812 L 1604 850" fill="none" stroke="#187E77" stroke-width="2.5" stroke-dasharray="none" marker-end="url(#arrow_output)" stroke-linejoin="round" />
+  </g>
+  <g id="f2_feedback" data-claim="I004 I005 U001" data-kind="feedback" data-status="implemented">
+    <path id="f2_feedback_path" d="M 1374 478 L 1284 478 L 1284 572 L 540 572 L 540 520" fill="none" stroke="#7556A6" stroke-width="3.5" stroke-dasharray="none" marker-end="url(#arrow_feedback)" stroke-linejoin="round" />
+    <text id="f2_feedback_label" x="890" y="560" font-size="28" text-anchor="middle" fill="#7556A6" font-weight="normal" data-claim="I004 I005 U001" data-role="edge">
+      <tspan x="890" y="560.0">S_t feedback; h_t cast / layout</tspan>
+    </text>
+  </g>
+  <g id="f2_regs" data-claim="I014" data-kind="storage" data-status="implemented">
+    <rect id="f2_regs_box" x="84" y="340" width="494" height="180" rx="12" fill="#F7F8FA" stroke="#667085" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f2_regs_badge_box" x="96" y="350" width="88.8828125" height="38" rx="5" fill="#FFFFFF" />
+    <text id="f2_regs_badge" x="107" y="379" font-size="28" text-anchor="start" fill="#667085" font-weight="bold" data-claim="I014" data-role="badge">
+      <tspan x="107" y="379.0">IMPL</tspan>
+    </text>
+    <text id="f2_regs_text" x="331.0" y="443.31" font-size="34" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I014" data-role="label">
+      <tspan x="331.0" y="443.31">Thread registers</tspan>
+      <tspan x="331.0" y="485.81">MMA fragments</tspan>
+    </text>
+  </g>
+  <g id="f2_shared" data-claim="I014" data-kind="storage" data-status="implemented">
+    <rect id="f2_shared_box" x="718" y="340" width="504" height="180" rx="12" fill="#F7F8FA" stroke="#667085" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f2_shared_badge_box" x="730" y="350" width="88.8828125" height="38" rx="5" fill="#FFFFFF" />
+    <text id="f2_shared_badge" x="741" y="379" font-size="28" text-anchor="start" fill="#667085" font-weight="bold" data-claim="I014" data-role="badge">
+      <tspan x="741" y="379.0">IMPL</tspan>
+    </text>
+    <text id="f2_shared_text" x="970.0" y="443.31" font-size="34" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I014" data-role="label">
+      <tspan x="970.0" y="443.31">CTA shared memory</tspan>
+      <tspan x="970.0" y="485.81">staging / exchange</tspan>
+    </text>
+  </g>
+  <g id="f2_compute" data-claim="I004 I005 I014" data-kind="compute" data-status="implemented">
+    <rect id="f2_compute_box" x="1374" y="340" width="460" height="180" rx="12" fill="#EDF3FA" stroke="#3568A0" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f2_compute_badge_box" x="1386" y="350" width="88.8828125" height="38" rx="5" fill="#FFFFFF" />
+    <text id="f2_compute_badge" x="1397" y="379" font-size="28" text-anchor="start" fill="#3568A0" font-weight="bold" data-claim="I004 I005 I014" data-role="badge">
+      <tspan x="1397" y="379.0">IMPL</tspan>
+    </text>
+    <text id="f2_compute_text" x="1604.0" y="443.31" font-size="34" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I004 I005 I014" data-role="label">
+      <tspan x="1604.0" y="443.31">Recurrent MMA +</tspan>
+      <tspan x="1604.0" y="485.81">pointwise update</tspan>
+    </text>
+  </g>
+  <g id="f2_mapping" data-claim="U001" data-kind="state" data-status="unknown">
+    <rect id="f2_mapping_box" x="84" y="628" width="1110" height="150" rx="12" fill="#F2EDF8" stroke="#7556A6" stroke-width="2.5" stroke-dasharray="12 5 2 5" />
+    <rect id="f2_mapping_badge_box" x="96" y="638" width="79.544921875" height="38" rx="5" fill="#FFFFFF" />
+    <text id="f2_mapping_badge" x="107" y="667" font-size="28" text-anchor="start" fill="#7556A6" font-weight="bold" data-claim="U001" data-role="badge">
+      <tspan x="107" y="667.0">TBD</tspan>
+    </text>
+    <text id="f2_mapping_text" x="639.0" y="716.31" font-size="34" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="U001" data-role="label">
+      <tspan x="639.0" y="716.31">S_t / R,b / A_t placement</tspan>
+      <tspan x="639.0" y="758.81">configuration dependent</tspan>
+    </text>
+  </g>
+  <g id="f2_global_weights" data-claim="I004" data-kind="input" data-status="implemented">
+    <rect id="f2_global_weights_box" x="84" y="850" width="494" height="154" rx="12" fill="#EAF5F2" stroke="#187E77" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f2_global_weights_badge_box" x="96" y="860" width="88.8828125" height="38" rx="5" fill="#FFFFFF" />
+    <text id="f2_global_weights_badge" x="107" y="889" font-size="28" text-anchor="start" fill="#187E77" font-weight="bold" data-claim="I004" data-role="badge">
+      <tspan x="107" y="889.0">IMPL</tspan>
+    </text>
+    <text id="f2_global_weights_text" x="331.0" y="940.31" font-size="34" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I004" data-role="label">
+      <tspan x="331.0" y="940.31">R / b global backing</tspan>
+      <tspan x="331.0" y="982.81">load per chunk kernel</tspan>
+    </text>
+  </g>
+  <g id="f2_global_input" data-claim="I004 U002" data-kind="input" data-status="implemented">
+    <rect id="f2_global_input_box" x="718" y="850" width="504" height="154" rx="12" fill="#EAF5F2" stroke="#187E77" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f2_global_input_badge_box" x="730" y="860" width="88.8828125" height="38" rx="5" fill="#FFFFFF" />
+    <text id="f2_global_input_badge" x="741" y="889" font-size="28" text-anchor="start" fill="#187E77" font-weight="bold" data-claim="I004 U002" data-role="badge">
+      <tspan x="741" y="889.0">IMPL</tspan>
+    </text>
+    <text id="f2_global_input_text" x="970.0" y="940.31" font-size="34" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I004 U002" data-role="label">
+      <tspan x="970.0" y="940.31">U_t in global Wx</tspan>
+      <tspan x="970.0" y="982.81">load then consume</tspan>
+    </text>
+  </g>
+  <g id="f2_global_output" data-claim="I006 I007 I009" data-kind="output" data-status="implemented">
+    <rect id="f2_global_output_box" x="1374" y="850" width="460" height="154" rx="12" fill="#EAF5F2" stroke="#187E77" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f2_global_output_badge_box" x="1386" y="860" width="88.8828125" height="38" rx="5" fill="#FFFFFF" />
+    <text id="f2_global_output_badge" x="1397" y="889" font-size="28" text-anchor="start" fill="#187E77" font-weight="bold" data-claim="I006 I007 I009" data-role="badge">
+      <tspan x="1397" y="889.0">IMPL</tspan>
+    </text>
+    <text id="f2_global_output_text" x="1604.0" y="940.31" font-size="34" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I006 I007 I009" data-role="label">
+      <tspan x="1604.0" y="940.31">Y_t + boundary carry</tspan>
+      <tspan x="1604.0" y="982.81">separate global arrays</tspan>
+    </text>
+  </g>
+  <g id="f2_band_0" data-claim="I004" data-kind="input" data-status="implemented">
+    <rect id="f2_band_0_box" x="384" y="1165" width="1420" height="53" rx="10" fill="#EAF5F2" stroke="#187E77" stroke-width="2" stroke-dasharray="none" />
+    <text id="f2_band_0_text" x="400" y="1200" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I004" data-role="secondary" />
+  </g>
+  <g id="f2_band_1" data-claim="I005 I006" data-kind="state" data-status="implemented">
+    <rect id="f2_band_1_box" x="384" y="1228" width="1420" height="53" rx="10" fill="#F2EDF8" stroke="#7556A6" stroke-width="2" stroke-dasharray="none" />
+    <text id="f2_band_1_text" x="400" y="1263" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I005 I006" data-role="secondary" />
+  </g>
+  <g id="f2_band_2" data-claim="I004 U002" data-kind="input" data-status="implemented">
+    <rect id="f2_band_2_box" x="384" y="1291" width="1420" height="53" rx="10" fill="#EAF5F2" stroke="#187E77" stroke-width="2" stroke-dasharray="none" />
+    <text id="f2_band_2_text" x="400" y="1326" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I004 U002" data-role="secondary" />
+  </g>
+  <g id="f2_band_3" data-claim="I005" data-kind="compute" data-status="implemented">
+    <rect id="f2_band_3_box" x="384" y="1354" width="1420" height="53" rx="10" fill="#EDF3FA" stroke="#3568A0" stroke-width="2" stroke-dasharray="none" />
+    <text id="f2_band_3_text" x="400" y="1389" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I005" data-role="secondary" />
+  </g>
+  <g id="f2_band_4" data-claim="I007 I010" data-kind="output" data-status="implemented">
+    <rect id="f2_band_4_box" x="384" y="1417" width="1420" height="53" rx="10" fill="#EAF5F2" stroke="#187E77" stroke-width="2" stroke-dasharray="none" />
+    <text id="f2_band_4_text" x="400" y="1452" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I007 I010" data-role="secondary" />
+  </g>
+  <g id="f2_band_5" data-claim="I003 I015" data-kind="storage" data-status="implemented">
+    <rect id="f2_band_5_box" x="384" y="1480" width="1420" height="53" rx="10" fill="#F7F8FA" stroke="#667085" stroke-width="2" stroke-dasharray="none" />
+    <text id="f2_band_5_text" x="400" y="1515" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I003 I015" data-role="secondary" />
+  </g>
+  <g id="fig02_state_residency_title" data-claim="I004" data-kind="storage" data-status="implemented">
+    <text id="fig02_state_residency_title_text" x="48" y="64" font-size="46" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="I004" data-role="title">
+      <tspan x="48" y="64.0">State residency: scope, storage and lifetime</tspan>
+    </text>
+  </g>
+  <g id="fig02_state_residency_scope" data-claim="I004 I005" data-kind="storage" data-status="implemented">
+    <text id="fig02_state_residency_scope_text" x="48" y="118" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I004 I005" data-role="secondary">
+      <tspan x="48" y="118.0">Generic MMA path | one CTA / batch tile / head | exact object allocation: TBD</tspan>
+    </text>
+  </g>
+  <g id="f2_exchange" data-claim="I014" data-kind="storage" data-status="implemented">
+    <text id="f2_exchange_text" x="690" y="603" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I014" data-role="secondary">
+      <tspan x="690" y="603.0">ldmatrix + bar.sync (sample PTX)</tspan>
+    </text>
+  </g>
+  <g id="f2_obj_0" data-claim="I004" data-kind="input" data-status="implemented">
+    <text id="f2_obj_0_text" x="82" y="1200" font-size="32" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="I004" data-role="secondary">
+      <tspan x="82" y="1200.0">R / b</tspan>
+    </text>
+  </g>
+  <g id="f2_obj_1" data-claim="I005 I006" data-kind="state" data-status="implemented">
+    <text id="f2_obj_1_text" x="82" y="1263" font-size="32" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="I005 I006" data-role="secondary">
+      <tspan x="82" y="1263.0">S_t</tspan>
+    </text>
+  </g>
+  <g id="f2_obj_2" data-claim="I004 U002" data-kind="input" data-status="implemented">
+    <text id="f2_obj_2_text" x="82" y="1326" font-size="32" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="I004 U002" data-role="secondary">
+      <tspan x="82" y="1326.0">U_t</tspan>
+    </text>
+  </g>
+  <g id="f2_obj_3" data-claim="I005" data-kind="compute" data-status="implemented">
+    <text id="f2_obj_3_text" x="82" y="1389" font-size="32" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="I005" data-role="secondary">
+      <tspan x="82" y="1389.0">A_t</tspan>
+    </text>
+  </g>
+  <g id="f2_obj_4" data-claim="I007 I010" data-kind="output" data-status="implemented">
+    <text id="f2_obj_4_text" x="82" y="1452" font-size="32" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="I007 I010" data-role="secondary">
+      <tspan x="82" y="1452.0">Y_t</tspan>
+    </text>
+  </g>
+  <g id="f2_obj_5" data-claim="I003 I015" data-kind="storage" data-status="implemented">
+    <text id="f2_obj_5_text" x="82" y="1515" font-size="32" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="I003 I015" data-role="secondary">
+      <tspan x="82" y="1515.0">C_t</tspan>
+    </text>
+  </g>
+  <g id="f2_limits" data-claim="U001 I010" data-kind="storage" data-status="implemented">
+    <text id="f2_limits_text" x="48" y="1650" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="U001 I010" data-role="secondary">
+      <tspan x="48" y="1650.0">No CTA-to-SM ownership claim. Exact state layout / spills: TBD.</tspan>
+      <tspan x="48" y="1690.0">Borrowed prepared results must be consumed before the next run overwrites them.</tspan>
+    </text>
+  </g>
+  <g id="f2_stage_0" data-claim="I004" data-kind="storage" data-status="implemented">
+    <text id="f2_stage_0_text" x="420" y="1155" font-size="32" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="I004" data-role="secondary">
+      <tspan x="420" y="1155.0">init</tspan>
+    </text>
+  </g>
+  <g id="f2_stage_1" data-claim="I004" data-kind="storage" data-status="implemented">
+    <text id="f2_stage_1_text" x="780" y="1155" font-size="32" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="I004" data-role="secondary">
+      <tspan x="780" y="1155.0">t</tspan>
+    </text>
+  </g>
+  <g id="f2_stage_2" data-claim="I004" data-kind="storage" data-status="implemented">
+    <text id="f2_stage_2_text" x="1140" y="1155" font-size="32" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="I004" data-role="secondary">
+      <tspan x="1140" y="1155.0">t+1</tspan>
+    </text>
+  </g>
+  <g id="f2_stage_3" data-claim="I004" data-kind="storage" data-status="implemented">
+    <text id="f2_stage_3_text" x="1500" y="1155" font-size="32" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="I004" data-role="secondary">
+      <tspan x="1500" y="1155.0">finish</tspan>
+    </text>
+  </g>
+  <g id="f2_cell_0_0" data-claim="I004" data-kind="input" data-status="implemented">
+    <text id="f2_cell_0_0_text" x="420" y="1200" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I004" data-role="secondary">
+      <tspan x="420" y="1200.0">load once</tspan>
+    </text>
+  </g>
+  <g id="f2_cell_0_1" data-claim="I004" data-kind="input" data-status="implemented">
+    <text id="f2_cell_0_1_text" x="780" y="1200" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I004" data-role="secondary">
+      <tspan x="780" y="1200.0">reuse</tspan>
+    </text>
+  </g>
+  <g id="f2_cell_0_2" data-claim="I004" data-kind="input" data-status="implemented">
+    <text id="f2_cell_0_2_text" x="1120" y="1200" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I004" data-role="secondary">
+      <tspan x="1120" y="1200.0">reuse</tspan>
+    </text>
+  </g>
+  <g id="f2_cell_0_3" data-claim="I004" data-kind="input" data-status="implemented">
+    <text id="f2_cell_0_3_text" x="1480" y="1200" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I004" data-role="secondary">
+      <tspan x="1480" y="1200.0">release</tspan>
+    </text>
+  </g>
+  <g id="f2_cell_1_0" data-claim="I005 I006" data-kind="state" data-status="implemented">
+    <text id="f2_cell_1_0_text" x="420" y="1263" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I005 I006" data-role="secondary">
+      <tspan x="420" y="1263.0">initial S_0</tspan>
+    </text>
+  </g>
+  <g id="f2_cell_1_1" data-claim="I005 I006" data-kind="state" data-status="implemented">
+    <text id="f2_cell_1_1_text" x="780" y="1263" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I005 I006" data-role="secondary">
+      <tspan x="780" y="1263.0">update S_t</tspan>
+    </text>
+  </g>
+  <g id="f2_cell_1_2" data-claim="I005 I006" data-kind="state" data-status="implemented">
+    <text id="f2_cell_1_2_text" x="1120" y="1263" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I005 I006" data-role="secondary">
+      <tspan x="1120" y="1263.0">consume / update</tspan>
+    </text>
+  </g>
+  <g id="f2_cell_1_3" data-claim="I005 I006" data-kind="state" data-status="implemented">
+    <text id="f2_cell_1_3_text" x="1480" y="1263" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I005 I006" data-role="secondary">
+      <tspan x="1480" y="1263.0">FP32 carry</tspan>
+    </text>
+  </g>
+  <g id="f2_cell_2_0" data-claim="I004 U002" data-kind="input" data-status="implemented">
+    <text id="f2_cell_2_0_text" x="420" y="1326" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I004 U002" data-role="secondary">
+      <tspan x="420" y="1326.0">global Wx</tspan>
+    </text>
+  </g>
+  <g id="f2_cell_2_1" data-claim="I004 U002" data-kind="input" data-status="implemented">
+    <text id="f2_cell_2_1_text" x="780" y="1326" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I004 U002" data-role="secondary">
+      <tspan x="780" y="1326.0">ready -&gt; use</tspan>
+    </text>
+  </g>
+  <g id="f2_cell_2_2" data-claim="I004 U002" data-kind="input" data-status="implemented">
+    <text id="f2_cell_2_2_text" x="1120" y="1326" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I004 U002" data-role="secondary">
+      <tspan x="1120" y="1326.0">new U_(t+1)</tspan>
+    </text>
+  </g>
+  <g id="f2_cell_2_3" data-claim="I004 U002" data-kind="input" data-status="implemented">
+    <text id="f2_cell_2_3_text" x="1480" y="1326" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I004 U002" data-role="secondary">
+      <tspan x="1480" y="1326.0">slots TBD</tspan>
+    </text>
+  </g>
+  <g id="f2_cell_3_0" data-claim="I005" data-kind="compute" data-status="implemented">
+    <text id="f2_cell_3_0_text" x="420" y="1389" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I005" data-role="secondary">
+      <tspan x="420" y="1389.0">not live</tspan>
+    </text>
+  </g>
+  <g id="f2_cell_3_1" data-claim="I005" data-kind="compute" data-status="implemented">
+    <text id="f2_cell_3_1_text" x="780" y="1389" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I005" data-role="secondary">
+      <tspan x="780" y="1389.0">dot -&gt; update</tspan>
+    </text>
+  </g>
+  <g id="f2_cell_3_2" data-claim="I005" data-kind="compute" data-status="implemented">
+    <text id="f2_cell_3_2_text" x="1120" y="1389" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I005" data-role="secondary">
+      <tspan x="1120" y="1389.0">new A_(t+1)</tspan>
+    </text>
+  </g>
+  <g id="f2_cell_3_3" data-claim="I005" data-kind="compute" data-status="implemented">
+    <text id="f2_cell_3_3_text" x="1480" y="1389" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I005" data-role="secondary">
+      <tspan x="1480" y="1389.0">not live</tspan>
+    </text>
+  </g>
+  <g id="f2_cell_4_0" data-claim="I007 I010" data-kind="output" data-status="implemented">
+    <text id="f2_cell_4_0_text" x="420" y="1452" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I007 I010" data-role="secondary">
+      <tspan x="420" y="1452.0">allocate output</tspan>
+    </text>
+  </g>
+  <g id="f2_cell_4_1" data-claim="I007 I010" data-kind="output" data-status="implemented">
+    <text id="f2_cell_4_1_text" x="780" y="1452" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I007 I010" data-role="secondary">
+      <tspan x="780" y="1452.0">full/hidden: Y_t</tspan>
+    </text>
+  </g>
+  <g id="f2_cell_4_2" data-claim="I007 I010" data-kind="output" data-status="implemented">
+    <text id="f2_cell_4_2_text" x="1120" y="1452" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I007 I010" data-role="secondary">
+      <tspan x="1120" y="1452.0">full/hidden: Y_(t+1)</tspan>
+    </text>
+  </g>
+  <g id="f2_cell_4_3" data-claim="I007 I010" data-kind="output" data-status="implemented">
+    <text id="f2_cell_4_3_text" x="1480" y="1452" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I007 I010" data-role="secondary">
+      <tspan x="1480" y="1452.0">last: final h</tspan>
+    </text>
+  </g>
+  <g id="f2_cell_5_0" data-claim="I003 I015" data-kind="storage" data-status="implemented">
+    <text id="f2_cell_5_0_text" x="420" y="1515" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I003 I015" data-role="secondary">
+      <tspan x="420" y="1515.0">absent in this inference scope</tspan>
+    </text>
+  </g>
+  <g id="color_legend_state" data-kind="legend">
+    <rect id="color_sample_state" x="48.0" y="1706" width="30" height="30" rx="5" fill="#F2EDF8" stroke="#7556A6" stroke-width="2.5" />
+    <text id="color_label_state" x="92.0" y="1731" font-size="28" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="" data-role="legend">
+      <tspan x="92.0" y="1731.0">State / feedback</tspan>
+    </text>
+  </g>
+  <g id="color_legend_compute" data-kind="legend">
+    <rect id="color_sample_compute" x="412.8" y="1706" width="30" height="30" rx="5" fill="#EDF3FA" stroke="#3568A0" stroke-width="2.5" />
+    <text id="color_label_compute" x="456.8" y="1731" font-size="28" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="" data-role="legend">
+      <tspan x="456.8" y="1731.0">Compute</tspan>
+    </text>
+  </g>
+  <g id="color_legend_input" data-kind="legend">
+    <rect id="color_sample_input" x="777.6" y="1706" width="30" height="30" rx="5" fill="#EAF5F2" stroke="#187E77" stroke-width="2.5" />
+    <text id="color_label_input" x="821.6" y="1731" font-size="28" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="" data-role="legend">
+      <tspan x="821.6" y="1731.0">Input / output</tspan>
+    </text>
+  </g>
+  <g id="color_legend_sync" data-kind="legend">
+    <rect id="color_sample_sync" x="1142.4" y="1706" width="30" height="30" rx="5" fill="#FFF4E3" stroke="#A66B1F" stroke-width="2.5" />
+    <text id="color_label_sync" x="1186.4" y="1731" font-size="28" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="" data-role="legend">
+      <tspan x="1186.4" y="1731.0">Sync / constraints</tspan>
+    </text>
+  </g>
+  <g id="color_legend_storage" data-kind="legend">
+    <rect id="color_sample_storage" x="1507.2" y="1706" width="30" height="30" rx="5" fill="#F7F8FA" stroke="#667085" stroke-width="2.5" />
+    <text id="color_label_storage" x="1551.2" y="1731" font-size="28" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="" data-role="legend">
+      <tspan x="1551.2" y="1731.0">Storage / scope</tspan>
+    </text>
+  </g>
+  <g id="legend_implemented" data-status="implemented" data-kind="legend">
+    <rect id="legend_implemented_sample" x="48.0" y="1764" width="48" height="32" rx="5" fill="#FFFFFF" stroke="#667085" stroke-width="2.5" stroke-dasharray="none" />
+    <text id="legend_implemented_text" x="112.0" y="1791" font-size="28" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="" data-role="legend">
+      <tspan x="112.0" y="1791.0">IMPL: Implemented</tspan>
+    </text>
+  </g>
+  <g id="legend_documented" data-status="documented" data-kind="legend">
+    <rect id="legend_documented_sample" x="504.0" y="1764" width="48" height="32" rx="5" fill="#FFFFFF" stroke="#667085" stroke-width="2.5" stroke-dasharray="none" />
+    <text id="legend_documented_text" x="568.0" y="1791" font-size="28" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="" data-role="legend">
+      <tspan x="568.0" y="1791.0">DOC: Documented</tspan>
+    </text>
+  </g>
+  <g id="legend_proposed" data-status="proposed" data-kind="legend">
+    <rect id="legend_proposed_sample" x="960.0" y="1764" width="48" height="32" rx="5" fill="#FFFFFF" stroke="#667085" stroke-width="2.5" stroke-dasharray="12 8" />
+    <text id="legend_proposed_text" x="1024.0" y="1791" font-size="28" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="" data-role="legend">
+      <tspan x="1024.0" y="1791.0">PROPOSED</tspan>
+    </text>
+  </g>
+  <g id="legend_unknown" data-status="unknown" data-kind="legend">
+    <rect id="legend_unknown_sample" x="1416.0" y="1764" width="48" height="32" rx="5" fill="#FFFFFF" stroke="#667085" stroke-width="2.5" stroke-dasharray="12 5 2 5" />
+    <text id="legend_unknown_text" x="1480.0" y="1791" font-size="28" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="" data-role="legend">
+      <tspan x="1480.0" y="1791.0">TBD: Unknown</tspan>
+    </text>
+  </g>
+</svg>

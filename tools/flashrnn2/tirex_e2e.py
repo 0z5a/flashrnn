@@ -11,6 +11,7 @@ from pathlib import Path
 
 import torch
 import triton
+from tirex_qualification import current_manifest, load_diagnostic, require_manifest
 from tirex_slstm_reference_gate import (
     SOURCE_REVISION,
     WEIGHT_BYTES,
@@ -73,6 +74,8 @@ def main():
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--gate", type=Path, required=True)
     parser.add_argument("--audit", type=Path, required=True)
+    parser.add_argument("--diagnostic", type=Path)
+    parser.add_argument("--diagnostic-audit", type=Path)
     parser.add_argument("--batch", type=int, required=True)
     parser.add_argument("--concurrency", type=int, required=True)
     parser.add_argument("--blocks", type=int, default=20)
@@ -87,6 +90,11 @@ def main():
         parser.error("output already exists")
 
     gate = json.loads(args.gate.read_text())
+    manifest = current_manifest(args.source)
+    try:
+        require_manifest(gate, manifest)
+    except ValueError as error:
+        parser.error(str(error))
     if gate["status"] != "PASS":
         parser.error("TiRex GPU numerical gate has not passed")
     if gate["budget"] != 1e-4 or len(gate["comparisons"]) != 381:
@@ -123,6 +131,26 @@ def main():
         assert source.stat().st_size == entry["bytes"]
         assert git_blob_sha(source) == entry["sha"]
 
+    fixtures = contexts(args.concurrency, args.batch)
+    fixture_sha = hashlib.sha256(torch.cat(fixtures).numpy().tobytes()).hexdigest()
+    if args.batch in ACCELERATED_BATCHES:
+        if args.diagnostic is None or args.diagnostic_audit is None:
+            parser.error(
+                "accelerated timing requires --diagnostic and --diagnostic-audit"
+            )
+        try:
+            load_diagnostic(
+                args.diagnostic,
+                args.diagnostic_audit,
+                current=manifest,
+                gate_sha256=sha256(args.gate),
+                fixture_sha256=fixture_sha,
+                batch=args.batch,
+                concurrency=args.concurrency,
+            )
+        except ValueError as error:
+            parser.error(str(error))
+
     shim = add_training_import_shim()
     sys.path.insert(0, str(args.source / "src"))
     from tirex.models.tirex import TiRexZero
@@ -140,10 +168,13 @@ def main():
     candidate = copy.deepcopy(model)
     install_tirex_cells(candidate)
     del checkpoint
-    fixtures = contexts(args.concurrency, args.batch)
-    fixture_sha = hashlib.sha256(torch.cat(fixtures).numpy().tobytes()).hexdigest()
     meta = {
         "status": "RUNNING",
+        "execution_manifest": manifest,
+        "diagnostic_sha256": sha256(args.diagnostic) if args.diagnostic else None,
+        "diagnostic_audit_sha256": sha256(args.diagnostic_audit)
+        if args.diagnostic_audit
+        else None,
         "model": "TiRex 35M, 12 sLSTM blocks",
         "checkpoint_sha256": WEIGHT_SHA256,
         "source_revision": SOURCE_REVISION,

@@ -1,0 +1,369 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" id="fig01_architecture_overview" width="1920" height="1680" viewBox="0 0 1920 1680" role="img" aria-labelledby="fig01_architecture_overview_accessible_title fig01_architecture_overview_accessible_desc" font-family="Arial">
+  <title id="fig01_architecture_overview_accessible_title">FlashRNN2: separate recurrence from observation</title>
+  <desc id="fig01_architecture_overview_accessible_desc">Two homologous panels show R/b feeding recurrent MMA, U_t feeding state update, local S_t feedback and separate Y_t writes. The baseline exposes a final snapshot view; FlashRNN2 can expose independent FP32 chunk carry. Notes distinguish inheritance, implemented changes and proposed overlap.</desc>
+  <defs>
+    <marker id="arrow_input" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10 5 L 0 10 Z" fill="#187E77" />
+    </marker>
+    <marker id="arrow_compute" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10 5 L 0 10 Z" fill="#3568A0" />
+    </marker>
+    <marker id="arrow_state" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10 5 L 0 10 Z" fill="#7556A6" />
+    </marker>
+    <marker id="arrow_feedback" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10 5 L 0 10 Z" fill="#7556A6" />
+    </marker>
+    <marker id="arrow_output" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10 5 L 0 10 Z" fill="#187E77" />
+    </marker>
+  </defs>
+  <rect id="background" x="0" y="0" width="1920" height="1680" fill="#FFFFFF" />
+  <g id="f1_b_scope" data-claim="I001" data-kind="scope" data-status="implemented">
+    <rect id="f1_b_scope_boundary" x="48" y="170" width="884" height="1010" rx="14" fill="#FFFFFF" stroke="#667085" stroke-width="2" stroke-dasharray="none" />
+    <text id="f1_b_scope_label" x="72" y="218" font-size="38" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="I001" data-role="panel">
+      <tspan x="72" y="218.0">(a) FlashRNN: pinned Triton fused</tspan>
+    </text>
+    <text id="f1_b_scope_subtitle" x="72" y="264" font-size="34" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I001" data-role="secondary">
+      <tspan x="72" y="264.0">One CTA / batch tile / head</tspan>
+    </text>
+  </g>
+  <g id="f1_v_scope" data-claim="I004" data-kind="scope" data-status="implemented">
+    <rect id="f1_v_scope_boundary" x="988" y="170" width="884" height="1010" rx="14" fill="#FFFFFF" stroke="#667085" stroke-width="2" stroke-dasharray="none" />
+    <text id="f1_v_scope_label" x="1012" y="218" font-size="38" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="I004" data-role="panel">
+      <tspan x="1012" y="218.0">(b) FlashRNN2: current generic path</tspan>
+    </text>
+    <text id="f1_v_scope_subtitle" x="1012" y="264" font-size="34" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I004" data-role="secondary">
+      <tspan x="1012" y="264.0">One CTA / batch tile / head</tspan>
+    </text>
+  </g>
+  <g id="f1_b_weights" data-claim="I001" data-kind="input" data-status="implemented">
+    <path id="f1_b_weights_path" d="M 249 480 L 249 530" fill="none" stroke="#187E77" stroke-width="2.5" stroke-dasharray="none" marker-end="url(#arrow_input)" stroke-linejoin="round" />
+  </g>
+  <g id="f1_b_input" data-claim="I001" data-kind="input" data-status="implemented">
+    <path id="f1_b_input_path" d="M 731 480 L 731 530" fill="none" stroke="#187E77" stroke-width="2.5" stroke-dasharray="none" marker-end="url(#arrow_input)" stroke-linejoin="round" />
+  </g>
+  <g id="f1_b_acc" data-claim="I001" data-kind="compute" data-status="implemented">
+    <path id="f1_b_acc_path" d="M 424 610 L 556 610" fill="none" stroke="#3568A0" stroke-width="2.5" stroke-dasharray="none" marker-end="url(#arrow_compute)" stroke-linejoin="round" />
+    <text id="f1_b_acc_label" x="490" y="590" font-size="32" text-anchor="middle" fill="#3568A0" font-weight="normal" data-claim="I001" data-role="edge">
+      <tspan x="490" y="590.0">A_t</tspan>
+    </text>
+  </g>
+  <g id="f1_b_produce" data-claim="I001" data-kind="state" data-status="implemented">
+    <path id="f1_b_produce_path" d="M 731 690 L 731 725 L 490 725 L 490 760" fill="none" stroke="#7556A6" stroke-width="2.5" stroke-dasharray="none" marker-end="url(#arrow_state)" stroke-linejoin="round" />
+  </g>
+  <g id="f1_b_feedback" data-claim="I001" data-kind="feedback" data-status="implemented">
+    <path id="f1_b_feedback_path" d="M 275 840 L 152 840 L 152 725 L 249 725 L 249 690" fill="none" stroke="#7556A6" stroke-width="3.5" stroke-dasharray="none" marker-end="url(#arrow_feedback)" stroke-linejoin="round" />
+  </g>
+  <g id="f1_b_history_store" data-claim="I002" data-kind="output" data-status="implemented">
+    <path id="f1_b_history_store_path" d="M 375 920 L 375 950 L 265 950 L 265 990" fill="none" stroke="#187E77" stroke-width="2.5" stroke-dasharray="none" marker-end="url(#arrow_output)" stroke-linejoin="round" />
+  </g>
+  <g id="f1_b_carry_store" data-claim="I002" data-kind="state" data-status="implemented">
+    <path id="f1_b_carry_store_path" d="M 456 1070 L 530 1070" fill="none" stroke="#7556A6" stroke-width="2.5" stroke-dasharray="none" marker-end="url(#arrow_state)" stroke-linejoin="round" />
+    <text id="f1_b_carry_store_label" x="493" y="1050" font-size="32" text-anchor="middle" fill="#7556A6" font-weight="normal" data-claim="I002" data-role="edge">
+      <tspan x="493" y="1050.0">view</tspan>
+    </text>
+  </g>
+  <g id="f1_v_weights" data-claim="I004" data-kind="input" data-status="implemented">
+    <path id="f1_v_weights_path" d="M 1189 480 L 1189 530" fill="none" stroke="#187E77" stroke-width="2.5" stroke-dasharray="none" marker-end="url(#arrow_input)" stroke-linejoin="round" />
+  </g>
+  <g id="f1_v_input" data-claim="I004" data-kind="input" data-status="implemented">
+    <path id="f1_v_input_path" d="M 1671 480 L 1671 530" fill="none" stroke="#187E77" stroke-width="2.5" stroke-dasharray="none" marker-end="url(#arrow_input)" stroke-linejoin="round" />
+  </g>
+  <g id="f1_v_acc" data-claim="I004" data-kind="compute" data-status="implemented">
+    <path id="f1_v_acc_path" d="M 1364 610 L 1496 610" fill="none" stroke="#3568A0" stroke-width="2.5" stroke-dasharray="none" marker-end="url(#arrow_compute)" stroke-linejoin="round" />
+    <text id="f1_v_acc_label" x="1430" y="590" font-size="32" text-anchor="middle" fill="#3568A0" font-weight="normal" data-claim="I004" data-role="edge">
+      <tspan x="1430" y="590.0">A_t</tspan>
+    </text>
+  </g>
+  <g id="f1_v_produce" data-claim="I004" data-kind="state" data-status="implemented">
+    <path id="f1_v_produce_path" d="M 1671 690 L 1671 725 L 1430 725 L 1430 760" fill="none" stroke="#7556A6" stroke-width="2.5" stroke-dasharray="none" marker-end="url(#arrow_state)" stroke-linejoin="round" />
+  </g>
+  <g id="f1_v_feedback" data-claim="I004" data-kind="feedback" data-status="implemented">
+    <path id="f1_v_feedback_path" d="M 1215 840 L 1092 840 L 1092 725 L 1189 725 L 1189 690" fill="none" stroke="#7556A6" stroke-width="3.5" stroke-dasharray="none" marker-end="url(#arrow_feedback)" stroke-linejoin="round" />
+  </g>
+  <g id="f1_v_history_store" data-claim="I007" data-kind="output" data-status="implemented">
+    <path id="f1_v_history_store_path" d="M 1315 920 L 1315 950 L 1205 950 L 1205 990" fill="none" stroke="#187E77" stroke-width="2.5" stroke-dasharray="none" marker-end="url(#arrow_output)" stroke-linejoin="round" />
+  </g>
+  <g id="f1_v_carry_store" data-claim="I006" data-kind="state" data-status="implemented">
+    <path id="f1_v_carry_store_path" d="M 1545 920 L 1545 950 L 1658 950 L 1658 990" fill="none" stroke="#7556A6" stroke-width="2.5" stroke-dasharray="none" marker-end="url(#arrow_state)" stroke-linejoin="round" />
+  </g>
+  <g id="f1_b_other_feedback" data-claim="I001" data-kind="feedback" data-status="implemented">
+    <path id="f1_b_other_feedback_path" d="M 705 840 L 914 840 L 914 704 L 828 704 L 828 690" fill="none" stroke="#7556A6" stroke-width="3.5" stroke-dasharray="none" marker-end="url(#arrow_feedback)" stroke-linejoin="round" />
+  </g>
+  <g id="f1_v_other_feedback" data-claim="I004 I005" data-kind="feedback" data-status="implemented">
+    <path id="f1_v_other_feedback_path" d="M 1645 840 L 1854 840 L 1854 704 L 1768 704 L 1768 690" fill="none" stroke="#7556A6" stroke-width="3.5" stroke-dasharray="none" marker-end="url(#arrow_feedback)" stroke-linejoin="round" />
+  </g>
+  <g id="f1_b_bias_input" data-claim="I001" data-kind="input" data-status="implemented">
+    <path id="f1_b_bias_input_path" d="M 424 400 L 490 400 L 490 510 L 608 510 L 608 530" fill="none" stroke="#187E77" stroke-width="2.5" stroke-dasharray="none" marker-end="url(#arrow_input)" stroke-linejoin="round" />
+    <text id="f1_b_bias_input_label" x="530" y="500" font-size="32" text-anchor="middle" fill="#187E77" font-weight="normal" data-claim="I001" data-role="edge">
+      <tspan x="530" y="500.0">b</tspan>
+    </text>
+  </g>
+  <g id="f1_v_bias_input" data-claim="I004 I005" data-kind="input" data-status="implemented">
+    <path id="f1_v_bias_input_path" d="M 1364 400 L 1430 400 L 1430 510 L 1548 510 L 1548 530" fill="none" stroke="#187E77" stroke-width="2.5" stroke-dasharray="none" marker-end="url(#arrow_input)" stroke-linejoin="round" />
+    <text id="f1_v_bias_input_label" x="1470" y="500" font-size="32" text-anchor="middle" fill="#187E77" font-weight="normal" data-claim="I004 I005" data-role="edge">
+      <tspan x="1470" y="500.0">b</tspan>
+    </text>
+  </g>
+  <g id="f1_b_r" data-claim="I001" data-kind="input" data-status="implemented">
+    <rect id="f1_b_r_box" x="74" y="320" width="350" height="160" rx="12" fill="#EAF5F2" stroke="#187E77" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f1_b_r_badge_box" x="86" y="330" width="98.4375" height="42" rx="5" fill="#FFFFFF" />
+    <text id="f1_b_r_badge" x="97" y="363" font-size="32" text-anchor="start" fill="#187E77" font-weight="bold" data-claim="I001" data-role="badge">
+      <tspan x="97" y="363.0">IMPL</tspan>
+    </text>
+    <text id="f1_b_r_text" x="249.0" y="414.74" font-size="36" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I001" data-role="label">
+      <tspan x="249.0" y="414.74">R / b</tspan>
+      <tspan x="249.0" y="459.74">loaded before loop</tspan>
+    </text>
+  </g>
+  <g id="f1_b_u" data-claim="I001" data-kind="input" data-status="implemented">
+    <rect id="f1_b_u_box" x="556" y="320" width="350" height="160" rx="12" fill="#EAF5F2" stroke="#187E77" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f1_b_u_badge_box" x="568" y="330" width="98.4375" height="42" rx="5" fill="#FFFFFF" />
+    <text id="f1_b_u_badge" x="579" y="363" font-size="32" text-anchor="start" fill="#187E77" font-weight="bold" data-claim="I001" data-role="badge">
+      <tspan x="579" y="363.0">IMPL</tspan>
+    </text>
+    <text id="f1_b_u_text" x="731.0" y="414.74" font-size="36" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I001" data-role="label">
+      <tspan x="731.0" y="414.74">U_t</tspan>
+      <tspan x="731.0" y="459.74">preprojected Wx</tspan>
+    </text>
+  </g>
+  <g id="f1_b_mma" data-claim="I001 I001" data-kind="compute" data-status="implemented">
+    <rect id="f1_b_mma_box" x="74" y="530" width="350" height="160" rx="12" fill="#EDF3FA" stroke="#3568A0" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f1_b_mma_badge_box" x="86" y="540" width="98.4375" height="42" rx="5" fill="#FFFFFF" />
+    <text id="f1_b_mma_badge" x="97" y="573" font-size="32" text-anchor="start" fill="#3568A0" font-weight="bold" data-claim="I001 I001" data-role="badge">
+      <tspan x="97" y="573.0">IMPL</tspan>
+    </text>
+    <text id="f1_b_mma_text" x="249.0" y="624.74" font-size="36" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I001 I001" data-role="label">
+      <tspan x="249.0" y="624.74">Recurrent MMA</tspan>
+      <tspan x="249.0" y="669.74">FP32 A_t</tspan>
+    </text>
+  </g>
+  <g id="f1_b_update" data-claim="I001" data-kind="compute" data-status="implemented">
+    <rect id="f1_b_update_box" x="556" y="530" width="350" height="160" rx="12" fill="#EDF3FA" stroke="#3568A0" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f1_b_update_badge_box" x="568" y="540" width="98.4375" height="42" rx="5" fill="#FFFFFF" />
+    <text id="f1_b_update_badge" x="579" y="573" font-size="32" text-anchor="start" fill="#3568A0" font-weight="bold" data-claim="I001" data-role="badge">
+      <tspan x="579" y="573.0">IMPL</tspan>
+    </text>
+    <text id="f1_b_update_text" x="731.0" y="624.74" font-size="36" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I001" data-role="label">
+      <tspan x="731.0" y="624.74">State update</tspan>
+      <tspan x="731.0" y="669.74">S_t = (h,c[,n,m])</tspan>
+    </text>
+  </g>
+  <g id="f1_b_state" data-claim="I001 I001" data-kind="state" data-status="implemented">
+    <rect id="f1_b_state_box" x="275" y="760" width="430" height="160" rx="12" fill="#F2EDF8" stroke="#7556A6" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f1_b_state_badge_box" x="287" y="770" width="98.4375" height="42" rx="5" fill="#FFFFFF" />
+    <text id="f1_b_state_badge" x="298" y="803" font-size="32" text-anchor="start" fill="#7556A6" font-weight="bold" data-claim="I001 I001" data-role="badge">
+      <tspan x="298" y="803.0">IMPL</tspan>
+    </text>
+    <text id="f1_b_state_text" x="490.0" y="854.74" font-size="36" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I001 I001" data-role="label">
+      <tspan x="490.0" y="854.74">Local S_t</tspan>
+      <tspan x="490.0" y="899.74">round h_t for MMA</tspan>
+    </text>
+  </g>
+  <g id="f1_b_history" data-claim="I002" data-kind="output" data-status="implemented">
+    <rect id="f1_b_history_box" x="74" y="990" width="382" height="160" rx="12" fill="#EAF5F2" stroke="#187E77" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f1_b_history_badge_box" x="86" y="1000" width="98.4375" height="42" rx="5" fill="#FFFFFF" />
+    <text id="f1_b_history_badge" x="97" y="1033" font-size="32" text-anchor="start" fill="#187E77" font-weight="bold" data-claim="I002" data-role="badge">
+      <tspan x="97" y="1033.0">IMPL</tspan>
+    </text>
+    <text id="f1_b_history_text" x="265.0" y="1084.74" font-size="36" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I002" data-role="label">
+      <tspan x="265.0" y="1084.74">Y_t: state history</tspan>
+      <tspan x="265.0" y="1129.74">full by default</tspan>
+    </text>
+  </g>
+  <g id="f1_b_carry" data-claim="I002" data-kind="state" data-status="implemented">
+    <rect id="f1_b_carry_box" x="530" y="990" width="376" height="160" rx="12" fill="#F2EDF8" stroke="#7556A6" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f1_b_carry_badge_box" x="542" y="1000" width="98.4375" height="42" rx="5" fill="#FFFFFF" />
+    <text id="f1_b_carry_badge" x="553" y="1033" font-size="32" text-anchor="start" fill="#7556A6" font-weight="bold" data-claim="I002" data-role="badge">
+      <tspan x="553" y="1033.0">IMPL</tspan>
+    </text>
+    <text id="f1_b_carry_text" x="718.0" y="1084.74" font-size="36" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I002" data-role="label">
+      <tspan x="718.0" y="1084.74">Last-state view</tspan>
+      <tspan x="718.0" y="1129.74">snapshot dtype</tspan>
+    </text>
+  </g>
+  <g id="f1_v_r" data-claim="I004" data-kind="input" data-status="implemented">
+    <rect id="f1_v_r_box" x="1014" y="320" width="350" height="160" rx="12" fill="#EAF5F2" stroke="#187E77" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f1_v_r_badge_box" x="1026" y="330" width="98.4375" height="42" rx="5" fill="#FFFFFF" />
+    <text id="f1_v_r_badge" x="1037" y="363" font-size="32" text-anchor="start" fill="#187E77" font-weight="bold" data-claim="I004" data-role="badge">
+      <tspan x="1037" y="363.0">IMPL</tspan>
+    </text>
+    <text id="f1_v_r_text" x="1189.0" y="414.74" font-size="36" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I004" data-role="label">
+      <tspan x="1189.0" y="414.74">R / b</tspan>
+      <tspan x="1189.0" y="459.74">loaded before loop</tspan>
+    </text>
+  </g>
+  <g id="f1_v_u" data-claim="I004" data-kind="input" data-status="implemented">
+    <rect id="f1_v_u_box" x="1496" y="320" width="350" height="160" rx="12" fill="#EAF5F2" stroke="#187E77" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f1_v_u_badge_box" x="1508" y="330" width="98.4375" height="42" rx="5" fill="#FFFFFF" />
+    <text id="f1_v_u_badge" x="1519" y="363" font-size="32" text-anchor="start" fill="#187E77" font-weight="bold" data-claim="I004" data-role="badge">
+      <tspan x="1519" y="363.0">IMPL</tspan>
+    </text>
+    <text id="f1_v_u_text" x="1671.0" y="414.74" font-size="36" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I004" data-role="label">
+      <tspan x="1671.0" y="414.74">U_t</tspan>
+      <tspan x="1671.0" y="459.74">preprojected Wx</tspan>
+    </text>
+  </g>
+  <g id="f1_v_mma" data-claim="I004 I005" data-kind="compute" data-status="implemented">
+    <rect id="f1_v_mma_box" x="1014" y="530" width="350" height="160" rx="12" fill="#EDF3FA" stroke="#3568A0" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f1_v_mma_badge_box" x="1026" y="540" width="98.4375" height="42" rx="5" fill="#FFFFFF" />
+    <text id="f1_v_mma_badge" x="1037" y="573" font-size="32" text-anchor="start" fill="#3568A0" font-weight="bold" data-claim="I004 I005" data-role="badge">
+      <tspan x="1037" y="573.0">IMPL</tspan>
+    </text>
+    <text id="f1_v_mma_text" x="1189.0" y="624.74" font-size="36" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I004 I005" data-role="label">
+      <tspan x="1189.0" y="624.74">Recurrent MMA</tspan>
+      <tspan x="1189.0" y="669.74">FP32 A_t</tspan>
+    </text>
+  </g>
+  <g id="f1_v_update" data-claim="I004" data-kind="compute" data-status="implemented">
+    <rect id="f1_v_update_box" x="1496" y="530" width="350" height="160" rx="12" fill="#EDF3FA" stroke="#3568A0" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f1_v_update_badge_box" x="1508" y="540" width="98.4375" height="42" rx="5" fill="#FFFFFF" />
+    <text id="f1_v_update_badge" x="1519" y="573" font-size="32" text-anchor="start" fill="#3568A0" font-weight="bold" data-claim="I004" data-role="badge">
+      <tspan x="1519" y="573.0">IMPL</tspan>
+    </text>
+    <text id="f1_v_update_text" x="1671.0" y="624.74" font-size="36" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I004" data-role="label">
+      <tspan x="1671.0" y="624.74">State update</tspan>
+      <tspan x="1671.0" y="669.74">S_t = (h,c[,n,m])</tspan>
+    </text>
+  </g>
+  <g id="f1_v_state" data-claim="I004 I005" data-kind="state" data-status="implemented">
+    <rect id="f1_v_state_box" x="1215" y="760" width="430" height="160" rx="12" fill="#F2EDF8" stroke="#7556A6" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f1_v_state_badge_box" x="1227" y="770" width="98.4375" height="42" rx="5" fill="#FFFFFF" />
+    <text id="f1_v_state_badge" x="1238" y="803" font-size="32" text-anchor="start" fill="#7556A6" font-weight="bold" data-claim="I004 I005" data-role="badge">
+      <tspan x="1238" y="803.0">IMPL</tspan>
+    </text>
+    <text id="f1_v_state_text" x="1430.0" y="854.74" font-size="36" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I004 I005" data-role="label">
+      <tspan x="1430.0" y="854.74">Local S_t</tspan>
+      <tspan x="1430.0" y="899.74">round h_t for MMA</tspan>
+    </text>
+  </g>
+  <g id="f1_v_history" data-claim="I007" data-kind="output" data-status="implemented">
+    <rect id="f1_v_history_box" x="1014" y="990" width="382" height="160" rx="12" fill="#EAF5F2" stroke="#187E77" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f1_v_history_badge_box" x="1026" y="1000" width="98.4375" height="42" rx="5" fill="#FFFFFF" />
+    <text id="f1_v_history_badge" x="1037" y="1033" font-size="32" text-anchor="start" fill="#187E77" font-weight="bold" data-claim="I007" data-role="badge">
+      <tspan x="1037" y="1033.0">IMPL</tspan>
+    </text>
+    <text id="f1_v_history_text" x="1205.0" y="1084.74" font-size="36" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I007" data-role="label">
+      <tspan x="1205.0" y="1084.74">Y_t: state history</tspan>
+      <tspan x="1205.0" y="1129.74">full by default</tspan>
+    </text>
+  </g>
+  <g id="f1_v_carry" data-claim="I006 I008 I009" data-kind="state" data-status="implemented">
+    <rect id="f1_v_carry_box" x="1470" y="990" width="376" height="160" rx="12" fill="#F2EDF8" stroke="#7556A6" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f1_v_carry_badge_box" x="1482" y="1000" width="98.4375" height="42" rx="5" fill="#FFFFFF" />
+    <text id="f1_v_carry_badge" x="1493" y="1033" font-size="32" text-anchor="start" fill="#7556A6" font-weight="bold" data-claim="I006 I008 I009" data-role="badge">
+      <tspan x="1493" y="1033.0">IMPL</tspan>
+    </text>
+    <text id="f1_v_carry_text" x="1658.0" y="1084.74" font-size="36" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I006 I008 I009" data-role="label">
+      <tspan x="1658.0" y="1084.74">Chunk compute carry</tspan>
+      <tspan x="1658.0" y="1129.74">FP32; opt-in</tspan>
+    </text>
+  </g>
+  <g id="fig01_architecture_overview_title" data-claim="I004" data-kind="storage" data-status="implemented">
+    <text id="fig01_architecture_overview_title_text" x="48" y="64" font-size="48" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="I004" data-role="title">
+      <tspan x="48" y="64.0">FlashRNN2: separate recurrence from observation</tspan>
+    </text>
+  </g>
+  <g id="fig01_architecture_overview_scope" data-claim="I004 I005" data-kind="storage" data-status="implemented">
+    <text id="fig01_architecture_overview_scope_text" x="48" y="118" font-size="34" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I004 I005" data-role="secondary">
+      <tspan x="48" y="118.0">Generic LSTM / sLSTM | FP16 / BF16 | inference forward | source-observed</tspan>
+    </text>
+  </g>
+  <g id="f1_b_cache" data-claim="I003" data-kind="storage" data-status="implemented">
+    <text id="f1_b_cache_text" x="74" y="1245" font-size="34" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I003" data-role="secondary">
+      <tspan x="74" y="1245.0">C_t backward cache: absent in inference</tspan>
+    </text>
+  </g>
+  <g id="f1_v_cache" data-claim="I015" data-kind="storage" data-status="implemented">
+    <text id="f1_v_cache_text" x="1014" y="1245" font-size="34" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I015" data-role="secondary">
+      <tspan x="1014" y="1245.0">C_t backward cache: absent in inference</tspan>
+    </text>
+  </g>
+  <g id="f1_inherit" data-claim="I001 I004 I014" data-kind="storage" data-status="implemented">
+    <rect id="f1_inherit_box" x="48" y="1285" width="570" height="120" rx="10" fill="#F7F8FA" stroke="#667085" stroke-width="2" stroke-dasharray="none" />
+    <text id="f1_inherit_text" x="74" y="1330" font-size="34" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I001 I004 I014" data-role="secondary">
+      <tspan x="74" y="1330.0">1  Local feedback: inherited</tspan>
+      <tspan x="74" y="1372.5">Warp / CTA sync remains</tspan>
+    </text>
+  </g>
+  <g id="f1_change" data-claim="I006 I007 I008" data-kind="state" data-status="implemented">
+    <rect id="f1_change_box" x="670" y="1285" width="580" height="120" rx="10" fill="#F2EDF8" stroke="#7556A6" stroke-width="2" stroke-dasharray="none" />
+    <text id="f1_change_text" x="696" y="1330" font-size="34" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I006 I007 I008" data-role="secondary">
+      <tspan x="696" y="1330.0">2  Carry + output: separated</tspan>
+      <tspan x="696" y="1372.5">Full-call context crosses chunks</tspan>
+    </text>
+  </g>
+  <g id="f1_overlap" data-claim="P001 U001" data-kind="sync" data-status="proposed">
+    <rect id="f1_overlap_box" x="1298" y="1285" width="574" height="120" rx="10" fill="#FFF4E3" stroke="#A66B1F" stroke-width="2" stroke-dasharray="12 8" />
+    <text id="f1_overlap_text" x="1320" y="1330" font-size="34" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="P001 U001" data-role="secondary">
+      <tspan x="1320" y="1330.0">3  Overlap: PROPOSED</tspan>
+      <tspan x="1320" y="1372.5">Layout / spill mapping: TBD</tspan>
+    </text>
+  </g>
+  <g id="f1_footer" data-claim="I001 I004 I007" data-kind="storage" data-status="implemented">
+    <text id="f1_footer_text" x="48" y="1460" font-size="34" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I001 I004 I007" data-role="secondary">
+      <tspan x="48" y="1460.0">Feedback uses local computation state; required global output writes remain.</tspan>
+    </text>
+  </g>
+  <g id="f1_paper_context" data-claim="D001" data-kind="storage" data-status="documented">
+    <text id="f1_paper_context_text" x="48" y="1502.5" font-size="34" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="D001" data-role="secondary">
+      <tspan x="48" y="1502.5">Paper CUDA sharding: DOC, grid-sync may apply; selected local baseline is Triton fused.</tspan>
+    </text>
+  </g>
+  <g id="color_legend_state" data-kind="legend">
+    <rect id="color_sample_state" x="48.0" y="1526" width="30" height="30" rx="5" fill="#F2EDF8" stroke="#7556A6" stroke-width="2.5" />
+    <text id="color_label_state" x="92.0" y="1551" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="" data-role="legend">
+      <tspan x="92.0" y="1551.0">State / feedback</tspan>
+    </text>
+  </g>
+  <g id="color_legend_compute" data-kind="legend">
+    <rect id="color_sample_compute" x="412.8" y="1526" width="30" height="30" rx="5" fill="#EDF3FA" stroke="#3568A0" stroke-width="2.5" />
+    <text id="color_label_compute" x="456.8" y="1551" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="" data-role="legend">
+      <tspan x="456.8" y="1551.0">Compute</tspan>
+    </text>
+  </g>
+  <g id="color_legend_input" data-kind="legend">
+    <rect id="color_sample_input" x="777.6" y="1526" width="30" height="30" rx="5" fill="#EAF5F2" stroke="#187E77" stroke-width="2.5" />
+    <text id="color_label_input" x="821.6" y="1551" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="" data-role="legend">
+      <tspan x="821.6" y="1551.0">Input / output</tspan>
+    </text>
+  </g>
+  <g id="color_legend_sync" data-kind="legend">
+    <rect id="color_sample_sync" x="1142.4" y="1526" width="30" height="30" rx="5" fill="#FFF4E3" stroke="#A66B1F" stroke-width="2.5" />
+    <text id="color_label_sync" x="1186.4" y="1551" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="" data-role="legend">
+      <tspan x="1186.4" y="1551.0">Sync / constraints</tspan>
+    </text>
+  </g>
+  <g id="color_legend_storage" data-kind="legend">
+    <rect id="color_sample_storage" x="1507.2" y="1526" width="30" height="30" rx="5" fill="#F7F8FA" stroke="#667085" stroke-width="2.5" />
+    <text id="color_label_storage" x="1551.2" y="1551" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="" data-role="legend">
+      <tspan x="1551.2" y="1551.0">Storage / scope</tspan>
+    </text>
+  </g>
+  <g id="legend_implemented" data-status="implemented" data-kind="legend">
+    <rect id="legend_implemented_sample" x="48.0" y="1584" width="48" height="32" rx="5" fill="#FFFFFF" stroke="#667085" stroke-width="2.5" stroke-dasharray="none" />
+    <text id="legend_implemented_text" x="112.0" y="1611" font-size="32" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="" data-role="legend">
+      <tspan x="112.0" y="1611.0">IMPL: Implemented</tspan>
+    </text>
+  </g>
+  <g id="legend_documented" data-status="documented" data-kind="legend">
+    <rect id="legend_documented_sample" x="504.0" y="1584" width="48" height="32" rx="5" fill="#FFFFFF" stroke="#667085" stroke-width="2.5" stroke-dasharray="none" />
+    <text id="legend_documented_text" x="568.0" y="1611" font-size="32" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="" data-role="legend">
+      <tspan x="568.0" y="1611.0">DOC: Documented</tspan>
+    </text>
+  </g>
+  <g id="legend_proposed" data-status="proposed" data-kind="legend">
+    <rect id="legend_proposed_sample" x="960.0" y="1584" width="48" height="32" rx="5" fill="#FFFFFF" stroke="#667085" stroke-width="2.5" stroke-dasharray="12 8" />
+    <text id="legend_proposed_text" x="1024.0" y="1611" font-size="32" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="" data-role="legend">
+      <tspan x="1024.0" y="1611.0">PROPOSED</tspan>
+    </text>
+  </g>
+  <g id="legend_unknown" data-status="unknown" data-kind="legend">
+    <rect id="legend_unknown_sample" x="1416.0" y="1584" width="48" height="32" rx="5" fill="#FFFFFF" stroke="#667085" stroke-width="2.5" stroke-dasharray="12 5 2 5" />
+    <text id="legend_unknown_text" x="1480.0" y="1611" font-size="32" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="" data-role="legend">
+      <tspan x="1480.0" y="1611.0">TBD: Unknown</tspan>
+    </text>
+  </g>
+</svg>

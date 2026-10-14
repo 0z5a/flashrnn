@@ -10,6 +10,8 @@ from typing import Literal
 
 import torch
 
+from .state_contract import SequenceContext
+
 Cell = Literal["lstm", "slstm", "gru", "elman"]
 SIZES: dict[str, tuple[int, int, int]] = {
     "lstm": (4, 4, 2),
@@ -28,6 +30,8 @@ def recurrence(
     mma_dtype: torch.dtype | None = None,
     slstm_init: Literal["global", "elementwise"] = "global",
     recurrent_mma_dtype: torch.dtype | None = None,
+    *,
+    sequence_context: SequenceContext | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Return state history [S,B,T,N,D] and last state [S,B,1,N,D]."""
     batch, steps, gates, heads, width = wx.shape
@@ -42,9 +46,32 @@ def recurrence(
         raise ValueError("bias gate count does not match cell")
     if initial.shape != (state_count, batch, 1, heads, width):
         raise ValueError("initial state must have layout [S,B,1,N,D]")
+    if sequence_context is not None:
+        contract = sequence_context.contract
+        if (
+            contract.cell != cell
+            or contract.semantics != "flashrnn"
+            or slstm_init != "global"
+        ):
+            raise ValueError(
+                "reference sequence context requires matching generic cell semantics"
+            )
+        if (
+            initial.dtype != contract.compute_dtype
+            or wx.dtype != contract.compute_dtype
+        ):
+            raise ValueError(
+                "continuation reference requires compute dtype inputs and states"
+            )
+        if sequence_context.zero_normalizer.device != wx.device:
+            raise ValueError("sequence context must share input device")
+        if mma_dtype != contract.input_dtype:
+            raise ValueError(
+                "reference hidden-operand rounding must match the state contract"
+            )
     state = initial[:, :, 0]
     history = []
-    for x in wx.unbind(1):
+    for step, x in enumerate(wx.unbind(1)):
         hidden = (
             state[0] if mma_dtype is None else state[0].to(mma_dtype).to(state.dtype)
         )
@@ -71,6 +98,10 @@ def recurrence(
                 _, old_c, old_n, old_m = state.unbind(0)
                 log_f = torch.nn.functional.logsigmoid(f) + old_m
                 zero = torch.all(old_n == 0) if slstm_init == "global" else old_n == 0
+                if sequence_context is not None:
+                    zero = sequence_context.zero_normalizer & (
+                        sequence_context.step_offset + step == 0
+                    )
                 m = torch.where(zero, i, torch.maximum(i, log_f))
                 input_gate = torch.exp(i - m)
                 forget_gate = torch.exp(log_f - m)

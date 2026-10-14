@@ -2,7 +2,11 @@
 
 from triton.experimental import gluon
 from triton.experimental.gluon import language as gl
-from triton.experimental.gluon.language.nvidia.ampere import mma_v2
+
+try:
+    from triton.experimental.gluon.language.nvidia.ampere import mma_v2
+except ImportError as error:
+    raise ImportError("Gluon persistent MMA requires Triton >= 3.6") from error
 
 
 @gluon.jit
@@ -17,6 +21,7 @@ def _sequence(
     BIAS,
     INITIAL,
     OUTPUT,
+    FINAL,
     B: gl.constexpr,
     T: gl.constexpr,
     H: gl.constexpr,
@@ -27,9 +32,13 @@ def _sequence(
     BD: gl.constexpr,
     WEIGHT_A: gl.constexpr,
     TIREX: gl.constexpr,
+    XLSTM: gl.constexpr,
+    STORE_FINAL: gl.constexpr,
+    SEQUENCE_START: gl.constexpr,
 ):
     gl.static_assert(not WEIGHT_A)
     gl.static_assert(not TIREX)
+    gl.static_assert(not XLSTM)
     state_layout: gl.constexpr = gl.BlockedLayout([1, 4], [4, 8], [1, 8], [1, 0])
     weight_layout: gl.constexpr = gl.BlockedLayout([4, 1], [8, 4], [1, 8], [0, 1])
     mma_layout: gl.constexpr = gl.NVMMADistributedLayout([2, 0], [1, 8], [16, 8])
@@ -84,7 +93,9 @@ def _sequence(
         z_value = 2.0 * sigmoid(2.0 * z) - 1.0
         if SLSTM:
             logf = gl.minimum(f, 0.0) - gl.log(1.0 + gl.exp(-gl.abs(f))) + m
-            next_m = gl.where((step == 0) & zero_normalizer, i, gl.maximum(i, logf))
+            next_m = gl.where(
+                SEQUENCE_START & (step == 0) & zero_normalizer, i, gl.maximum(i, logf)
+            )
             igate = gl.exp(i - next_m)
             fgate = gl.exp(logf - next_m)
             c = fgate * c + igate * z_value
@@ -101,3 +112,10 @@ def _sequence(
         if SLSTM:
             gl.store(OUTPUT + 2 * output_stride + output_offset, n, valid)
             gl.store(OUTPUT + 3 * output_stride + output_offset, m, valid)
+
+    if STORE_FINAL:
+        gl.store(FINAL + state_offset, hidden, valid)
+        gl.store(FINAL + stride + state_offset, c, valid)
+        if SLSTM:
+            gl.store(FINAL + 2 * stride + state_offset, n, valid)
+            gl.store(FINAL + 3 * stride + state_offset, m, valid)
