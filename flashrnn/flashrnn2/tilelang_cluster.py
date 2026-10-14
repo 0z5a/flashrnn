@@ -2,7 +2,7 @@
 
 Algorithm (M5): a cluster of k = D/S CTAs per (batch tile, head). CTA s keeps the
 four gate slices R[g, head, s*S:(s+1)*S, :] in shared memory and its c/n/m slices
-in fragments. Per step, WGMMA computes R_slice[4S x D] @ h^T[D x 16] (weights as
+in fragments. Per step, WGMMA computes R_slice[4S x D] @ h^T[D x BM] (weights as
 operand A); each CTA writes its rounded h slice into its own next-step h^T buffer
 and copies it into every peer's buffer with cp.async.bulk.shared::cluster, which
 completes on the receiver's mbarrier (TileLang's copy_cluster arms that barrier
@@ -18,24 +18,31 @@ TileLang is optional: it is imported only when this module is used.
 
 _KERNELS = {}
 SLICE_WIDTHS = (16, 32, 64)
+BATCH_TILES = (16, 32, 64, 128)  # WGMMA N: rows of the batch handled by one CTA per step
 MODES = {"full": 0, "hidden": 1, "last": 2}
+SMEM_LIMIT = 232448  # H100 opt-in dynamic shared memory per block
 
 
-def supported(width, slice_width):
-    """Cluster size 2..16 and the shared-memory bound used by the M5 qualification."""
-    if slice_width not in SLICE_WIDTHS or width % slice_width:
+def cluster_smem(width, slice_width, bm=16):
+    """R slice + double-buffered h^T + FP32 gate stage."""
+    return 4 * slice_width * width * 2 + 2 * width * bm * 2 + 4 * slice_width * bm * 4
+
+
+def supported(width, slice_width, bm=16):
+    """Cluster size 2..16 and the shared-memory bound (no BM = 16 shape lies between the M5 bound of
+    200 KiB and the hardware limit, so the qualified BM = 16 set is unchanged)."""
+    if slice_width not in SLICE_WIDTHS or width % slice_width or bm not in BATCH_TILES:
         return False
     k = width // slice_width
-    smem = 4 * slice_width * width * 2 + 2 * width * 16 * 2 + 4 * slice_width * 16 * 4
-    return 2 <= k <= 16 and smem <= 200 * 1024
+    return 2 <= k <= 16 and cluster_smem(width, slice_width, bm) <= SMEM_LIMIT
 
 
 def build(batch, total_steps, heads, width, slice_width, *, cell="lstm", dtype="float16", mode="full",
           snapshot="float32", threads=128, bm=16):
     import tilelang.language as T
 
-    if not supported(width, slice_width):
-        raise ValueError("unsupported (D, S) for the cluster path")
+    if not supported(width, slice_width, bm):
+        raise ValueError("unsupported (D, S, BM) for the cluster path")
     k = width // slice_width
     S, D, H, B, BM, TT = slice_width, width, heads, batch, bm, total_steps
     groups = (B + BM - 1) // BM * H
@@ -169,26 +176,26 @@ def build(batch, total_steps, heads, width, slice_width, *, cell="lstm", dtype="
 
 
 GRID_SLICE_WIDTHS = (16, 32)
-GRID_SMEM_LIMIT = 232448  # H100 opt-in dynamic shared memory per block
+GRID_SMEM_LIMIT = SMEM_LIMIT
 
 
-def grid_smem(width, slice_width):
-    return 4 * slice_width * width * 2 + width * 16 * 2 + 4 * slice_width * 16 * 4
+def grid_smem(width, slice_width, bm=16):
+    return 4 * slice_width * width * 2 + width * bm * 2 + 4 * slice_width * bm * 4
 
 
-def grid_plan(batch, heads, width, slice_width, sms):
+def grid_plan(batch, heads, width, slice_width, sms, bm=16):
     """(k, co-resident groups, slots): every CTA of a cooperative grid must be resident, one per SM."""
     k = width // slice_width
-    groups = (batch + 15) // 16 * heads
+    groups = (batch + bm - 1) // bm * heads
     resident = max(1, min(groups, sms // k))
     return k, resident, (groups + resident - 1) // resident
 
 
-def supported_grid(width, slice_width, sms=132):
+def supported_grid(width, slice_width, sms=132, bm=16):
     """Grid-synchronized path: any k = D/S up to the SM count, R slice + h^T + stage in shared memory."""
-    if slice_width not in GRID_SLICE_WIDTHS or width % slice_width:
+    if slice_width not in GRID_SLICE_WIDTHS or width % slice_width or bm not in BATCH_TILES:
         return False
-    return 2 <= width // slice_width <= sms and grid_smem(width, slice_width) <= GRID_SMEM_LIMIT
+    return 2 <= width // slice_width <= sms and grid_smem(width, slice_width, bm) <= GRID_SMEM_LIMIT
 
 
 def build_grid(batch, total_steps, heads, width, slice_width, *, sms, cell="lstm", dtype="float16", mode="full",
@@ -204,10 +211,10 @@ def build_grid(batch, total_steps, heads, width, slice_width, *, sms, cell="lstm
     """
     import tilelang.language as T
 
-    if not supported_grid(width, slice_width, sms):
-        raise ValueError("unsupported (D, S) for the grid path")
+    if not supported_grid(width, slice_width, sms, bm):
+        raise ValueError("unsupported (D, S, BM) for the grid path")
     S, D, H, B, BM, TT = slice_width, width, heads, batch, bm, total_steps
-    k, resident, slots = grid_plan(B, H, D, S, sms)
+    k, resident, slots = grid_plan(B, H, D, S, sms, BM)
     tiles = (B + BM - 1) // BM
     groups = tiles * H
     slstm = cell == "slstm"
@@ -334,7 +341,8 @@ def sm_count():
     return torch.cuda.get_device_properties(torch.cuda.current_device()).multi_processor_count
 
 
-def kernel(batch, total_steps, heads, width, slice_width, *, cell, dtype, mode, snapshot, sync="cluster", sms=None):
+def kernel(batch, total_steps, heads, width, slice_width, *, cell, dtype, mode, snapshot, sync="cluster", sms=None,
+           bm=16):
     """Compiled kernel for one logical-call shape; chunk length, offset and start are runtime arguments."""
     import tilelang
 
@@ -342,11 +350,13 @@ def kernel(batch, total_steps, heads, width, slice_width, *, cell, dtype, mode, 
         sms = sms or sm_count()
         key = ("grid", sms, batch, total_steps, heads, width, slice_width, cell, dtype, mode, snapshot)
         func = lambda: build_grid(batch, total_steps, heads, width, slice_width, sms=sms, cell=cell,  # noqa: E731
-                                  dtype=dtype, mode=mode, snapshot=snapshot)
+                                  dtype=dtype, mode=mode, snapshot=snapshot, bm=bm)
     else:
         key = (batch, total_steps, heads, width, slice_width, cell, dtype, mode, snapshot)
         func = lambda: build(batch, total_steps, heads, width, slice_width, cell=cell, dtype=dtype,  # noqa: E731
-                             mode=mode, snapshot=snapshot)
+                             mode=mode, snapshot=snapshot, bm=bm)
+    if bm != 16:
+        key = key + (("bm", bm),)  # BM = 16 keys stay as they were
     if key not in _KERNELS:
         _KERNELS[key] = tilelang.compile(func(), target={"kind": "cuda", "arch": "sm_90a"})
     return _KERNELS[key]
@@ -359,11 +369,12 @@ def version():
 
 
 def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context, slice_width=32,
-               output_mode="full", snapshot_dtype=None, sync="cluster"):
+               output_mode="full", snapshot_dtype=None, sync="cluster", batch_tile=16):
     """Public per-call API with the triton_rtiled contract; returns (output, FP32 compute carry).
 
     sync="cluster" exchanges h inside a thread-block cluster (k <= 16); sync="grid" exchanges it
     through global memory under one cooperative grid barrier per step (k up to the SM count).
+    batch_tile is the number of batch rows one CTA carries per step (WGMMA N).
     """
     import torch
 
@@ -386,7 +397,8 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context, s
         raise ValueError("snapshot dtype must be input dtype or FP32")
     batch, steps, gates, heads, width = wx.shape
     states = len(contract.components)
-    ok = supported(width, slice_width) if sync == "cluster" else supported_grid(width, slice_width, sm_count())
+    ok = (supported(width, slice_width, batch_tile) if sync == "cluster" else
+          supported_grid(width, slice_width, sm_count(), batch_tile))
     if gates != 4 or steps < 1 or batch < 1 or heads < 1 or not ok:
         raise ValueError(f"unsupported shape for the {sync} path")
     if recurrent.shape != (4, heads, width, width) or bias.shape != (4, heads, width):
@@ -400,7 +412,7 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context, s
     names = {torch.float16: "float16", torch.bfloat16: "bfloat16", torch.float32: "float32"}
     snap = wx.dtype if snapshot_dtype is None else snapshot_dtype
     fn = kernel(batch, steps, heads, width, slice_width, cell=cell, dtype=names[wx.dtype], mode=output_mode,
-                snapshot=names[snap], sync=sync)
+                snapshot=names[snap], sync=sync, bm=batch_tile)
     out_shape = {"full": (states, batch, steps, heads, width), "hidden": (batch, steps, heads, width),
                  "last": (batch, 1, heads, width)}[output_mode]
     output = torch.empty(out_shape, device=wx.device, dtype=snap)
@@ -408,6 +420,7 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context, s
     zero = sequence_context.zero_normalizer.to(torch.int32).reshape(1)
     args = [wx.contiguous(), recurrent.contiguous(), bias.contiguous(), initial.float().contiguous(), zero, output, final]
     if sync == "grid":
-        args.append(torch.empty((2, (batch + 15) // 16 * heads, width, 16), device=wx.device, dtype=wx.dtype))
+        tiles = (batch + batch_tile - 1) // batch_tile
+        args.append(torch.empty((2, tiles * heads, width, batch_tile), device=wx.device, dtype=wx.dtype))
     fn(*args, steps, 0, int(sequence_context.step_offset == 0))
     return output, final

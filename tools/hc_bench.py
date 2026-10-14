@@ -1,4 +1,4 @@
-"""High-concurrency (HC) serving of the FlashRNN2 classifier: R0 decomposition.
+"""High-concurrency (HC) serving of the FlashRNN2 classifier: decomposition, selection and paired timing.
 
 Workload: C requests of T tokens arrive together (closed batch) at the existing
 classifier (4 layers, vocab 512, FP16; tools/rtiled_m4.Model). One process per
@@ -16,10 +16,21 @@ total kernel time (GPU-busy fraction); the recurrence SM footprint.
 Recurrence microbench: µs/step, CTAs and SM·µs per row-step per config and batch.
 Checks: logits vs the FP64 model oracle (MODEL_BUDGET) for the first requests;
 recurrence rows bitwise independent of batch composition for every config used.
+
+Modes
+  decompose  the round-0 measurements above (split-0 fixtures)
+  select     one case (cell, D, C, T): qualify every candidate strategy (FP64 oracle on the first 32
+             requests, logits vs the reference candidate for all requests, MODEL_BUDGET), then interleaved
+             makespan repetitions on split-0 fixtures; writes select.json
+  start      one process start of one frozen comparison on split-1 fixtures: qualification, 3 warm-up
+             bursts per arm, then ABBA/BAAB blocks of whole-burst makespans (rtiled_m4_analyze format)
+A strategy is {"strategy": "s0" | "s0p", "group": rows per call, "config": KernelConfig fields}.
 """
 import argparse
 import json
+import os
 import statistics
+import sys
 import time
 import traceback
 from pathlib import Path
@@ -44,7 +55,7 @@ def arm(cell, cfg):
         if cfg.family == "tilelang":
             from flashrnn.flashrnn2 import tilelang_cluster
             y, _ = tilelang_cluster.recurrence(wx, r, b, init, cell, sequence_context=ctx, slice_width=cfg.slice_width,
-                                               output_mode="hidden", sync=cfg.sync)
+                                               output_mode="hidden", sync=cfg.sync, batch_tile=cfg.batch_tile)
         elif cfg.family == "mma_rtiled":
             y, _ = triton_rtiled.recurrence(wx, r, b, init, cell, sequence_context=ctx, slice_width=cfg.slice_width,
                                             num_warps=cfg.warps, pad_k=cfg.pad_k, output_mode="hidden")
@@ -57,13 +68,13 @@ def arm(cell, cfg):
 def footprint(cfg, batch, width, heads=1):
     """CTAs one recurrence launch keeps resident (one CTA per SM for every R-tiled path here)."""
     k = width // cfg.slice_width
-    groups = (batch + 15) // 16 * heads
+    groups = (batch + cfg.batch_tile - 1) // cfg.batch_tile * heads
     if cfg.family == "mma_rtiled":
         splits, groups, resident = triton_rtiled.plan(batch, heads, width, cfg.slice_width, sms=SMS)
         return dict(k=splits, groups=groups, resident_groups=resident, ctas=splits * resident)
     if cfg.sync == "grid":
         from flashrnn.flashrnn2 import tilelang_cluster
-        k, resident, slots = tilelang_cluster.grid_plan(batch, heads, width, cfg.slice_width, SMS)
+        k, resident, slots = tilelang_cluster.grid_plan(batch, heads, width, cfg.slice_width, SMS, cfg.batch_tile)
         return dict(k=k, groups=groups, resident_groups=resident, slots=slots, ctas=k * resident)
     # Cluster launch: all clusters are queued; at most SMS // k run at once (fewer if GPCs fragment).
     resident = min(groups, SMS // k)
@@ -193,8 +204,160 @@ def microbench(cell, width, steps, cfgs, batches, calls=10):
     return rows
 
 
+def ids_for(conc, steps, split):
+    g = torch.Generator().manual_seed((20261015 if split == 0 else 20261115) + conc)
+    return torch.randint(0, m4.VOCAB, (conc, steps), generator=g)
+
+
+def strategy_arm(cell, spec):
+    return arm(cell, KernelConfig(**spec["config"]))
+
+
+def burst(model, ids, spec, fn):
+    torch.cuda.synchronize()
+    t0 = time.perf_counter_ns()
+    outs, done = serve(model, list(ids.split(spec["group"])), fn)
+    makespan = (time.perf_counter_ns() - t0) / 1e6
+    per_request = [d for d, grp in zip(done, ids.split(spec["group"])) for _ in range(len(grp))]
+    return torch.cat(outs), dict(makespan_ms=makespan, p50_ms=statistics.median(per_request),
+                                 p90_ms=sorted(per_request)[int(0.9 * (len(per_request) - 1))])
+
+
+def qualify_arms(model, ids, specs, cell):
+    """Every arm vs the FP64 oracle (first 32 requests) and vs the first arm (all requests)."""
+    o_logits, _ = model.oracle(ids[:32])
+    outs, rep_ = {}, {}
+    for name, spec in specs.items():
+        logits, _ = burst(model, ids, spec, strategy_arm(cell, spec))
+        outs[name] = logits
+        rep_[name] = dict(vs_oracle=m4.compare(logits[:32].cuda(), o_logits))
+    first = next(iter(specs))
+    for name in specs:
+        rep_[name]["vs_first"] = m4.compare(outs[name].cuda(), outs[first].cuda())
+        rep_[name]["pass"] = rep_[name]["vs_oracle"]["pass_"] and rep_[name]["vs_first"]["pass_"]
+    return rep_, outs
+
+
+def mode_select(a):
+    case = json.loads(a.case)
+    cell, width, steps, conc = case["cell"], case["width"], case["steps"], case["concurrency"]
+    rec = dict(mode="select", case=case, identity=runtime_identity(), started=time.time())
+    model = m4.Model(cell, width)
+    ids = ids_for(conc, steps, 0)
+    specs = {c["label"]: c for c in case["candidates"]}
+    with torch.inference_mode():
+        quals, errors = {}, {}
+        for name, spec in specs.items():
+            try:
+                q, _ = qualify_arms(model, ids, {case["reference"]: specs[case["reference"]], name: spec}, cell)
+                quals[name] = q[name]
+            except Exception as e:  # noqa: BLE001 - an unsupported or failing candidate is a result
+                errors[name] = f"{type(e).__name__}: {str(e)[:400]}"
+        rec.update(qualification=quals, errors=errors)
+        ok = [n for n in specs if n in quals and quals[n]["pass"]]
+        fns = {n: strategy_arm(cell, specs[n]) for n in ok}
+        for n in ok:
+            burst(model, ids, specs[n], fns[n])
+        runs = {n: [] for n in ok}
+        for rep_i in range(a.reps):
+            order = ok[rep_i % len(ok):] + ok[:rep_i % len(ok)]
+            for n in order:
+                runs[n].append(burst(model, ids, specs[n], fns[n])[1])
+        med = {n: dict(makespan_ms=statistics.median(r["makespan_ms"] for r in v),
+                       p90_ms=statistics.median(r["p90_ms"] for r in v)) for n, v in runs.items()}
+        rec["screen"] = dict(runs=runs, median=med)
+        roles = {}
+        for role, labels in case["roles"].items():
+            pool = [n for n in labels if n in med]
+            best = min(pool, key=lambda n: med[n]["makespan_ms"]) if pool else None
+            roles[role] = dict(pool=labels, qualified=pool, selected=specs[best] if best else None, label=best)
+        rec["roles"] = roles
+    rec["finished"] = time.time()
+    m4.write(Path(a.out) / "select.json", rec)
+    print(json.dumps(dict(case=case["name"], **{r: v["label"] for r, v in roles.items()},
+                          median={n: round(v["makespan_ms"], 3) for n, v in med.items()})), flush=True)
+    return 0
+
+
+def mode_start(a):
+    table_path = Path(a.table)
+    assert m4.sha(table_path) == a.table_sha256, "frozen table changed"
+    table = json.loads(table_path.read_text())
+    comp = next(c for c in table["comparisons"] if c["name"] == a.comparison)
+    cell, width, steps, conc = comp["cell"], comp["width"], comp["steps"], comp["concurrency"]
+    out = Path(a.out)
+    meta = dict(comparison=comp, start=a.start, split=1, identity=runtime_identity(), table_sha256=a.table_sha256,
+                pid=os.getpid(), host=os.uname().nodename, job=os.environ.get("SLURM_JOB_ID"),
+                gpu_uuid=os.environ.get("FRNN_GPU_UUID"), cpu_affinity=sorted(os.sched_getaffinity(0)),
+                started=time.time(), blocks=a.blocks, order="ABBA even blocks, BAAB odd blocks",
+                arm_unit="one burst: C requests (IDs on host) to logits on host", budget=m4.MODEL_BUDGET)
+    m4.write(out / "meta.json", meta)
+    model = m4.Model(cell, width)
+    ids = ids_for(conc, steps, 1)
+    specs = {"baseline": comp["baseline"], "candidate": comp["candidate"]}
+    with torch.inference_mode():
+        report, outs = qualify_arms(model, ids, specs, cell)
+        m4.write(out / "qualification.json", report)
+        if not all(v["pass"] for v in report.values()):
+            meta.update(status="NUMERICAL_FAIL_NO_TIMING", finished=time.time())
+            m4.write(out / "meta.json", meta)
+            return 3
+        golden = outs["baseline"].cuda()
+        fns = {k: strategy_arm(cell, v) for k, v in specs.items()}
+        for _ in range(3):
+            for k in specs:
+                burst(model, ids, specs[k], fns[k])
+        blocks = []
+        for i in range(a.blocks):
+            order = "ABBA" if i % 2 == 0 else "BAAB"
+            raw = {"A": [], "B": []}
+            checked = True
+            for arm_ in order:
+                k = "baseline" if arm_ == "A" else "candidate"
+                logits, t = burst(model, ids, specs[k], fns[k])
+                checked &= m4.compare(logits.cuda(), golden)["pass_"]
+                raw[arm_].append(t)
+            blocks.append(dict(block=i, order=order, a_ms=sum(t["makespan_ms"] for t in raw["A"]) / 2,
+                               b_ms=sum(t["makespan_ms"] for t in raw["B"]) / 2,
+                               a_raw=[t["makespan_ms"] for t in raw["A"]], b_raw=[t["makespan_ms"] for t in raw["B"]],
+                               a_p90=[t["p90_ms"] for t in raw["A"]], b_p90=[t["p90_ms"] for t in raw["B"]],
+                               a_p50=[t["p50_ms"] for t in raw["A"]], b_p50=[t["p50_ms"] for t in raw["B"]],
+                               outputs_within_budget=checked))
+            if not checked:
+                break
+    status = "PASS" if len(blocks) == a.blocks and all(b["outputs_within_budget"] for b in blocks) else "FAIL"
+    m4.write(out / "timing.json", dict(blocks=blocks, status=status))
+    meta.update(status=status, finished=time.time())
+    m4.write(out / "meta.json", meta)
+    print(json.dumps(dict(comparison=a.comparison, start=a.start, status=status,
+                          ratio=sum(b["a_ms"] for b in blocks) / max(1e-9, sum(b["b_ms"] for b in blocks)))), flush=True)
+    return 0 if status == "PASS" else 4
+
+
 def main():
     global SMS
+    SMS = torch.cuda.get_device_properties(0).multi_processor_count
+    torch.backends.cuda.matmul.allow_tf32 = False
+    if len(sys.argv) > 1 and sys.argv[1] in ("select", "start"):
+        mode = sys.argv.pop(1)
+        p = argparse.ArgumentParser()
+        p.add_argument("--out", required=True)
+        if mode == "select":
+            p.add_argument("--case", required=True)
+            p.add_argument("--reps", type=int, default=5)
+            return mode_select(p.parse_args())
+        p.add_argument("--table", required=True)
+        p.add_argument("--table-sha256", required=True)
+        p.add_argument("--comparison", required=True)
+        p.add_argument("--start", type=int, required=True)
+        p.add_argument("--blocks", type=int, default=20)
+        return mode_start(p.parse_args())
+    if len(sys.argv) > 1 and sys.argv[1] == "decompose":
+        sys.argv.pop(1)
+    return mode_decompose()
+
+
+def mode_decompose():
     p = argparse.ArgumentParser()
     p.add_argument("--out", required=True)
     p.add_argument("--cell", required=True)
@@ -205,8 +368,6 @@ def main():
     p.add_argument("--reps", type=int, default=7)
     p.add_argument("--no-micro", action="store_true", help="skip the recurrence microbench and row checks")
     a = p.parse_args()
-    SMS = torch.cuda.get_device_properties(0).multi_processor_count
-    torch.backends.cuda.matmul.allow_tf32 = False
     ident = runtime_identity()
     pol = policy()
     rec = dict(cell=a.cell, width=a.width, steps=a.steps, group=a.group, sms=SMS, identity=ident, cases=[], started=time.time())
@@ -296,4 +457,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

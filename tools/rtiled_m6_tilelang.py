@@ -8,6 +8,7 @@ Stages:
             and CUDA Graph replay (also after changing the bound initial state); difference to Triton R tiling
   stress    oversubscribed grids (many queued clusters, or grid slots), 50 bit-identical repeats
   vs_cluster grid path only, where the cluster path also exists: bitwise equal to it (same GEMM, same epilogue)
+  vs_bm16   --bm > 16 only: bitwise equal to the same path and S with 16-row batch tiles (rows are independent)
 Writes m6.json with every check; status PASS only if every gate passes.
 """
 import argparse
@@ -27,6 +28,7 @@ from flashrnn.flashrnn2.state_contract import begin_sequence
 
 DT = {"float16": torch.float16, "bfloat16": torch.bfloat16}
 SYNC = "cluster"
+BM = 16
 SOURCES = ["flashrnn/flashrnn2/tilelang_cluster.py", "flashrnn/flashrnn2/prepared.py",
            "flashrnn/flashrnn2/execution_policy.py", "flashrnn/flashrnn2/triton_rtiled.py",
            "tools/rtiled_m6_tilelang.py", "fixture_math.py"]
@@ -61,6 +63,7 @@ def inputs(cell, dtype, batch, steps, heads, width, seed, normalizer="nonzero"):
 def call(values, cell, s, **kw):
     ctx = begin_sequence(values[3], cell, values[0].dtype)
     kw.setdefault("sync", SYNC)
+    kw.setdefault("batch_tile", BM)
     return tilelang_cluster.recurrence(*values, cell, sequence_context=ctx, slice_width=s, **kw)
 
 
@@ -101,7 +104,7 @@ def stage_e1(a, rec):
 def stage_protocol(a, rec):
     rows, ok = [], True
     rec["protocol"] = rows  # rows completed before a later exception stay in m6.json
-    cfg = KernelConfig(family="tilelang", slice_width=a.slice, sync=SYNC)
+    cfg = KernelConfig(family="tilelang", slice_width=a.slice, sync=SYNC, batch_tile=BM)
     for batch, steps, heads in ((1, 33, 1), (3, 17, 2), (33, 40, 2)):
         for normalizer in (("zero", "nonzero") if a.cell == "slstm" else ("nonzero",)):
             values = inputs(a.cell, DT[a.dtype], batch, steps, heads, a.width, 11 + batch, normalizer)
@@ -120,7 +123,7 @@ def stage_protocol(a, rec):
             for n in (3, steps - 3):
                 y, state = tilelang_cluster.recurrence(values[0][:, start:start + n], values[1], values[2], state,
                                                        a.cell, sequence_context=ctx, slice_width=a.slice,
-                                                       snapshot_dtype=torch.float32, sync=SYNC)
+                                                       snapshot_dtype=torch.float32, sync=SYNC, batch_tile=BM)
                 parts.append(y)
                 ctx, start = ctx.advance(n), start + n
             checks["public_chunked_calls_bitwise"] = same(torch.cat(parts, 2), full) and same(state, carry)
@@ -191,10 +194,10 @@ def stage_stress(a, rec):
         good = all(same(y, first[0]) and same(c, first[1])
                    for y, c in (call(values, a.cell, a.slice, output_mode="last") for _ in range(50)))
         k = a.width // a.slice
-        row = dict(batch=batch, steps=steps, heads=heads, ctas=k * ((batch + 15) // 16) * heads,
+        row = dict(batch=batch, steps=steps, heads=heads, ctas=k * ((batch + BM - 1) // BM) * heads,
                    repeats=50, bitwise=good, status="PASS" if good else "FAIL")
         if SYNC == "grid":
-            row["grid_plan"] = tilelang_cluster.grid_plan(batch, heads, a.width, a.slice, tilelang_cluster.sm_count())
+            row["grid_plan"] = tilelang_cluster.grid_plan(batch, heads, a.width, a.slice, tilelang_cluster.sm_count(), BM)
         rows.append(row)
         ok &= good
     rec["stress"] = rows
@@ -223,10 +226,32 @@ def stage_vs_cluster(a, rec):
     return ok
 
 
+def stage_vs_bm16(a, rec):
+    """A wider batch tile changes only how many rows share one WGMMA (N); each row's arithmetic is the same."""
+    if BM == 16:
+        raise ValueError("vs_bm16 needs --bm > 16")
+    rows, ok = [], True
+    for batch, steps, heads in ((3, 17, 2), (33, 40, 2), (200, 64, 2)):
+        values = inputs(a.cell, DT[a.dtype], batch, steps, heads, a.width, 31 + batch)
+        checks = {}
+        for mode, snap in (("full", torch.float32), ("full", None), ("hidden", None), ("last", None)):
+            yw, cw = call(values, a.cell, a.slice, output_mode=mode, snapshot_dtype=snap)
+            y16, c16 = call(values, a.cell, a.slice, output_mode=mode, snapshot_dtype=snap, batch_tile=16)
+            torch.cuda.synchronize()
+            checks[f"{mode}_{'fp32' if snap else 'input'}"] = dict(
+                bitwise=same(yw, y16) and same(cw, c16), output_max_abs=float((yw.float() - y16.float()).abs().max()),
+                carry_max_abs=float((cw - c16).abs().max()))
+        good = all(c["bitwise"] for c in checks.values())
+        rows.append(dict(batch=batch, steps=steps, heads=heads, checks=checks, status="PASS" if good else "FAIL"))
+        ok &= good
+    rec["vs_bm16"] = rows
+    return ok
+
+
 def stage_sanity(a, rec):
     """Small case for compute-sanitizer: one call, per-step launches and a reduced output."""
     values = inputs(a.cell, DT[a.dtype], 3, 9, 2, a.width, 3)
-    cfg = KernelConfig(family="tilelang", slice_width=a.slice, sync=SYNC)
+    cfg = KernelConfig(family="tilelang", slice_width=a.slice, sync=SYNC, batch_tile=BM)
     full, carry = call(values, a.cell, a.slice, snapshot_dtype=torch.float32)
     y1, c1 = PreparedSequence(*values, a.cell, snapshot_dtype=torch.float32, config=cfg, chunks=[1] * 9).run()
     yl, _ = call(values, a.cell, a.slice, output_mode="last", snapshot_dtype=torch.float32)
@@ -245,16 +270,18 @@ def main():
     p.add_argument("--slice", type=int, required=True)
     p.add_argument("--stages", default="e1,protocol,stress")
     p.add_argument("--sync", choices=("cluster", "grid"), default="cluster")
+    p.add_argument("--bm", type=int, default=16, help="batch tile (rows per CTA per step, WGMMA N)")
     a = p.parse_args()
-    global SYNC
-    SYNC = a.sync
+    global SYNC, BM
+    SYNC, BM = a.sync, a.bm
     torch.backends.cuda.matmul.allow_tf32 = False
-    rec = dict(cell=a.cell, dtype=a.dtype, width=a.width, slice_width=a.slice, sync=a.sync, identity=runtime_identity(),
+    rec = dict(cell=a.cell, dtype=a.dtype, width=a.width, slice_width=a.slice, sync=a.sync, bm=a.bm,
+               identity=runtime_identity(),
                source={f: hashlib.sha256(Path(f).read_bytes()).hexdigest() for f in SOURCES},
                uuid=os.environ.get("FRNN_GPU_UUID"), started=time.time(), gates={})
     stages = a.stages.split(",")
     for name, fn in (("e1", stage_e1), ("protocol", stage_protocol), ("stress", stage_stress),
-                     ("vs_cluster", stage_vs_cluster), ("sanity", stage_sanity)):
+                     ("vs_cluster", stage_vs_cluster), ("vs_bm16", stage_vs_bm16), ("sanity", stage_sanity)):
         if name not in stages:
             continue
         try:
@@ -267,7 +294,7 @@ def main():
     rec["finished"] = time.time()
     write(Path(a.out) / "m6.json", rec)
     write(Path(a.out) / "DONE.json", dict(finished=time.strftime("%Y-%m-%dT%H:%M:%S%z")))
-    print(json.dumps({k: rec[k] for k in ("cell", "dtype", "width", "slice_width", "sync", "gates", "status")}),
+    print(json.dumps({k: rec[k] for k in ("cell", "dtype", "width", "slice_width", "sync", "bm", "gates", "status")}),
           flush=True)
 
 

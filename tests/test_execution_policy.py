@@ -60,6 +60,10 @@ class TileLangPolicyContract(unittest.TestCase):
         cfg = KernelConfig(family="tilelang", slice_width=16, sync="cluster")
         self.assertEqual((cfg.family, cfg.slice_width, cfg.warps), ("tilelang", 16, 4))
         self.assertEqual(KernelConfig(family="tilelang", slice_width=32, sync="grid").sync, "grid")
+        self.assertEqual(KernelConfig(family="tilelang", slice_width=16, sync="cluster", batch_tile=128).batch_tile, 128)
+        for tile in (8, 48, 256):
+            with self.assertRaises(ValueError):
+                KernelConfig(family="tilelang", slice_width=16, sync="cluster", batch_tile=tile)
         for kwargs in (dict(family="tilelang", slice_width=16), dict(family="tilelang", slice_width=128, sync="cluster"),
                        dict(family="tilelang", slice_width=64, sync="grid"),
                        dict(family="tilelang", slice_width=32, sync="none"),
