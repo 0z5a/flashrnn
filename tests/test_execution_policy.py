@@ -37,5 +37,23 @@ class PolicyContract(unittest.TestCase):
                 KernelConfig(batch_tile=tile)
 
 
+class RTiledPolicyContract(unittest.TestCase):
+    def test_unknown_large_width_uses_rtiled_default(self):
+        self.assertEqual(ExecutionPolicy().select("lstm", "float16", 16, 128, 1, 128), KernelConfig())
+        cfg = ExecutionPolicy().select("lstm", "float16", 16, 128, 1, 256)
+        self.assertEqual((cfg.family, cfg.slice_width, cfg.sync, cfg.warps), ("mma_rtiled", 64, "grid", 8))
+        self.assertEqual(ExecutionPolicy().select("slstm", "bfloat16", 4, 64, 2, 768).slice_width, 32)
+
+    def test_rtiled_fields_are_validated(self):
+        self.assertEqual(KernelConfig(family="mma_rtiled", slice_width=32, sync="grid").slice_width, 32)
+        for kwargs in (dict(family="mma_rtiled"), dict(family="mma_rtiled", slice_width=48, sync="grid"),
+                       dict(family="mma_rtiled", slice_width=64, sync="cluster"),
+                       dict(family="mma_rtiled", slice_width=64, sync="grid", batch_tile=32),
+                       dict(family="mma_rtiled", slice_width=64, sync="grid", weight_operand="a"),
+                       dict(slice_width=64), dict(sync="grid"), dict(pad_k=True)):
+            with self.assertRaises(ValueError):
+                KernelConfig(**kwargs)
+
+
 if __name__ == "__main__":
     unittest.main()

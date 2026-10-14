@@ -137,3 +137,34 @@ def compile_kernel(batch, steps, heads, width, slice_width, *, cell="lstm", dtyp
     target = target or {"kind": "cuda", "arch": "sm_90a"}
     return tilelang.compile(build(batch, steps, heads, width, slice_width, cell=cell, dtype=dtype,
                                   threads=threads), target=target)
+
+
+_KERNELS = {}
+
+
+def recurrence(wx, recurrent, bias, initial, cell="lstm", *, slice_width=64, threads=128):
+    """Spike wrapper: one full logical call from step 0.
+
+    Returns hidden history [B,T,H,D] in the input dtype and the FP32 compute
+    carry [S,B,1,H,D]. No chunk continuation or full-state output yet.
+    """
+    import torch
+
+    batch, steps, gates, heads, width = wx.shape
+    if gates != 4 or wx.dtype not in (torch.float16, torch.bfloat16):
+        raise ValueError("spike supports FP16/BF16 LSTM/sLSTM inputs")
+    dtype = {torch.float16: "float16", torch.bfloat16: "bfloat16"}[wx.dtype]
+    key = (batch, steps, heads, width, slice_width, cell, dtype, threads)
+    if key not in _KERNELS:
+        _KERNELS[key] = compile_kernel(batch, steps, heads, width, slice_width, cell=cell, dtype=dtype,
+                                       threads=threads)
+    states = 4 if cell == "slstm" else 2
+    if cell == "slstm":
+        zero = torch.all(initial[2] == 0).to(torch.int32).reshape(1)
+    else:
+        zero = torch.zeros(1, dtype=torch.int32, device=wx.device)
+    output = torch.empty((batch, steps, heads, width), dtype=wx.dtype, device=wx.device)
+    final = torch.empty((states, batch, 1, heads, width), dtype=torch.float32, device=wx.device)
+    _KERNELS[key](wx.contiguous(), recurrent.contiguous(), bias.contiguous(), initial.float().contiguous(), zero,
+                  output, final)
+    return output, final
