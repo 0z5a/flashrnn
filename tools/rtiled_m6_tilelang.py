@@ -19,7 +19,7 @@ from pathlib import Path
 import torch
 
 from flashrnn.flashrnn2 import tilelang_cluster, triton_rtiled
-from flashrnn.flashrnn2.execution_policy import KernelConfig, runtime_identity
+from flashrnn.flashrnn2.execution_policy import KernelConfig, default_config, runtime_identity
 from flashrnn.flashrnn2.prepared import PreparedSequence
 from flashrnn.flashrnn2.state_contract import begin_sequence
 
@@ -60,6 +60,17 @@ def call(values, cell, s, **kw):
     return tilelang_cluster.recurrence(*values, cell, sequence_context=ctx, slice_width=s, **kw)
 
 
+def ragged_chunks(steps, sizes=(1, 3, 13, 7, 9), count=3):
+    """Uneven chunk lengths: up to `count` leading sizes, then the positive remainder (sum == steps)."""
+    chunks, left = [], steps
+    for n in sizes:
+        if len(chunks) == count or n >= left:
+            break
+        chunks.append(n)
+        left -= n
+    return chunks + [left]
+
+
 def stage_e1(a, rec):
     import fixture_math as fm
     rows = []
@@ -85,6 +96,7 @@ def stage_e1(a, rec):
 
 def stage_protocol(a, rec):
     rows, ok = [], True
+    rec["protocol"] = rows  # rows completed before a later exception stay in m6.json
     cfg = KernelConfig(family="tilelang", slice_width=a.slice, sync="cluster")
     for batch, steps, heads in ((1, 33, 1), (3, 17, 2), (33, 40, 2)):
         for normalizer in (("zero", "nonzero") if a.cell == "slstm" else ("nonzero",)):
@@ -95,8 +107,7 @@ def stage_protocol(a, rec):
             p1 = PreparedSequence(*values, a.cell, snapshot_dtype=torch.float32, config=cfg, chunks=[1] * steps)
             y1, c1 = p1.run()
             checks["per_step_launches_bitwise"] = same(y1, full) and same(c1, carry)
-            ragged = [n for n in (1, 3, 13, 7, 9) if n < steps][:3]
-            ragged.append(steps - sum(ragged))
+            ragged = ragged_chunks(steps)
             pr = PreparedSequence(*values, a.cell, snapshot_dtype=torch.float32, config=cfg, chunks=ragged)
             yr, cr = pr.run()
             checks["prepared_ragged_chunks_bitwise"] = same(yr, full) and same(cr, carry)
@@ -144,19 +155,27 @@ def stage_protocol(a, rec):
                 checks["graph_error"] = f"{type(e).__name__}: {str(e)[:300]}"
             finally:
                 pg.close()
-            tctx = begin_sequence(values[3], a.cell, values[0].dtype)
-            ty, tc = triton_rtiled.recurrence(*values, a.cell, sequence_context=tctx, slice_width=a.slice,
-                                              snapshot_dtype=torch.float32)
-            torch.cuda.synchronize()
-            row = dict(batch=batch, steps=steps, heads=heads, normalizer=normalizer, checks=checks,
-                       vs_triton=dict(history_max_abs=float((full - ty).abs().max()),
-                                      carry_max_abs=float((carry - tc).abs().max()),
-                                      bitwise=same(full, ty) and same(carry, tc)))
+            # Informational, not a gate: distance to the conservative Triton R-tiled default.
+            tcfg = default_config(a.width)
+            try:
+                tctx = begin_sequence(values[3], a.cell, values[0].dtype)
+                ty, tc = triton_rtiled.recurrence(*values, a.cell, sequence_context=tctx,
+                                                  slice_width=tcfg.slice_width, num_warps=tcfg.warps,
+                                                  snapshot_dtype=torch.float32)
+                torch.cuda.synchronize()
+                vs_triton = dict(slice_width=tcfg.slice_width, warps=tcfg.warps,
+                                 history_max_abs=float((full - ty).abs().max()),
+                                 carry_max_abs=float((carry - tc).abs().max()),
+                                 bitwise=same(full, ty) and same(carry, tc))
+            except Exception as e:  # noqa: BLE001 - recorded, never turns the qualification into ERROR
+                vs_triton = dict(error=f"{type(e).__name__}: {str(e)[:300]}")
+            row = dict(batch=batch, steps=steps, heads=heads, normalizer=normalizer, chunks=ragged, checks=checks,
+                       vs_triton=vs_triton)
             row["status"] = "PASS" if all(v is True for k, v in checks.items() if not k.endswith("_error")) \
                 else "FAIL"
             ok &= row["status"] == "PASS"
             rows.append(row)
-    rec["protocol"] = rows
+            write(Path(a.out) / "m6.json", rec)
     return ok
 
 
