@@ -25,7 +25,7 @@ import triton.language as tl
 
 from .state_contract import SequenceContext, state_contract
 
-SPIN_LIMIT = 1 << 26
+SPIN_LIMIT = 1 << 20
 
 
 @triton.jit
@@ -35,8 +35,11 @@ def _group_barrier(SYNC, slot, target, ERR, SPIN: tl.constexpr):
     tl.atomic_add(SYNC + slot, 1, sem="release", scope="gpu")
     seen = tl.atomic_add(SYNC + slot, 0, sem="acquire", scope="gpu")
     spins = seen * 0
-    while (seen < target) & (spins < SPIN):
+    failed = seen * 0
+    # Stop early once any CTA of the launch has already reported a failed barrier.
+    while (seen < target) & (spins < SPIN) & (failed == 0):
         seen = tl.atomic_add(SYNC + slot, 0, sem="acquire", scope="gpu")
+        failed = tl.load(ERR, volatile=True)
         spins += 1
     if seen < target:
         tl.atomic_max(ERR, 1)

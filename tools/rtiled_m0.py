@@ -105,28 +105,22 @@ def ptx_features(ptx):
 
 def stage_resources(out, args):
     rows = []
-    for cell in args.cells:
-        for width in args.widths:
-            for s in (16, 32, 64, 128):
-                if s > triton.next_power_of_2(width):
-                    continue
-                for warps in (4, 8):
-                    for pad in ((False, True) if triton_rtiled.k_parts(width)[1] else (False,)):
-                        rec = dict(cell=cell, dtype="float16", width=width, slice_width=s, warps=warps, pad_k=pad)
-                        try:
-                            values = fixture(cell, torch.float16, 2, 3, 1, width, 7)
-                            d = {}
-                            run(values, cell, slice_width=s, num_warps=warps, pad_k=pad, diagnostics=d)
-                            torch.cuda.synchronize()
-                            rec.update(status="COMPILED", registers=d["registers"], spills=d["spills"],
-                                       shared_bytes=d["shared_bytes"], splits=d["splits"], k_parts=d["k_parts"],
-                                       ptx=ptx_features(d["ptx"]),
-                                       error_flag=int(d["error_flag"].item()),
-                                       sync_ok=d["sync_counts"].tolist()[0] == d["expected_sync_counts"])
-                        except Exception as e:  # noqa: BLE001 - resource failures are data here
-                            rec.update(status="FAILED", error=f"{type(e).__name__}: {str(e)[:300]}")
-                        rows.append(rec)
-                        print(json.dumps(rec), flush=True)
+    for cfg in args.configs:
+        rec = dict(cfg, dtype="float16")
+        try:
+            values = fixture(cfg["cell"], torch.float16, 2, 3, 1, cfg["width"], 7)
+            d = {}
+            run(values, cfg["cell"], slice_width=cfg["slice_width"], num_warps=cfg["warps"], pad_k=cfg["pad_k"],
+                sync=args.sync, diagnostics=d)
+            torch.cuda.synchronize()
+            rec.update(status="COMPILED", sync=args.sync, registers=d["registers"], spills=d["spills"],
+                       shared_bytes=d["shared_bytes"], splits=d["splits"], k_parts=d["k_parts"],
+                       ptx=ptx_features(d["ptx"]), error_flag=int(d["error_flag"].item()),
+                       sync_ok=d["sync_counts"].tolist()[0] == d["expected_sync_counts"])
+        except Exception as e:  # noqa: BLE001 - resource failures are data here
+            rec.update(status="FAILED", error=f"{type(e).__name__}: {str(e)[:300]}")
+        rows.append(rec)
+        print(json.dumps(rec), flush=True)
     write(out / "resources.json", dict(identity=identity(), rows=rows))
     return rows
 
@@ -264,7 +258,8 @@ def stage_e1(out, args, feasible):
                                        for k in ("wx", "r", "bias", "initial"))
                         ref, final = fx["reference_fp64"], fx["reference_final_fp64"]
                         arms = [(dict(c), lambda c=c, **kw: run(values, cell, slice_width=c["slice_width"],
-                                num_warps=c["warps"], pad_k=c["pad_k"], **kw)) for c in configs.get((cell, width), [])]
+                                num_warps=c["warps"], pad_k=c["pad_k"], sync=args.sync, **kw))
+                                for c in configs.get((cell, width), [])]
                         if width <= 128:
                             ctx = begin_sequence(values[3], cell, values[0].dtype)
                             arms.append((dict(single_cta=True), lambda **kw: triton_persistent.recurrence(
@@ -313,8 +308,11 @@ def stage_explore(out, args, feasible):
         for batch, steps in ((16, 256), (64, 256)):
             values = fixture("lstm", torch.float16, batch, steps, 1, cfg["width"], 3)
             rec = dict(cfg, batch=batch, steps=steps)
-            rec["grid_ms"] = timed(lambda: run(values, "lstm", output_mode="hidden", **kw))
-            rec["launch_ms"] = timed(lambda: run(values, "lstm", sync="launch", output_mode="hidden", **kw), 3)
+            ctx = begin_sequence(values[3], "lstm", torch.float16)
+            call = lambda sync: triton_rtiled.recurrence(  # noqa: E731
+                *values, "lstm", sequence_context=ctx, sync=sync, output_mode="hidden", **kw)
+            rec["grid_ms"] = timed(lambda: call("grid"))
+            rec["launch_ms"] = timed(lambda: call("launch"), 3)
             if cfg["width"] <= 128:
                 ctx = begin_sequence(values[3], "lstm", torch.float16)
                 rec["single_cta_ms"] = timed(lambda: triton_persistent.recurrence(
@@ -322,12 +320,37 @@ def stage_explore(out, args, feasible):
             rec["grid_us_per_step"] = rec["grid_ms"] * 1000 / steps
             rows.append(rec)
             print(json.dumps(rec), flush=True)
-    write(out / "explore-timing.json", dict(identity=identity(), note="exploratory, not paired", rows=rows))
+    write(out / "explore-timing.json", dict(
+        identity=identity(), rows=rows,
+        note="exploratory, not paired; R-tiled calls include per-call buffer allocation and memsets "
+             "absent from the single-CTA call; not usable for the E2 switch point"))
+
+
+def canary(out):
+    """Tiny grid-vs-launch case: if the barrier protocol is broken, skip every grid stage."""
+    rec = dict(cell="lstm", width=128, slice_width=64, warps=4, batch=3, steps=5)
+    try:
+        values = fixture("lstm", torch.float16, 3, 5, 1, 128, 1)
+        d = {}
+        grid = run(values, "lstm", slice_width=64, diagnostics=d)
+        launch = run(values, "lstm", slice_width=64, sync="launch")
+        torch.cuda.synchronize()
+        rec.update(error_flag=int(d["error_flag"].item()),
+                   sync_counts=d["sync_counts"].tolist()[0], expected=d["expected_sync_counts"],
+                   bitwise=all(same_bits(a, b) for a, b in zip(grid, launch)))
+        rec["status"] = "PASS" if rec["error_flag"] == 0 and rec["bitwise"] and \
+            rec["sync_counts"] == rec["expected"] else "FAIL"
+    except Exception:  # noqa: BLE001
+        rec.update(status="ERROR", error=traceback.format_exc()[-1500:])
+    write(out / "canary.json", rec)
+    print(json.dumps(rec), flush=True)
+    return rec["status"] == "PASS"
 
 
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--out", required=True)
+    p.add_argument("--configs", required=True, help="frozen JSON list of compile-feasible configurations")
     p.add_argument("--stages", default="resources,protocol,e1,stress,explore")
     p.add_argument("--cells", default="lstm,slstm")
     p.add_argument("--widths", default="64,96,128,192,256,384,512,768")
@@ -337,27 +360,30 @@ def main():
     args.deadline = time.time() + 60 * args.minutes
     args.widths = [int(x) for x in args.widths.split(",")]
     args.cells = args.cells.split(",")
+    args.configs = [c for c in json.loads(Path(args.configs).read_text())
+                    if c["cell"] in args.cells and c["width"] in args.widths]
     out = Path(args.out)
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
     stages = args.stages.split(",")
     write(out / "identity.json", identity())
+    grid_ok = canary(out)
+    args.sync = "grid" if grid_ok else "launch"
     rows = stage_resources(out, args)
     ok = [r for r in rows if r["status"] == "COMPILED" and r["error_flag"] == 0 and r["sync_ok"]]
     feasible = [dict(cell=r["cell"], width=r["width"], slice_width=r["slice_width"], warps=r["warps"],
                      pad_k=r["pad_k"]) for r in ok]
-    write(out / "feasible.json", feasible)
-    # Protocol/numerics: every compiled slice at four warps, and padded K only where it differs.
-    checked = [c for c in feasible if c["warps"] == 4 and (not c["pad_k"] or c["width"] in (192, 384))]
-    if "protocol" in stages:
-        stage_protocol(out, args, checked)
+    write(out / "feasible.json", dict(sync=args.sync, configs=feasible))
+    if grid_ok and "protocol" in stages:
+        stage_protocol(out, args, feasible)
     if "e1" in stages:
-        stage_e1(out, args, checked)
-    if "stress" in stages:
+        stage_e1(out, args, feasible)
+    if grid_ok and "stress" in stages:
         stage_stress(out, args, feasible)
-    if "explore" in stages:
+    if grid_ok and "explore" in stages:
         stage_explore(out, args, feasible)
-    write(out / "DONE.json", dict(finished=time.strftime("%Y-%m-%dT%H:%M:%S%z")))
+    write(out / "DONE.json", dict(finished=time.strftime("%Y-%m-%dT%H:%M:%S%z"), grid_ok=grid_ok,
+                                  timed_out=past(args)))
 
 
 if __name__ == "__main__":
