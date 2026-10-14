@@ -155,6 +155,22 @@ def v1_module():
     sys.path.insert(0, str(V1_BASE / "source/tools/flashrnn2"))
     from build_without_ninja import TaskBuilder  # noqa: E402
 
+    # Same namespace adapter as the external-baseline cohort: the cluster's torch 2.4
+    # pre-release exposes these decorators only under torch.cuda.amp. Pinned files unchanged.
+    if not hasattr(torch.amp, "custom_fwd"):
+        def custom_fwd(*positional, device_type, **keywords):
+            assert device_type == "cuda"
+            return torch.cuda.amp.custom_fwd(*positional, **keywords)
+
+        def custom_bwd(*positional, device_type, **keywords):
+            assert device_type == "cuda"
+            if not positional:
+                assert not keywords
+                return torch.cuda.amp.custom_bwd
+            return torch.cuda.amp.custom_bwd(*positional, **keywords)
+        torch.amp.custom_fwd = custom_fwd
+        torch.amp.custom_bwd = custom_bwd
+
     spec = importlib.util.spec_from_file_location("frnn1_pinned", V1_BASE / "pinned/flashrnn/__init__.py",
                                                   submodule_search_locations=[str(V1_BASE / "pinned/flashrnn")])
     package = importlib.util.module_from_spec(spec)
