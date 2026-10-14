@@ -170,7 +170,8 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, slice_width=64, thr
     return output, final
 
 
-def build_v2(batch, steps, heads, width, slice_width, *, cell="lstm", dtype="float16", threads=128, bm=16):
+def build_v2(batch, steps, heads, width, slice_width, *, cell="lstm", dtype="float16", threads=128, bm=16,
+             exchange="bulk"):
     """Same algorithm as tk_rtiled.cu: gates = R_slice[4S x D] @ h^T[D x 16] (weights as operand A), h slices
     exchanged by asynchronous SM-to-SM copies that complete on the receiver's mbarrier (no per-step cluster
     barrier). Double-buffered h^T; one mbarrier per buffer."""
@@ -225,21 +226,24 @@ def build_v2(batch, steps, heads, width, slice_width, *, cell="lstm", dtype="flo
                     m[b, j] = T.if_then_else(valid, INIT[3, bt * BM + b, 0, head, s * S + j], 0.0)
             tx = T.get_thread_binding()
             # One arrival per phase: the barriers were initialized with an arrive count of 1.
-            if tx == 0:
-                T.mbarrier_arrive_expect_tx(ready[1], (k - 1) * slice_bytes)
+            if exchange == "bulk":
+                if tx == 0:
+                    T.mbarrier_arrive_expect_tx(ready[1], (k - 1) * slice_bytes)
             T.fence_proxy_async()
             T.cluster_sync()
 
             for t in T.serial(steps):
-                if t > 0:
-                    T.mbarrier_wait_parity(ready[t % 2], ((t - 1) // 2) % 2)
+                if exchange == "bulk":
+                    if t > 0:
+                        T.mbarrier_wait_parity(ready[t % 2], ((t - 1) // 2) % 2)
                 if t % 2 == 0:
                     T.gemm(rs, h0, gates, clear_accum=True)
                 else:
                     T.gemm(rs, h1, gates, clear_accum=True)
                 T.copy(gates, stage)
-                if t >= 1 and t + 1 < steps and tx == 0:
-                    T.mbarrier_arrive_expect_tx(ready[(t + 1) % 2], (k - 1) * slice_bytes)
+                if exchange == "bulk":
+                    if t >= 1 and t + 1 < steps and tx == 0:
+                        T.mbarrier_arrive_expect_tx(ready[(t + 1) % 2], (k - 1) * slice_bytes)
                 for b, j in T.Parallel(BM, S):
                     row = bt * BM + b
                     col = s * S + j
@@ -273,7 +277,16 @@ def build_v2(batch, steps, heads, width, slice_width, *, cell="lstm", dtype="flo
                             h1[col, b] = T.cast(hid[b, j], dtype)
                         else:
                             h0[col, b] = T.cast(hid[b, j], dtype)
-                if t + 1 < steps:
+                if exchange == "sync" and t + 1 < steps:
+                    # Debug variant: synchronous SM-to-SM stores and one cluster barrier per step.
+                    for r in T.serial(k):
+                        if r != s:
+                            if t % 2 == 0:
+                                T.copy_cluster(h1[s * S:(s + 1) * S, 0:BM], h1[s * S:(s + 1) * S, 0:BM], dst_block=r)
+                            else:
+                                T.copy_cluster(h0[s * S:(s + 1) * S, 0:BM], h0[s * S:(s + 1) * S, 0:BM], dst_block=r)
+                    T.cluster_sync()
+                if exchange == "bulk" and t + 1 < steps:
                     # Own slice written by all threads -> async-proxy fence -> one block barrier -> thread 0
                     # issues the k-1 bulk copies (same order as the ThunderKittens kernel).
                     T.fence_proxy_async()
@@ -305,16 +318,17 @@ def build_v2(batch, steps, heads, width, slice_width, *, cell="lstm", dtype="flo
 _KERNELS_V2 = {}
 
 
-def recurrence_v2(wx, recurrent, bias, initial, cell="lstm", *, slice_width=32, threads=128):
+def recurrence_v2(wx, recurrent, bias, initial, cell="lstm", *, slice_width=32, threads=128, exchange="bulk"):
     """Bulk-DSMEM TileLang path (same algorithm as the ThunderKittens kernel); same contract as recurrence()."""
     import torch
 
     batch, steps, gates, heads, width = wx.shape
     dtype = {torch.float16: "float16", torch.bfloat16: "bfloat16"}[wx.dtype]
-    key = (batch, steps, heads, width, slice_width, cell, dtype, threads)
+    key = (batch, steps, heads, width, slice_width, cell, dtype, threads, exchange)
     if key not in _KERNELS_V2:
         _KERNELS_V2[key] = tilelang.compile(build_v2(batch, steps, heads, width, slice_width, cell=cell, dtype=dtype,
-                                                     threads=threads), target={"kind": "cuda", "arch": "sm_90a"})
+                                                     threads=threads, exchange=exchange),
+                                            target={"kind": "cuda", "arch": "sm_90a"})
     states = 4 if cell == "slstm" else 2
     zero = (torch.all(initial[2] == 0) if cell == "slstm"
             else torch.zeros((), dtype=torch.bool, device=wx.device)).to(torch.int32).reshape(1)
