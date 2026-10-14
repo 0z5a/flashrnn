@@ -351,7 +351,7 @@ def sm_count():
 
 
 def kernel(batch, total_steps, heads, width, slice_width, *, cell, dtype, mode, snapshot, sync="cluster", sms=None,
-           bm=16):
+           bm=16, threads=128):
     """Compiled kernel for one logical-call shape; chunk length, offset and start are runtime arguments."""
     import tilelang
 
@@ -359,13 +359,15 @@ def kernel(batch, total_steps, heads, width, slice_width, *, cell, dtype, mode, 
         sms = sms or sm_count()
         key = ("grid", sms, batch, total_steps, heads, width, slice_width, cell, dtype, mode, snapshot)
         func = lambda: build_grid(batch, total_steps, heads, width, slice_width, sms=sms, cell=cell,  # noqa: E731
-                                  dtype=dtype, mode=mode, snapshot=snapshot, bm=bm)
+                                  dtype=dtype, mode=mode, snapshot=snapshot, bm=bm, threads=threads)
     else:
         key = (batch, total_steps, heads, width, slice_width, cell, dtype, mode, snapshot)
         func = lambda: build(batch, total_steps, heads, width, slice_width, cell=cell, dtype=dtype,  # noqa: E731
-                             mode=mode, snapshot=snapshot, bm=bm)
+                             mode=mode, snapshot=snapshot, bm=bm, threads=threads)
     if bm != 16:
         key = key + (("bm", bm),)  # BM = 16 keys stay as they were
+    if threads != 128:
+        key = key + (("threads", threads),)
     if key not in _KERNELS:
         _KERNELS[key] = tilelang.compile(func(), target={"kind": "cuda", "arch": "sm_90a"})
     return _KERNELS[key]
@@ -378,12 +380,13 @@ def version():
 
 
 def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context, slice_width=32,
-               output_mode="full", snapshot_dtype=None, sync="cluster", batch_tile=16):
+               output_mode="full", snapshot_dtype=None, sync="cluster", batch_tile=16, threads=128):
     """Public per-call API with the triton_rtiled contract; returns (output, FP32 compute carry).
 
     sync="cluster" exchanges h inside a thread-block cluster (k <= 16); sync="grid" exchanges it
     through global memory under one cooperative grid barrier per step (k up to the SM count).
-    batch_tile is the number of batch rows one CTA carries per step (WGMMA N).
+    batch_tile is the number of batch rows one CTA carries per step (WGMMA N); threads is the CTA size
+    (128 = one warpgroup, 256 = two).
     """
     import torch
 
@@ -421,7 +424,7 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context, s
     names = {torch.float16: "float16", torch.bfloat16: "bfloat16", torch.float32: "float32"}
     snap = wx.dtype if snapshot_dtype is None else snapshot_dtype
     fn = kernel(batch, steps, heads, width, slice_width, cell=cell, dtype=names[wx.dtype], mode=output_mode,
-                snapshot=names[snap], sync=sync, bm=batch_tile)
+                snapshot=names[snap], sync=sync, bm=batch_tile, threads=threads)
     out_shape = {"full": (states, batch, steps, heads, width), "hidden": (batch, steps, heads, width),
                  "last": (batch, 1, heads, width)}[output_mode]
     output = torch.empty(out_shape, device=wx.device, dtype=snap)

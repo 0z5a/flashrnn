@@ -88,7 +88,8 @@ class PreparedSequence:
                 raise ValueError("the TileLang cluster path supports FP16 and BF16")
             self.tilelang_kernel = tilelang_cluster.kernel(
                 batch, steps, heads, width, config.slice_width, cell=cell, dtype=names[wx.dtype],
-                mode=output_mode, snapshot=names[dtype], sync=config.sync, bm=config.batch_tile)
+                mode=output_mode, snapshot=names[dtype], sync=config.sync, bm=config.batch_tile,
+                threads=32 * config.warps)
             # Fixed FP32 initial state and int32 normalizer flag, refreshed inside every (captured) run.
             self.initial32 = torch.empty(initial.shape, dtype=torch.float32, device=wx.device)
             self.zero32 = torch.empty((1,), dtype=torch.int32, device=wx.device)

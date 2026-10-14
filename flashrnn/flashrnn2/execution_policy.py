@@ -28,8 +28,9 @@ class KernelConfig:
             # k = D / slice_width CTAs, one warpgroup each (flashrnn2.tilelang_cluster): sync "cluster"
             # exchanges h through distributed shared memory with an mbarrier per step (k <= 16); sync "grid"
             # exchanges it through global memory under one cooperative grid barrier per step.
-            if self.batch_tile not in (16, 32, 64, 128) or self.weight_operand != "b" or self.warps != 4 or self.pad_k:
-                raise ValueError("the TileLang R-tiled paths use 16/32/64/128-row batch tiles and one warpgroup")
+            if self.batch_tile not in (16, 32, 64, 128) or self.weight_operand != "b" or self.pad_k:
+                raise ValueError("the TileLang R-tiled paths use 16/32/64/128-row batch tiles and weight operand b")
+            # warps: 4 (one warpgroup) or 8 (two warpgroups per CTA); checked with every family below.
             if not ((self.sync == "cluster" and self.slice_width in (16, 32, 64))
                     or (self.sync == "grid" and self.slice_width in (16, 32))):
                 raise ValueError("TileLang needs cluster sync with a slice of 16/32/64 or grid sync with 16/32")

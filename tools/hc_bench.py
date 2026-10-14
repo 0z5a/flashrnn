@@ -24,7 +24,11 @@ Modes
              makespan repetitions on split-0 fixtures; writes select.json
   start      one process start of one frozen comparison on split-1 fixtures: qualification, 3 warm-up
              bursts per arm, then ABBA/BAAB blocks of whole-burst makespans (rtiled_m4_analyze format)
-A strategy is {"strategy": "s0" | "s0p", "group": rows per call, "config": KernelConfig fields}.
+  profile    run one configuration's recurrence a few times (for ncu with --launch-skip/--launch-count)
+  forward    run the s0p forward of one configuration a few times (for nsys)
+A strategy is {"strategy": "s0" | "s0p", "group": rows per call, "config": KernelConfig fields} and may set
+"graph": true, which serves each group through a CUDA Graph of the whole 4-layer forward (IDs copied into a
+static device buffer, replay, logits to host).
 """
 import argparse
 import json
@@ -55,7 +59,8 @@ def arm(cell, cfg):
         if cfg.family == "tilelang":
             from flashrnn.flashrnn2 import tilelang_cluster
             y, _ = tilelang_cluster.recurrence(wx, r, b, init, cell, sequence_context=ctx, slice_width=cfg.slice_width,
-                                               output_mode="hidden", sync=cfg.sync, batch_tile=cfg.batch_tile)
+                                               output_mode="hidden", sync=cfg.sync, batch_tile=cfg.batch_tile,
+                                               threads=32 * cfg.warps)
         elif cfg.family == "mma_rtiled":
             y, _ = triton_rtiled.recurrence(wx, r, b, init, cell, sequence_context=ctx, slice_width=cfg.slice_width,
                                             num_warps=cfg.warps, pad_k=cfg.pad_k, output_mode="hidden")
@@ -204,6 +209,48 @@ def microbench(cell, width, steps, cfgs, batches, calls=10):
     return rows
 
 
+class GraphForward:
+    """The whole classifier forward for one (rows, steps) captured once and replayed per group."""
+
+    def __init__(self, model, rows, steps, fn):
+        self.model, self.fn = model, fn
+        self.ids = torch.zeros((rows, steps), dtype=torch.int64, device="cuda")
+        side = torch.cuda.Stream()
+        side.wait_stream(torch.cuda.current_stream())
+        with torch.cuda.stream(side):
+            for _ in range(2):
+                self.forward()
+        torch.cuda.current_stream().wait_stream(side)
+        self.graph = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(self.graph):
+            self.logits = self.forward()
+        torch.cuda.synchronize()
+
+    def forward(self):
+        model = self.model
+        x = model.embedding[self.ids]
+        for w, r, b in model.weights:
+            wx = torch.einsum("bti,ghdi->btghd", x, w)
+            hidden = self.fn(wx, r, b, model.initial(self.ids.shape[0], model.dtype))
+            x = hidden[:, :, 0]
+        return x[:, -1] @ model.readout
+
+    def __call__(self, ids):
+        self.ids.copy_(ids)
+        self.graph.replay()
+        return self.logits.cpu()
+
+
+_GRAPHS = {}
+
+
+def graph_arm(model, spec, rows, steps, fn):
+    key = (id(model), json.dumps(spec, sort_keys=True), rows, steps)
+    if key not in _GRAPHS:
+        _GRAPHS[key] = GraphForward(model, rows, steps, fn)
+    return _GRAPHS[key]
+
+
 def ids_for(conc, steps, split):
     g = torch.Generator().manual_seed((20261015 if split == 0 else 20261115) + conc)
     return torch.randint(0, m4.VOCAB, (conc, steps), generator=g)
@@ -214,9 +261,19 @@ def strategy_arm(cell, spec):
 
 
 def burst(model, ids, spec, fn):
-    torch.cuda.synchronize()
-    t0 = time.perf_counter_ns()
-    outs, done = serve(model, list(ids.split(spec["group"])), fn)
+    groups = list(ids.split(spec["group"]))
+    if spec.get("graph"):
+        graphs = [graph_arm(model, spec, len(g), g.shape[1], fn) for g in groups]  # built outside the timed span
+        torch.cuda.synchronize()
+        t0 = time.perf_counter_ns()
+        outs, done = [], []
+        for g, gf in zip(groups, graphs):
+            outs.append(gf(g))
+            done.append((time.perf_counter_ns() - t0) / 1e6)
+    else:
+        torch.cuda.synchronize()
+        t0 = time.perf_counter_ns()
+        outs, done = serve(model, groups, fn)
     makespan = (time.perf_counter_ns() - t0) / 1e6
     per_request = [d for d, grp in zip(done, ids.split(spec["group"])) for _ in range(len(grp))]
     return torch.cat(outs), dict(makespan_ms=makespan, p50_ms=statistics.median(per_request),
@@ -255,6 +312,15 @@ def mode_select(a):
                 errors[name] = f"{type(e).__name__}: {str(e)[:400]}"
         rec.update(qualification=quals, errors=errors)
         ok = [n for n in specs if n in quals and quals[n]["pass"]]
+        # A candidate with a "twin" (same arithmetic, different CTA size) must reproduce it bit for bit.
+        twins = {}
+        for n in ok:
+            t = specs[n].get("twin")
+            if t in ok:
+                a_, _ = burst(model, ids, specs[n], strategy_arm(cell, specs[n]))
+                b_, _ = burst(model, ids, specs[t], strategy_arm(cell, specs[t]))
+                twins[n] = dict(twin=t, bitwise=bool(torch.equal(a_.view(torch.int16), b_.view(torch.int16))))
+        rec["twin_bitwise"] = twins
         fns = {n: strategy_arm(cell, specs[n]) for n in ok}
         for n in ok:
             burst(model, ids, specs[n], fns[n])
@@ -303,6 +369,8 @@ def mode_start(a):
             m4.write(out / "meta.json", meta)
             return 3
         golden = outs["baseline"].cuda()
+        meta["candidate_bitwise_equal_to_baseline"] = bool(torch.equal(outs["candidate"].view(torch.int16),
+                                                                       outs["baseline"].view(torch.int16)))
         fns = {k: strategy_arm(cell, v) for k, v in specs.items()}
         for _ in range(3):
             for k in specs:
@@ -334,10 +402,55 @@ def mode_start(a):
     return 0 if status == "PASS" else 4
 
 
+def mode_profile(a):
+    """Recurrence only: warm-up calls, then the calls a profiler selects by launch index."""
+    cfg = KernelConfig(**json.loads(a.config))
+    model = m4.Model(a.cell, a.width)
+    w, r, b = model.weights[0]
+    g = torch.Generator().manual_seed(11)
+    wx = (torch.randn(a.batch, a.steps, 4, 1, a.width, generator=g) * 0.5).to("cuda", torch.float16)
+    init = model.initial(a.batch, torch.float16)
+    fn = arm(a.cell, cfg)
+    with torch.inference_mode():
+        for _ in range(a.calls):
+            fn(wx, r, b, init)
+        torch.cuda.synchronize()
+    print("HC_PROFILE_DONE", json.dumps(dict(config=cfg.as_dict(), batch=a.batch, steps=a.steps, calls=a.calls)),
+          flush=True)
+    return 0
+
+
+def mode_forward(a):
+    """The s0p forward (all C requests per layer) of one configuration, repeated for a timeline."""
+    cfg = KernelConfig(**json.loads(a.config))
+    model = m4.Model(a.cell, a.width)
+    ids = ids_for(a.concurrency, a.steps, 0)
+    fn = arm(a.cell, cfg)
+    with torch.inference_mode():
+        for _ in range(a.calls):
+            serve(model, [ids], fn)
+        torch.cuda.synchronize()
+    print("HC_FORWARD_DONE", flush=True)
+    return 0
+
+
 def main():
     global SMS
     SMS = torch.cuda.get_device_properties(0).multi_processor_count
     torch.backends.cuda.matmul.allow_tf32 = False
+    if len(sys.argv) > 1 and sys.argv[1] in ("profile", "forward"):
+        mode = sys.argv.pop(1)
+        p = argparse.ArgumentParser()
+        p.add_argument("--out", required=True)
+        p.add_argument("--config", required=True)
+        p.add_argument("--cell", required=True)
+        p.add_argument("--width", type=int, required=True)
+        p.add_argument("--steps", type=int, default=128)
+        p.add_argument("--calls", type=int, default=5)
+        p.add_argument("--batch", type=int, default=1024)
+        p.add_argument("--concurrency", type=int, default=1024)
+        a = p.parse_args()
+        return mode_profile(a) if mode == "profile" else mode_forward(a)
     if len(sys.argv) > 1 and sys.argv[1] in ("select", "start"):
         mode = sys.argv.pop(1)
         p = argparse.ArgumentParser()
