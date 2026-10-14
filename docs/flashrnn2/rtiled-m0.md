@@ -1,7 +1,8 @@
 # R tiling across SMs: M0 feasibility record (H100, Triton 3.6)
 
-Status: design decision and GPU-free compile evidence. GPU results are recorded
-separately once the M0 batch has run; nothing here is an E2E or speedup claim.
+Status: design decision, compile evidence and the M0 GPU qualification (job
+`47298120`). Timings in this file are exploratory and unpaired; nothing here is
+an E2E or speedup claim.
 
 ## Decision
 
@@ -86,12 +87,68 @@ slices trade fewer CTAs for heavy spills (D=192, S=128); a smaller slice is
 spill-free (D=192, S=64, k=3, 102 KiB). Which point is fastest is an E2/E3
 question, not answered by compile resources.
 
-## GPU batch
+## GPU batches
 
-Submitted job `47297792` (name 58): one ACC node, four H100s used as four
-independent single-GPU lanes, three hours, cluster-side start command and
-finalizer through `offline_batch.py`. Frozen case plan: 140 configurations
-(`control/configs.json`), stages canary → resources → protocol (grid vs
-launch bitwise, serial groups, chunked continuation, hidden/last) → E1
-(`fixture_math` FP64 oracle under `CELL_BUDGET`) → barrier stress →
-exploratory timing. Receipts: `evidence/flashrnn2-rtiled-m0-20261014/control/`.
+### Job 47297792 (name 58): failed at startup, no kernel executed
+
+Module activation sets `CC=nvc`; Triton builds its launcher C modules with
+`$CC`, and `nvc` rejects `-Wno-psabi`. Every canary raised before any GPU
+kernel ran; the allocation lasted 62 s. The finalizer archived and verified
+the negative outputs (`evidence/flashrnn2-rtiled-m0-20261014/job47297792-failed-startup/`).
+Repair: the runtime exports `CC=/usr/bin/gcc CXX=/usr/bin/g++` after
+activation; a login-node dry run now builds `cuda_utils` and the `_rtiled`
+launcher (and reproduces the original error without the fix); a worker aborts
+when its canary raises.
+
+### Job 47298120 (name 61): M0 qualification, all gates passed
+
+One ACC node `as04r2b14`, four H100 lanes, 15 min 53 s. Same kernel source and
+frozen 140-configuration plan as the failed job. Receipts and every stage JSON
+are in `evidence/flashrnn2-rtiled-m0-20261014/job47298120/`; the complete raw
+archive `archives/m0-47298120.tar.gz` (182 files) stays on MN5 with an
+independent re-hash check (`ARCHIVE_VERIFIED`).
+
+| Stage | Scope | Result |
+| --- | --- | --- |
+| Canary (grid vs launch, D=128, k=2) | 16 width workers | 16/16 PASS |
+| Resources (launch each frozen configuration) | 140 configurations, LSTM/sLSTM, D=64–768 | 140/140 launched, error flag 0, barrier counters exact |
+| Protocol | every configuration × (B,T,H) ∈ {(1,33,1),(3,17,2),(33,40,2)} × FP16/BF16 × sLSTM zero/nonzero normalizer | 1260/1260 PASS |
+| E1 numerics | `fixture_math` FP64 oracle, `CELL_BUDGET`, history/carry/hidden/last, (3,17,2) and (16,128,1), sLSTM zero/mixed/warm | 1120/1120 R-tiled and 48/48 single-CTA arms PASS; worst normalized error 0.0053 of budget |
+| Barrier stress | widest 4-warp configuration per (cell, D), (16,256,1), (64,128,4), (128,64,8), 50 repeats | 48/48 PASS, bit-identical repeats, no timeouts |
+
+Protocol PASS means, bitwise: persistent grid barrier = per-step kernel
+boundary; serial groups per slot = one group per slot; ragged chunked
+continuation through the FP32 carry = one call; hidden and last outputs = the
+full-state output; and both modes leave the expected barrier counter values.
+
+Overlap with the single-CTA path (FP32 snapshots, same inputs):
+
+* D=64 and D=128: bitwise equal for every slice width, including k = 2, 4, 8.
+* D=96: bitwise equal when K is padded to 128 (the single-CTA reduction
+  shape); the exact two-part K (64+32) is not bitwise and passes under the
+  budget instead.
+
+### Exploratory timing (job 47298120, unpaired)
+
+LSTM FP16, H=1, T=256, hidden output, CUDA events over 20 calls; each R-tiled
+call includes its own buffer allocation and memsets, the single-CTA call does
+not. Best configuration per point, microseconds per time step:
+
+| D | B=16 | B=64 | best (S, warps, k) | single CTA B=16 / B=64 |
+| ---: | ---: | ---: | --- | --- |
+| 64 | 2.23 | 2.23 | 32, 4, 2 | 1.60 / 1.51 |
+| 96 | 2.43 | 2.49 | 32, 4, 3 | 2.85 / 2.85 |
+| 128 | 2.49 | 2.99 | 32, 4, 4 | 2.83 / 3.15 |
+| 192 | 2.92 | 4.03 | 32, 4, 6 / 64, 8, 3 | n/a |
+| 256 | 3.11 | 4.45 | 32, 4, 8 / 64, 8, 4 | n/a |
+| 384 | 3.17 | 4.67 | 32, 4, 12 | n/a |
+| 512 | 4.58 | 5.50 | 32, 4, 16 | n/a |
+| 768 | 5.41 | 5.71 | 32, 4, 24 | n/a |
+
+Kernel-boundary sync (one launch per step) costs about 18.5 µs per step, so
+the in-kernel barrier is essential. At k=2 the barrier adds roughly
+0.6–0.9 µs per step over the single CTA (D=64). At D=96 and D=128 the S=32,
+k=3–4 split was faster than the single CTA in this unpaired screen; whether
+the D ≤ 128 default should change is the E2 question and needs the paired
+protocol. Padded K and slot-limited grids (for example D=768, S=16, B=64:
+48 CTAs per group, two slots for four groups) are clearly slower.

@@ -1,0 +1,122 @@
+{
+  "identity": {
+    "gpu": "NVIDIA H100",
+    "capability": [
+      9,
+      0
+    ],
+    "sms": 132,
+    "triton": "3.6.0",
+    "torch": "2.4.0a0+gite3b9b71",
+    "cuda": "11.8",
+    "uuid": "GPU-55b2f39a-f666-028a-4a4a-35b021c71864",
+    "host": "as04r2b14",
+    "source": {
+      "fixture_math.py": "c5f11bd98a4091f9a7e910a6e9ecc6fc5cfea6845ca3089238a1169fac892c81",
+      "flashrnn/flashrnn2/triton_rtiled.py": "5e822255adcd00c00c19c5aa217dfff268634e3b4e3c8ccb4ba5cc76b97eed12",
+      "flashrnn/flashrnn2/triton_persistent.py": "c83a6255f01e1db30e5ea6bc9a50f5f7a6d24cffe26b7bd8a89faffe7b2148e1",
+      "flashrnn/flashrnn2/state_contract.py": "b99311ca231c478860b55ecae216e88ecb3a55f9d8aa212428b82157f8b9485e",
+      "flashrnn/flashrnn2/reference.py": "9b6351ded119b071f6d7bc749e9a20269dde09c9a536cb6094afd6961c1d8260",
+      "tools/rtiled_m0.py": "4cda056c80165c215a7a5c726a1e928a8e0792013cb7f6d897405c691f7f13b9"
+    }
+  },
+  "rows": [
+    {
+      "cell": "lstm",
+      "width": 512,
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false,
+      "batch": 16,
+      "steps": 256,
+      "grid_ms": 1.3526816368103027,
+      "launch_ms": 4.714816093444824,
+      "grid_us_per_step": 5.283912643790245
+    },
+    {
+      "cell": "lstm",
+      "width": 512,
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false,
+      "batch": 64,
+      "steps": 256,
+      "grid_ms": 1.4736656188964843,
+      "launch_ms": 4.716501235961914,
+      "grid_us_per_step": 5.756506323814392
+    },
+    {
+      "cell": "lstm",
+      "width": 512,
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false,
+      "batch": 16,
+      "steps": 256,
+      "grid_ms": 1.7709184646606446,
+      "launch_ms": 4.680885314941406,
+      "grid_us_per_step": 6.917650252580643
+    },
+    {
+      "cell": "lstm",
+      "width": 512,
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false,
+      "batch": 64,
+      "steps": 256,
+      "grid_ms": 1.8676288604736329,
+      "launch_ms": 4.661813418070476,
+      "grid_us_per_step": 7.295425236225128
+    },
+    {
+      "cell": "lstm",
+      "width": 512,
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false,
+      "batch": 16,
+      "steps": 256,
+      "grid_ms": 1.1720352172851562,
+      "launch_ms": 4.718602816263835,
+      "grid_us_per_step": 4.578262567520142
+    },
+    {
+      "cell": "lstm",
+      "width": 512,
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false,
+      "batch": 64,
+      "steps": 256,
+      "grid_ms": 1.4082287788391112,
+      "launch_ms": 4.680458704630534,
+      "grid_us_per_step": 5.500893667340279
+    },
+    {
+      "cell": "lstm",
+      "width": 512,
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false,
+      "batch": 16,
+      "steps": 256,
+      "grid_ms": 1.3026495933532716,
+      "launch_ms": 4.695712089538574,
+      "grid_us_per_step": 5.088474974036217
+    },
+    {
+      "cell": "lstm",
+      "width": 512,
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false,
+      "batch": 64,
+      "steps": 256,
+      "grid_ms": 1.4676639556884765,
+      "launch_ms": 4.661802609761556,
+      "grid_us_per_step": 5.733062326908112
+    }
+  ],
+  "note": "exploratory, not paired; R-tiled calls include per-call buffer allocation and memsets absent from the single-CTA call; not usable for the E2 switch point"
+}
