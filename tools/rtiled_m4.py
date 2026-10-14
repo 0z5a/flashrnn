@@ -517,7 +517,9 @@ def mode_kstart(args):
     comp = next(c for c in table["comparisons"] if c["name"] == args.comparison)
     cell, width, batch, steps = (comp[k] for k in ("cell", "width", "batch", "steps"))
     out = Path(args.out)
+    served = check_policy(table, comp)
     meta = dict(comparison=comp, start=args.start, split=1, identity=identity(), table_sha256=args.table_sha256,
+                served_by_policy=served,
                 pid=os.getpid(), host=os.uname().nodename, gpu_uuid=os.environ.get("FRNN_GPU_UUID"),
                 cpu_affinity=sorted(os.sched_getaffinity(0)), started=time.time(), blocks=args.blocks,
                 order="ABBA even blocks, BAAB odd blocks",
@@ -608,6 +610,20 @@ def mode_select(args):
     return 0
 
 
+def check_policy(table, comp):
+    """Serve the candidate through the frozen exact-shape table and the runtime identity (public path)."""
+    if comp["experiment"] not in ("K_POLICY_VS_DEFAULT", "POLICY_VS_DEFAULT"):
+        return None
+    from flashrnn.flashrnn2.execution_policy import runtime_identity
+    policy = ExecutionPolicy(table["policy_table"], identity=table["policy_identity"])
+    cfg = policy.select(comp["cell"], "float16", comp["batch"], comp["steps"], 1, comp["width"],
+                        identity=runtime_identity())
+    cand = comp["candidate"]
+    expect = ("tilelang", cand["slice_width"]) if cand["kind"] == "tilelang_full" else ("mma_rtiled", cand["slice_width"])
+    assert (cfg.family, cfg.slice_width) == expect, (cfg, cand)
+    return cfg.as_dict()
+
+
 def mode_start(args):
     table_path = Path(args.table)
     table = json.loads(table_path.read_text())
@@ -623,7 +639,9 @@ def mode_start(args):
         assert (cfg.slice_width, cfg.warps, cfg.pad_k) == (comp["candidate"]["slice_width"], comp["candidate"]["warps"],
                                                            comp["candidate"].get("pad_k", False))
     out = Path(args.out)
+    served = check_policy(table, comp)
     meta = dict(comparison=comp, start=args.start, split=1, identity=ident, table_sha256=args.table_sha256,
+                served_by_policy=served,
                 pid=os.getpid(), host=os.uname().nodename, job=os.environ.get("SLURM_JOB_ID"),
                 gpu_uuid=os.environ.get("FRNN_GPU_UUID"), cpu_affinity=sorted(os.sched_getaffinity(0)),
                 started=time.time(), blocks=args.blocks, order="ABBA even blocks, BAAB odd blocks",

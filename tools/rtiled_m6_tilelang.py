@@ -175,6 +175,19 @@ def stage_stress(a, rec):
     return ok
 
 
+def stage_sanity(a, rec):
+    """Small case for compute-sanitizer: one call, per-step launches and a reduced output."""
+    values = inputs(a.cell, DT[a.dtype], 3, 9, 2, a.width, 3)
+    cfg = KernelConfig(family="tilelang", slice_width=a.slice, sync="cluster")
+    full, carry = call(values, a.cell, a.slice, snapshot_dtype=torch.float32)
+    y1, c1 = PreparedSequence(*values, a.cell, snapshot_dtype=torch.float32, config=cfg, chunks=[1] * 9).run()
+    yl, _ = call(values, a.cell, a.slice, output_mode="last", snapshot_dtype=torch.float32)
+    torch.cuda.synchronize()
+    ok = same(y1, full) and same(c1, carry) and same(yl, full[0][:, -1:])
+    rec["sanity"] = dict(bitwise=ok)
+    return ok
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--out", required=True)
@@ -189,7 +202,8 @@ def main():
                source={f: hashlib.sha256(Path(f).read_bytes()).hexdigest() for f in SOURCES},
                uuid=os.environ.get("FRNN_GPU_UUID"), started=time.time(), gates={})
     stages = a.stages.split(",")
-    for name, fn in (("e1", stage_e1), ("protocol", stage_protocol), ("stress", stage_stress)):
+    for name, fn in (("e1", stage_e1), ("protocol", stage_protocol), ("stress", stage_stress),
+                     ("sanity", stage_sanity)):
         if name not in stages:
             continue
         try:
