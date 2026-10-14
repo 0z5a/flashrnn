@@ -222,7 +222,10 @@ def build_v2(batch, steps, heads, width, slice_width, *, cell="lstm", dtype="flo
                 if slstm:
                     n[j, b] = T.if_then_else(valid, INIT[2, bt * BM + b, 0, head, s * S + j], 1.0)
                     m[j, b] = T.if_then_else(valid, INIT[3, bt * BM + b, 0, head, s * S + j], 0.0)
-            T.mbarrier_arrive_expect_tx(ready[1], (k - 1) * slice_bytes)
+            tx = T.get_thread_binding()
+            # One arrival per phase: the barriers were initialized with an arrive count of 1.
+            if tx == 0:
+                T.mbarrier_arrive_expect_tx(ready[1], (k - 1) * slice_bytes)
             T.fence_proxy_async()
             T.cluster_sync()
 
@@ -234,7 +237,7 @@ def build_v2(batch, steps, heads, width, slice_width, *, cell="lstm", dtype="flo
                 else:
                     T.gemm(rs, h1, gates, clear_accum=True)
                 T.copy(gates, stage)
-                if t >= 1 and t + 1 < steps:
+                if t >= 1 and t + 1 < steps and tx == 0:
                     T.mbarrier_arrive_expect_tx(ready[(t + 1) % 2], (k - 1) * slice_bytes)
                 for j, b in T.Parallel(S, BM):
                     row = bt * BM + b

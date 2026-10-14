@@ -36,6 +36,7 @@ LAYERS, VOCAB = 4, 512
 V1_BASE = Path("/gpfs/scratch/ehpc390/tueb043681/paper-baselines-20261013-v1")
 SOURCES = ["tools/rtiled_m4.py", "flashrnn/flashrnn2/triton_rtiled.py", "flashrnn/flashrnn2/triton_persistent.py",
            "flashrnn/flashrnn2/tilelang_rtiled.py", "flashrnn/flashrnn2/reference.py",
+           "flashrnn/flashrnn2/tk_rtiled.cu", "flashrnn/flashrnn2/tk_rtiled.py",
            "flashrnn/flashrnn2/execution_policy.py", "flashrnn/flashrnn2/state_contract.py"]
 
 
@@ -206,8 +207,30 @@ def arm_v1(cell, batch, width):
     return run
 
 
+def arm_tk(cell, slice_width):
+    from flashrnn.flashrnn2 import tk_rtiled
+
+    def run(wx, r, b, init):
+        y, _ = tk_rtiled.recurrence(wx, r, b, init, cell, slice_width=slice_width)
+        return y
+    return run
+
+
+def arm_tilelang_v2(cell, slice_width):
+    from flashrnn.flashrnn2 import tilelang_rtiled
+
+    def run(wx, r, b, init):
+        y, _ = tilelang_rtiled.recurrence_v2(wx, r, b, init, cell, slice_width=slice_width)
+        return y
+    return run
+
+
 def make_arm(spec, cell, batch, width):
     kind = spec["kind"]
+    if kind == "tk":
+        return arm_tk(cell, spec["slice_width"])
+    if kind == "tilelang_v2":
+        return arm_tilelang_v2(cell, spec["slice_width"])
     if kind == "v1_cuda_fused":
         return arm_v1(cell, batch, width)
     if kind == "single":
@@ -320,6 +343,62 @@ def mode_v1check(args):
     return 0
 
 
+def cell_inputs(cell, batch, steps, heads, width, mode, seed):
+    """fixture_math distributions, rounded to FP16; sLSTM zero/mixed/warm normalizer modes."""
+    g = torch.Generator().manual_seed(seed)
+    states = 4 if cell == "slstm" else 2
+    wx = torch.randn(batch, steps, 4, heads, width, generator=g) * 0.1
+    r = torch.randn(4, heads, width, width, generator=g) * (0.1 / width ** 0.5)
+    b = torch.randn(4, heads, width, generator=g) * 0.03
+    init = torch.randn(states, batch, 1, heads, width, generator=g) * 0.05
+    if cell == "slstm":
+        init[2] = init[2].abs() + 1
+        if mode == "zero":
+            init.zero_()
+        if mode == "mixed":
+            init[:, 0, :, 0] = 0
+            init[3, 0, :, 0] = 0.75
+    return tuple(x.half().cuda() for x in (wx, r, b, init))
+
+
+def mode_cellcheck(args):
+    """One (backend, cell, D, S): hidden history and FP32 carry vs the FP64 GPU oracle under CELL_BUDGET."""
+    import fixture_math as fm
+    rec = dict(mode="cellcheck", backend=args.backend, cell=args.cell, width=args.width, slice_width=args.slice,
+               identity=identity(), budget="fixture_math.CELL_BUDGET", cases=[])
+    t0 = time.time()
+    fn = {"tk": lambda: __import__("flashrnn.flashrnn2.tk_rtiled", fromlist=["x"]).recurrence,
+          "tilelang_v2": lambda: __import__("flashrnn.flashrnn2.tilelang_rtiled", fromlist=["x"]).recurrence_v2}[
+        args.backend]()
+    ok = True
+    try:
+        for batch, steps, heads in ((3, 17, 2), (16, 128, 1)):
+            for mode in (("warm",) if args.cell == "lstm" else ("zero", "mixed", "warm")):
+                vals = cell_inputs(args.cell, batch, steps, heads, args.width, mode, 20261014 + args.width + batch)
+                with torch.inference_mode():
+                    y, carry = fn(*vals, args.cell, slice_width=args.slice)
+                    torch.cuda.synchronize()
+                    ref, final = reference.recurrence(*(v.double() for v in vals), args.cell, torch.float16)
+                    ctx = begin_sequence(vals[3], args.cell, torch.float16)
+                    ty, tcarry = triton_rtiled.recurrence(*vals, args.cell, sequence_context=ctx,
+                                                          slice_width=args.slice, output_mode="hidden")
+                checks = dict(hidden=fm.compare(y.float().cpu().numpy(), ref[0].cpu().numpy(), fm.CELL_BUDGET),
+                              carry=fm.compare(carry.cpu().numpy(), final.cpu().numpy(), fm.CELL_BUDGET))
+                case_ok = all(c["pass_"] for c in checks.values())
+                ok &= case_ok
+                rec["cases"].append(dict(batch=batch, steps=steps, heads=heads, mode=mode, checks=checks,
+                                         vs_triton_hidden_max_abs=float((y.float() - ty.float()).abs().max()),
+                                         vs_triton_hidden_bitwise=bool(torch.equal(y, ty)),
+                                         status="PASS" if case_ok else "NUMERICAL_FAIL"))
+        rec["status"] = "AVAILABLE" if ok else "NUMERICAL_FAIL"
+    except Exception:  # noqa: BLE001 - an unavailable backend configuration is a recorded result
+        rec.update(status="BACKEND_ERROR", error=traceback.format_exc()[-3000:])
+    rec["seconds"] = time.time() - t0
+    write(Path(args.out) / "cellcheck.json", rec)
+    print(json.dumps({k: rec[k] for k in ("backend", "cell", "width", "slice_width", "status", "seconds")}), flush=True)
+    return 0
+
+
 def screen(model, groups, arms, rounds=8):
     for fn in arms.values():
         for _ in range(2):
@@ -427,7 +506,9 @@ def mode_start(args):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("mode", choices=("v1check", "select", "start"))
+    p.add_argument("mode", choices=("v1check", "cellcheck", "select", "start"))
+    p.add_argument("--backend")
+    p.add_argument("--slice", type=int)
     p.add_argument("--out", required=True)
     p.add_argument("--cell")
     p.add_argument("--width", type=int)
@@ -441,7 +522,8 @@ def main():
     args = p.parse_args()
     torch.backends.cuda.matmul.allow_tf32 = False
     Path(args.out).mkdir(parents=True, exist_ok=True)
-    code = {"v1check": mode_v1check, "select": mode_select, "start": mode_start}[args.mode](args)
+    code = {"v1check": mode_v1check, "cellcheck": mode_cellcheck, "select": mode_select,
+            "start": mode_start}[args.mode](args)
     write(Path(args.out) / "DONE.json", dict(finished=time.strftime("%Y-%m-%dT%H:%M:%S%z"), exit=code))
     return code
 
