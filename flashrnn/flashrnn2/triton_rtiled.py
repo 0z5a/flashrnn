@@ -46,7 +46,10 @@ def _group_barrier(SYNC, slot, target, ERR, SPIN: tl.constexpr):
     tl.debug_barrier()
 
 
-@triton.jit
+# Runtime integers are not value-specialized: one compiled kernel per
+# (dtype, D, S, K parts, output mode, snapshot dtype) serves every B/T/H/chunk.
+@triton.jit(do_not_specialize=["B", "T", "TOTAL_T", "STEP_BASE", "SEQUENCE_START", "GROUPS", "SLOTS", "H",
+                               "PERSISTENT"])
 def _rtiled(
     WX,
     R,
@@ -65,7 +68,8 @@ def _rtiled(
     SEQUENCE_START,
     GROUPS,
     SLOTS,
-    H: tl.constexpr,
+    H,
+    PERSISTENT,
     D: tl.constexpr,
     SLSTM: tl.constexpr,
     BM: tl.constexpr,
@@ -73,7 +77,6 @@ def _rtiled(
     K1: tl.constexpr,
     K2: tl.constexpr,
     OUTPUT_MODE: tl.constexpr,
-    PERSISTENT: tl.constexpr,
     SPIN: tl.constexpr,
 ):
     split = tl.program_id(0)
@@ -174,7 +177,7 @@ def _rtiled(
                     if SLSTM:
                         tl.store(OUTPUT + 2 * output_stride + output_offset, n, valid)
                         tl.store(OUTPUT + 3 * output_stride + output_offset, m, valid)
-            if PERSISTENT:
+            if PERSISTENT != 0:
                 if (step < T - 1) | (group + SLOTS < GROUPS):
                     write = XBUF + ((slot * 2 + (bars + 1) % 2) * BM + local[:, None]) * D + o[None, :]
                     tl.store(write, hidden.to(dtype), o_valid[None, :])
@@ -294,12 +297,12 @@ def recurrence(
             wx, recurrent, bias, previous, output, carry, xbuf, sync_counts[index], err,
             sequence_context.zero_normalizer,
             batch, length, steps, base, int(start and base == 0), groups, slots,
-            heads, width, cell == "slstm", 16, slice_width, k1, k2, mode,
-            sync == "grid", SPIN_LIMIT,
+            heads, int(sync == "grid"), width, cell == "slstm", 16, slice_width, k1, k2, mode, SPIN_LIMIT,
             num_warps=num_warps,
             enable_fp_fusion=False,
             # The driver rejects a non-co-resident grid instead of deadlocking.
-            launch_cooperative_grid=sync == "grid",
+            # Both sync modes share the compiled kernel, so both launch cooperatively.
+            launch_cooperative_grid=True,
         )
         previous = carry
     if diagnostics is not None:
