@@ -115,6 +115,25 @@ class PackagedTableContract(unittest.TestCase):
             with self.assertRaises(ValueError):
                 policy.select(*shape, identity=wrong)
 
+    def test_m7_table_merges_with_m6_under_one_identity(self):
+        m7 = module.TABLES / "h100-rtiled-m7-20261014.json"
+        policy = ExecutionPolicy.from_json(self.path, m7)
+        self.assertEqual(len(policy.table), 50)
+        identity = dict(policy.identity)
+        cfg = policy.select("lstm", "float16", 64, 1024, 1, 768, identity=identity)
+        self.assertEqual((cfg.family, cfg.slice_width, cfg.sync), ("tilelang", 32, "grid"))
+        self.assertEqual(policy.select("slstm", "float16", 16, 1024, 1, 192, identity=identity).sync, "cluster")
+        with self.assertRaises(ValueError):
+            ExecutionPolicy.from_json(self.path, self.path)
+        import json
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            other = Path(d) / "t.json"
+            data = json.loads(m7.read_text())
+            other.write_text(json.dumps(dict(data, identity=dict(data["identity"], tilelang="0.1.16"))))
+            with self.assertRaises(ValueError):
+                ExecutionPolicy.from_json(self.path, other)
+
     def test_unknown_format_is_rejected(self):
         import json
         import tempfile

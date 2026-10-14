@@ -15,6 +15,7 @@
   以上比较的是本次写的两份实现，不代表两个框架的上限。
 * **契约不变。** full / hidden / last、FP32 compute carry、分块续跑、sLSTM full-call 初始化、PreparedSequence 与 CUDA Graph 在 R 切分路径上全部逐位一致。
 * **G4 完成：TileLang 成为完整契约的合格后端，并接入查表（M6）。** 完整契约版 TileLang（`tilelang_cluster`）40/40 个配置（LSTM/sLSTM × FP16/BF16 × 10 种 (D, S)）全部通过 M0 标准：E1 160/160，逐位协议 1440/1440，压力 80/80；compute-sanitizer memcheck、synccheck 0 错误，racecheck 0 hazard。按 split 0 冻结的查表在 40 个形状里选 TileLang 37 个、Triton 3 个（B = 1 的 LSTM D384/512、sLSTM D512）。与保守默认（Triton 8 warps）配对计时，40/40 更快，1.01×–2.33×，几何平均 1.44×，区间全部高于 1。这张表作为注册表文件随代码提交。
+* **D = 768 用 TileLang grid 同步补齐（M7）。** D = 768 需要 24 或 48 个 CTA，超出 cluster 上限 16，改用 `T.sync_grid`（cooperative launch）每步一次全网格屏障、经全局内存交换 h。20/20 配置合格，grid 与 cluster 在两者都支持的宽度上 144/144 逐位一致；查表 10 个 D = 768 形状全部选 TileLang grid，对保守默认 1.30×–2.06×，对最优 Triton 1.05×–1.73×，均 10/10 更快。
 
 ## 目标完成情况
 
@@ -23,7 +24,7 @@
 | G1 D > 128 可运行并过数值门槛 | 达成：LSTM/sLSTM FP16/BF16，D = 192、256、384、512、768 | M0 job 47298120，E1 1120/1120 PASS |
 | G2 输出契约不变 | 达成：full / hidden / last、FP32 compute carry、分块续跑、sLSTM full-call 初始化；PreparedSequence 与 CUDA Graph | M0 protocol 1260/1260；M1 job 47298769 432/432 |
 | G3 对 v1 CUDA fused 的大 D 配对计时 | 达成：30/30 更快，1.12×–1.72×，区间均高于 1 | M4 job 47299690，5 启动 × 20 配对块 |
-| G4 合格 fallback 后端 | 达成：TileLang 完整契约 40/40 配置通过 M0 标准与 sanitizer；精确形状查表（37 TileLang + 3 Triton）对保守默认 40/40 更快（1.01×–2.33×），表文件 `flashrnn/flashrnn2/tables/h100-rtiled-m6-20261014.json` 绑定 GPU/Triton/TileLang 身份 | M6 job 47304776；M5 job 47301466、47303121 |
+| G4 合格 fallback 后端 | 达成：TileLang 完整契约 40/40 配置通过 M0 标准与 sanitizer；精确形状查表（37 TileLang + 3 Triton）对保守默认 40/40 更快（1.01×–2.33×）；D = 768 由 TileLang grid 覆盖（M7，10/10 更快）。表文件 `h100-rtiled-m6-20261014.json` + `h100-rtiled-m7-20261014.json` 绑定同一 GPU/Triton/TileLang 身份，合并后 50 个形状 | M6 job 47304776；M7 job 47305834；M5 job 47301466、47303121 |
 
 ## 设计决定（M0）
 
@@ -150,6 +151,33 @@ split 0 在 M0 合格的 Triton 配置和 40 个合格 TileLang 配置之间选�
 
 详细数据见 `docs/flashrnn2/rtiled-m6.md`。
 
+## D = 768：TileLang grid 同步（M7）
+
+D = 768 在 S = 32 时需要 k = 24 个 CTA（每个 CTA 的 R 切片占 192 KiB 共享内存），S = 16 时需要 48 个，都超出 thread-block cluster 最多 16 个 CTA 的上限。`build_grid`（`tilelang_cluster.py`，提交 da2deba）保留 cluster 内核的每 CTA 计算（R 切片作 WGMMA A 操作数、hᵀ 作 B、相同 epilogue），只换交换方式：每个 CTA 把舍入后的 h 切片写进全局双缓冲 `XBUF[t % 2]`，每步一次 `T.sync_grid()`，再整块读回本组的 hᵀ。TileLang 检测到 `sync_grid` 后给函数加 `use_cooperative_groups`，TVM 用 `cuLaunchCooperativeKernel` 启动；超出同驻上限的组按 slot 串行，所有 CTA 执行相同次数的屏障。
+
+资格（作业 47305834，名 88，节点 as04r5b14，15 分 42 秒）：
+
+| 门槛 | 结果 |
+| --- | --- |
+| E1，fixture_math `CELL_BUDGET` | 20/20 配置，80/80 用例，最差占预算 0.34%（D = 768 为 0.29%） |
+| 逐位协议 | 720/720 |
+| 压力（含 4–32 个 slot） | 40/40 |
+| grid = cluster 逐位（D = 256 S16/S32、D = 512 S32，四种输出，三种形状） | 144/144，最大差 0 |
+| compute-sanitizer（LSTM FP16 D768 S32 小用例） | memcheck、synccheck 0 错误；racecheck 0 hazard |
+
+计时（split 0 选择、冻结表、split 1 5 次启动 × 20 配对块）：查表在 10 个形状上全部选 TileLang grid（B ≤ 32 用 S = 16，B = 64 用 S = 32）；最优 Triton 全部是 S32、4 warps。
+
+| 对比 | 行数 | 加速比范围 | 几何平均 | 区间高于 1 |
+| --- | ---: | --- | ---: | ---: |
+| 内核级，查表 vs 保守默认 | 4 | 1.35×–2.06× | 1.67× | 4/4 |
+| 分类器，查表 vs 保守默认 | 6 | 1.30×–1.80× | 1.51× | 6/6 |
+| 内核级，TileLang grid vs 最优 Triton | 4 | 1.15×–1.73× | 1.41× | 4/4 |
+| 分类器，TileLang grid vs 最优 Triton | 6 | 1.05×–1.56× | 1.27× | 6/6 |
+
+代价是 SM：S = 16 时每组占 48 个 SM，B = 32 时两组同驻共 96 个；B = 64 选 S = 32，四组共 96 个。单路请求独占 GPU 时这是对的选择，高并发下是否仍然合算，是下一阶段要回答的问题；每个条目的 SM 占用已写进表文件（`sm_footprint`）。
+
+注册表：`h100-rtiled-m7-20261014.json` 与 M6 表身份相同，`ExecutionPolicy.from_json(m6, m7)` 只在身份一致、形状不重叠时合并，得到 D = 192–768 共 50 个精确形状。详见 `docs/flashrnn2/rtiled-m7.md`。
+
 ## 失败与修复记录
 
 | 作业 | 现象 | 原因 | 修复 |
@@ -177,8 +205,8 @@ split 0 在 M0 合格的 Triton 配置和 40 个合格 TileLang 配置之间选�
 
 ## 下一步
 
-* G1–G4 已全部达成。剩下的都是扩展，不是收尾必需：
-* **D = 768。** TileLang cluster 上限 16 个 CTA，D = 768 目前仍走 Triton R 切分；可以试 TileLang 的 `sync_grid`（k > 16），再按 M0 + M6 的标准资格认证和计时。
+* G1–G4 已全部达成，D = 768 也已由 TileLang grid 覆盖（M7）。剩下的都是扩展：
+* **高并发多数据面。** 以 SM 代价、拥堵度、NUMA 亲和等数据面为轴，在高并发负载下迭代（方案另述）。
 * **扩大查表。** 现在的表只含 40 个精确形状（FP16、h = 1）。确认原作者的目标 D、B、T 网格后，按同样流程（split 0 选择 → 冻结 → split 1 计时）补表；BF16 已经资格认证，可以直接加入计时。
 * **公开接口接入。** 目前查表只在 `PreparedSequence` 路径上生效；如果希望一次性 recurrence 调用也按表选后端，需要另加分派并重新做契约检查。
 * D ≤ 128 保持单 CTA；如需再探索，应在预分配的 PreparedSequence 路径上单独配对计时。

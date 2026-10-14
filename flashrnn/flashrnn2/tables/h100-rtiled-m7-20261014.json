@@ -1,0 +1,223 @@
+{
+  "format": "flashrnn2-execution-policy-table/1",
+  "identity": {
+    "gpu": "NVIDIA H100",
+    "capability": [
+      9,
+      0
+    ],
+    "triton": "3.6.0",
+    "tilelang": "0.1.15"
+  },
+  "table": {
+    "lstm/float16/b1/t32/h1/d768": {
+      "family": "tilelang",
+      "slice_width": 16,
+      "sync": "grid"
+    },
+    "lstm/float16/b16/t1024/h1/d768": {
+      "family": "tilelang",
+      "slice_width": 16,
+      "sync": "grid"
+    },
+    "lstm/float16/b16/t32/h1/d768": {
+      "family": "tilelang",
+      "slice_width": 16,
+      "sync": "grid"
+    },
+    "lstm/float16/b32/t128/h1/d768": {
+      "family": "tilelang",
+      "slice_width": 16,
+      "sync": "grid"
+    },
+    "lstm/float16/b64/t1024/h1/d768": {
+      "family": "tilelang",
+      "slice_width": 32,
+      "sync": "grid"
+    },
+    "slstm/float16/b1/t32/h1/d768": {
+      "family": "tilelang",
+      "slice_width": 16,
+      "sync": "grid"
+    },
+    "slstm/float16/b16/t1024/h1/d768": {
+      "family": "tilelang",
+      "slice_width": 16,
+      "sync": "grid"
+    },
+    "slstm/float16/b16/t32/h1/d768": {
+      "family": "tilelang",
+      "slice_width": 16,
+      "sync": "grid"
+    },
+    "slstm/float16/b32/t128/h1/d768": {
+      "family": "tilelang",
+      "slice_width": 16,
+      "sync": "grid"
+    },
+    "slstm/float16/b64/t1024/h1/d768": {
+      "family": "tilelang",
+      "slice_width": 32,
+      "sync": "grid"
+    }
+  },
+  "scope": "Exact shapes only (cell/dtype/batch/steps/heads/width), D = 768; every other shape uses another loaded table or default_config(width). Measured on one MareNostrum 5 ACC node (four GPUs reported as 'NVIDIA H100', driver 595.91.07) with Triton 3.6.0 and TileLang 0.1.15; a different GPU name, capability, Triton or TileLang version is rejected by ExecutionPolicy.select.",
+  "provenance": {
+    "batch": "flashrnn2-rtiled-m7-20261014-v1",
+    "slurm_job": "47305834",
+    "slurm_name": "88",
+    "node": "as04r5b14",
+    "source_commit": "da2deba",
+    "frozen_table_sha256": "53afc336a6fed08b95de3e25ebd6aa514fd19d0761739719bf723492139d1708",
+    "archive_sha256": "e67bbffecff4f9f7af847bd707742828faf185f76932e3f6fac78ebc341964da",
+    "selection": "split 0, among M0-qualified Triton R-tiled configurations and M7-qualified TileLang grid configurations",
+    "timing": "split 1, 5 process starts x 20 ABBA/BAAB blocks, 10000-draw hierarchical bootstrap",
+    "qualification": "TileLang grid (sync_grid, cooperative launch): 20/20 (cell, dtype, D, S) PASS, D = 768 at S = 16/32 and D = 256/512 with 144/144 bitwise grid = cluster checks; compute-sanitizer memcheck/synccheck 0 errors, racecheck 0 hazards (one small case)",
+    "evidence": "evidence/flashrnn2-rtiled-m7-20261014/job47305834",
+    "report": "docs/flashrnn2/rtiled-m7.md"
+  },
+  "sm_footprint": {
+    "lstm/float16/b1/t32/h1/d768": {
+      "k": 48,
+      "groups": 1,
+      "resident_groups": 1,
+      "slots": 1,
+      "sms": 48
+    },
+    "lstm/float16/b16/t1024/h1/d768": {
+      "k": 48,
+      "groups": 1,
+      "resident_groups": 1,
+      "slots": 1,
+      "sms": 48
+    },
+    "lstm/float16/b16/t32/h1/d768": {
+      "k": 48,
+      "groups": 1,
+      "resident_groups": 1,
+      "slots": 1,
+      "sms": 48
+    },
+    "lstm/float16/b32/t128/h1/d768": {
+      "k": 48,
+      "groups": 2,
+      "resident_groups": 2,
+      "slots": 1,
+      "sms": 96
+    },
+    "lstm/float16/b64/t1024/h1/d768": {
+      "k": 24,
+      "groups": 4,
+      "resident_groups": 4,
+      "slots": 1,
+      "sms": 96
+    },
+    "slstm/float16/b1/t32/h1/d768": {
+      "k": 48,
+      "groups": 1,
+      "resident_groups": 1,
+      "slots": 1,
+      "sms": 48
+    },
+    "slstm/float16/b16/t1024/h1/d768": {
+      "k": 48,
+      "groups": 1,
+      "resident_groups": 1,
+      "slots": 1,
+      "sms": 48
+    },
+    "slstm/float16/b16/t32/h1/d768": {
+      "k": 48,
+      "groups": 1,
+      "resident_groups": 1,
+      "slots": 1,
+      "sms": 48
+    },
+    "slstm/float16/b32/t128/h1/d768": {
+      "k": 48,
+      "groups": 2,
+      "resident_groups": 2,
+      "slots": 1,
+      "sms": 96
+    },
+    "slstm/float16/b64/t1024/h1/d768": {
+      "k": 24,
+      "groups": 4,
+      "resident_groups": 4,
+      "slots": 1,
+      "sms": 96
+    }
+  },
+  "timing_vs_default": {
+    "k7-lstm-d768-b16-t1024-policy-vs-default": {
+      "speedup": 1.9528,
+      "ci95": [
+        1.9492,
+        1.9582
+      ]
+    },
+    "k7-lstm-d768-b64-t1024-policy-vs-default": {
+      "speedup": 1.3472,
+      "ci95": [
+        1.3433,
+        1.3507
+      ]
+    },
+    "m7-lstm-d768-b1-c8-t32-policy-vs-default": {
+      "speedup": 1.3006,
+      "ci95": [
+        1.2965,
+        1.3063
+      ]
+    },
+    "m7-lstm-d768-b16-c32-t32-policy-vs-default": {
+      "speedup": 1.4679,
+      "ci95": [
+        1.4638,
+        1.4717
+      ]
+    },
+    "m7-lstm-d768-b32-c64-t128-policy-vs-default": {
+      "speedup": 1.7393,
+      "ci95": [
+        1.7251,
+        1.7483
+      ]
+    },
+    "k7-slstm-d768-b16-t1024-policy-vs-default": {
+      "speedup": 2.0636,
+      "ci95": [
+        2.0569,
+        2.0683
+      ]
+    },
+    "k7-slstm-d768-b64-t1024-policy-vs-default": {
+      "speedup": 1.4281,
+      "ci95": [
+        1.4239,
+        1.432
+      ]
+    },
+    "m7-slstm-d768-b1-c8-t32-policy-vs-default": {
+      "speedup": 1.3046,
+      "ci95": [
+        1.3021,
+        1.3084
+      ]
+    },
+    "m7-slstm-d768-b16-c32-t32-policy-vs-default": {
+      "speedup": 1.4914,
+      "ci95": [
+        1.4853,
+        1.4962
+      ]
+    },
+    "m7-slstm-d768-b32-c64-t128-policy-vs-default": {
+      "speedup": 1.7994,
+      "ci95": [
+        1.795,
+        1.8024
+      ]
+    }
+  }
+}

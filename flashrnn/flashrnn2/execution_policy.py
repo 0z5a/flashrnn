@@ -96,12 +96,25 @@ class ExecutionPolicy:
         }
 
     @classmethod
-    def from_json(cls, path):
-        """Load a measured table file (identity + exact-shape entries), e.g. TABLES / "h100-rtiled-m6-20261014.json"."""
-        data = json.loads(Path(path).read_text())
-        if data.get("format") != "flashrnn2-execution-policy-table/1":
-            raise ValueError("unknown execution-policy table format")
-        return cls(data["table"], identity=data["identity"])
+    def from_json(cls, *paths):
+        """Load measured table files (identity + exact-shape entries), e.g. TABLES / "h100-rtiled-m6-20261014.json".
+
+        Several files merge only if they share one identity and no shape key.
+        """
+        table, identity = {}, None
+        for path in paths:
+            data = json.loads(Path(path).read_text())
+            if data.get("format") != "flashrnn2-execution-policy-table/1":
+                raise ValueError("unknown execution-policy table format")
+            if identity is not None and data["identity"] != identity:
+                raise ValueError("tables measured under different identities cannot be merged")
+            if table.keys() & data["table"].keys():
+                raise ValueError("tables overlap in exact shape keys")
+            identity = data["identity"]
+            table.update(data["table"])
+        if identity is None:
+            raise ValueError("no table file given")
+        return cls(table, identity=identity)
 
     def select(self, cell, dtype, batch, steps, heads, width, *, identity=None):
         if self.table and (not self.identity or identity != self.identity):

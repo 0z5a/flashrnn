@@ -1,0 +1,532 @@
+{
+  "identity": {
+    "gpu": "NVIDIA H100",
+    "capability": [
+      9,
+      0
+    ],
+    "triton": "3.6.0",
+    "torch": "2.4.0a0+gite3b9b71",
+    "cuda": "11.8",
+    "source": {
+      "tools/rtiled_m4.py": "d00df1a59af80cba6aa0d8218b8f052372e9c1bf533e1225445fcf4b6a5baf64",
+      "flashrnn/flashrnn2/triton_rtiled.py": "5e822255adcd00c00c19c5aa217dfff268634e3b4e3c8ccb4ba5cc76b97eed12",
+      "flashrnn/flashrnn2/triton_persistent.py": "c83a6255f01e1db30e5ea6bc9a50f5f7a6d24cffe26b7bd8a89faffe7b2148e1",
+      "flashrnn/flashrnn2/tilelang_rtiled.py": "e907cd33389524878ba534354e68fddc026ff6c29f572e020754de9809775f27",
+      "flashrnn/flashrnn2/reference.py": "9b6351ded119b071f6d7bc749e9a20269dde09c9a536cb6094afd6961c1d8260",
+      "flashrnn/flashrnn2/tk_rtiled.cu": "b4a98ae0e42aa1132470f0f18d257c0bdfd6b2346d31606a2b1c2204e040c9b0",
+      "flashrnn/flashrnn2/tk_rtiled.py": "88fbdd79e775866a05ae7b0ce90e8eb0d1c9cb63f92ef0003cf86d45dd6fc4ce",
+      "flashrnn/flashrnn2/tilelang_cluster.py": "bb922d365195bdf00d2e3084d082526b48c27392425441080e1dfd14779e2c1f",
+      "flashrnn/flashrnn2/execution_policy.py": "7e4bacc6f5c112e6ec09a2bb1d88cbf590d059b6052f3c768963f643a37c48f1",
+      "flashrnn/flashrnn2/state_contract.py": "b99311ca231c478860b55ecae216e88ecb3a55f9d8aa212428b82157f8b9485e"
+    },
+    "tilelang": "0.1.15"
+  },
+  "comparisons": [
+    {
+      "name": "k7-lstm-d768-b16-t1024-policy-vs-default",
+      "experiment": "K_POLICY_VS_DEFAULT",
+      "cell": "lstm",
+      "width": 768,
+      "batch": 16,
+      "concurrency": 16,
+      "steps": 1024,
+      "level": "kernel",
+      "baseline": {
+        "kind": "rtiled",
+        "pad_k": false,
+        "slice_width": 32,
+        "warps": 8
+      },
+      "candidate": {
+        "kind": "tilelang_full",
+        "slice_width": 16,
+        "sync": "grid"
+      },
+      "lane": 0
+    },
+    {
+      "name": "k7-lstm-d768-b16-t1024-tlgrid-vs-triton",
+      "experiment": "K_TLGRID_VS_TRITON",
+      "cell": "lstm",
+      "width": 768,
+      "batch": 16,
+      "concurrency": 16,
+      "steps": 1024,
+      "level": "kernel",
+      "baseline": {
+        "kind": "rtiled",
+        "pad_k": false,
+        "slice_width": 32,
+        "warps": 4
+      },
+      "candidate": {
+        "kind": "tilelang_full",
+        "slice_width": 16,
+        "sync": "grid"
+      },
+      "lane": 0
+    },
+    {
+      "name": "k7-lstm-d768-b64-t1024-policy-vs-default",
+      "experiment": "K_POLICY_VS_DEFAULT",
+      "cell": "lstm",
+      "width": 768,
+      "batch": 64,
+      "concurrency": 64,
+      "steps": 1024,
+      "level": "kernel",
+      "baseline": {
+        "kind": "rtiled",
+        "pad_k": false,
+        "slice_width": 32,
+        "warps": 8
+      },
+      "candidate": {
+        "kind": "tilelang_full",
+        "slice_width": 32,
+        "sync": "grid"
+      },
+      "lane": 1
+    },
+    {
+      "name": "k7-lstm-d768-b64-t1024-tlgrid-vs-triton",
+      "experiment": "K_TLGRID_VS_TRITON",
+      "cell": "lstm",
+      "width": 768,
+      "batch": 64,
+      "concurrency": 64,
+      "steps": 1024,
+      "level": "kernel",
+      "baseline": {
+        "kind": "rtiled",
+        "pad_k": false,
+        "slice_width": 32,
+        "warps": 4
+      },
+      "candidate": {
+        "kind": "tilelang_full",
+        "slice_width": 32,
+        "sync": "grid"
+      },
+      "lane": 1
+    },
+    {
+      "name": "m7-lstm-d768-b1-c8-t32-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "cell": "lstm",
+      "width": 768,
+      "batch": 1,
+      "concurrency": 8,
+      "steps": 32,
+      "level": "model",
+      "baseline": {
+        "kind": "rtiled",
+        "pad_k": false,
+        "slice_width": 32,
+        "warps": 8
+      },
+      "candidate": {
+        "kind": "tilelang_full",
+        "slice_width": 16,
+        "sync": "grid"
+      },
+      "lane": 2
+    },
+    {
+      "name": "m7-lstm-d768-b1-c8-t32-tlgrid-vs-triton",
+      "experiment": "TLGRID_VS_TRITON",
+      "cell": "lstm",
+      "width": 768,
+      "batch": 1,
+      "concurrency": 8,
+      "steps": 32,
+      "level": "model",
+      "baseline": {
+        "kind": "rtiled",
+        "pad_k": false,
+        "slice_width": 32,
+        "warps": 4
+      },
+      "candidate": {
+        "kind": "tilelang_full",
+        "slice_width": 16,
+        "sync": "grid"
+      },
+      "lane": 2
+    },
+    {
+      "name": "m7-lstm-d768-b16-c32-t32-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "cell": "lstm",
+      "width": 768,
+      "batch": 16,
+      "concurrency": 32,
+      "steps": 32,
+      "level": "model",
+      "baseline": {
+        "kind": "rtiled",
+        "pad_k": false,
+        "slice_width": 32,
+        "warps": 8
+      },
+      "candidate": {
+        "kind": "tilelang_full",
+        "slice_width": 16,
+        "sync": "grid"
+      },
+      "lane": 3
+    },
+    {
+      "name": "m7-lstm-d768-b16-c32-t32-tlgrid-vs-triton",
+      "experiment": "TLGRID_VS_TRITON",
+      "cell": "lstm",
+      "width": 768,
+      "batch": 16,
+      "concurrency": 32,
+      "steps": 32,
+      "level": "model",
+      "baseline": {
+        "kind": "rtiled",
+        "pad_k": false,
+        "slice_width": 32,
+        "warps": 4
+      },
+      "candidate": {
+        "kind": "tilelang_full",
+        "slice_width": 16,
+        "sync": "grid"
+      },
+      "lane": 3
+    },
+    {
+      "name": "m7-lstm-d768-b32-c64-t128-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "cell": "lstm",
+      "width": 768,
+      "batch": 32,
+      "concurrency": 64,
+      "steps": 128,
+      "level": "model",
+      "baseline": {
+        "kind": "rtiled",
+        "pad_k": false,
+        "slice_width": 32,
+        "warps": 8
+      },
+      "candidate": {
+        "kind": "tilelang_full",
+        "slice_width": 16,
+        "sync": "grid"
+      },
+      "lane": 0
+    },
+    {
+      "name": "m7-lstm-d768-b32-c64-t128-tlgrid-vs-triton",
+      "experiment": "TLGRID_VS_TRITON",
+      "cell": "lstm",
+      "width": 768,
+      "batch": 32,
+      "concurrency": 64,
+      "steps": 128,
+      "level": "model",
+      "baseline": {
+        "kind": "rtiled",
+        "pad_k": false,
+        "slice_width": 32,
+        "warps": 4
+      },
+      "candidate": {
+        "kind": "tilelang_full",
+        "slice_width": 16,
+        "sync": "grid"
+      },
+      "lane": 0
+    },
+    {
+      "name": "k7-slstm-d768-b16-t1024-policy-vs-default",
+      "experiment": "K_POLICY_VS_DEFAULT",
+      "cell": "slstm",
+      "width": 768,
+      "batch": 16,
+      "concurrency": 16,
+      "steps": 1024,
+      "level": "kernel",
+      "baseline": {
+        "kind": "rtiled",
+        "pad_k": false,
+        "slice_width": 32,
+        "warps": 8
+      },
+      "candidate": {
+        "kind": "tilelang_full",
+        "slice_width": 16,
+        "sync": "grid"
+      },
+      "lane": 1
+    },
+    {
+      "name": "k7-slstm-d768-b16-t1024-tlgrid-vs-triton",
+      "experiment": "K_TLGRID_VS_TRITON",
+      "cell": "slstm",
+      "width": 768,
+      "batch": 16,
+      "concurrency": 16,
+      "steps": 1024,
+      "level": "kernel",
+      "baseline": {
+        "kind": "rtiled",
+        "pad_k": false,
+        "slice_width": 32,
+        "warps": 4
+      },
+      "candidate": {
+        "kind": "tilelang_full",
+        "slice_width": 16,
+        "sync": "grid"
+      },
+      "lane": 1
+    },
+    {
+      "name": "k7-slstm-d768-b64-t1024-policy-vs-default",
+      "experiment": "K_POLICY_VS_DEFAULT",
+      "cell": "slstm",
+      "width": 768,
+      "batch": 64,
+      "concurrency": 64,
+      "steps": 1024,
+      "level": "kernel",
+      "baseline": {
+        "kind": "rtiled",
+        "pad_k": false,
+        "slice_width": 32,
+        "warps": 8
+      },
+      "candidate": {
+        "kind": "tilelang_full",
+        "slice_width": 32,
+        "sync": "grid"
+      },
+      "lane": 2
+    },
+    {
+      "name": "k7-slstm-d768-b64-t1024-tlgrid-vs-triton",
+      "experiment": "K_TLGRID_VS_TRITON",
+      "cell": "slstm",
+      "width": 768,
+      "batch": 64,
+      "concurrency": 64,
+      "steps": 1024,
+      "level": "kernel",
+      "baseline": {
+        "kind": "rtiled",
+        "pad_k": false,
+        "slice_width": 32,
+        "warps": 4
+      },
+      "candidate": {
+        "kind": "tilelang_full",
+        "slice_width": 32,
+        "sync": "grid"
+      },
+      "lane": 2
+    },
+    {
+      "name": "m7-slstm-d768-b1-c8-t32-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "cell": "slstm",
+      "width": 768,
+      "batch": 1,
+      "concurrency": 8,
+      "steps": 32,
+      "level": "model",
+      "baseline": {
+        "kind": "rtiled",
+        "pad_k": false,
+        "slice_width": 32,
+        "warps": 8
+      },
+      "candidate": {
+        "kind": "tilelang_full",
+        "slice_width": 16,
+        "sync": "grid"
+      },
+      "lane": 3
+    },
+    {
+      "name": "m7-slstm-d768-b1-c8-t32-tlgrid-vs-triton",
+      "experiment": "TLGRID_VS_TRITON",
+      "cell": "slstm",
+      "width": 768,
+      "batch": 1,
+      "concurrency": 8,
+      "steps": 32,
+      "level": "model",
+      "baseline": {
+        "kind": "rtiled",
+        "pad_k": false,
+        "slice_width": 32,
+        "warps": 4
+      },
+      "candidate": {
+        "kind": "tilelang_full",
+        "slice_width": 16,
+        "sync": "grid"
+      },
+      "lane": 3
+    },
+    {
+      "name": "m7-slstm-d768-b16-c32-t32-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "cell": "slstm",
+      "width": 768,
+      "batch": 16,
+      "concurrency": 32,
+      "steps": 32,
+      "level": "model",
+      "baseline": {
+        "kind": "rtiled",
+        "pad_k": false,
+        "slice_width": 32,
+        "warps": 8
+      },
+      "candidate": {
+        "kind": "tilelang_full",
+        "slice_width": 16,
+        "sync": "grid"
+      },
+      "lane": 0
+    },
+    {
+      "name": "m7-slstm-d768-b16-c32-t32-tlgrid-vs-triton",
+      "experiment": "TLGRID_VS_TRITON",
+      "cell": "slstm",
+      "width": 768,
+      "batch": 16,
+      "concurrency": 32,
+      "steps": 32,
+      "level": "model",
+      "baseline": {
+        "kind": "rtiled",
+        "pad_k": false,
+        "slice_width": 32,
+        "warps": 4
+      },
+      "candidate": {
+        "kind": "tilelang_full",
+        "slice_width": 16,
+        "sync": "grid"
+      },
+      "lane": 0
+    },
+    {
+      "name": "m7-slstm-d768-b32-c64-t128-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "cell": "slstm",
+      "width": 768,
+      "batch": 32,
+      "concurrency": 64,
+      "steps": 128,
+      "level": "model",
+      "baseline": {
+        "kind": "rtiled",
+        "pad_k": false,
+        "slice_width": 32,
+        "warps": 8
+      },
+      "candidate": {
+        "kind": "tilelang_full",
+        "slice_width": 16,
+        "sync": "grid"
+      },
+      "lane": 1
+    },
+    {
+      "name": "m7-slstm-d768-b32-c64-t128-tlgrid-vs-triton",
+      "experiment": "TLGRID_VS_TRITON",
+      "cell": "slstm",
+      "width": 768,
+      "batch": 32,
+      "concurrency": 64,
+      "steps": 128,
+      "level": "model",
+      "baseline": {
+        "kind": "rtiled",
+        "pad_k": false,
+        "slice_width": 32,
+        "warps": 4
+      },
+      "candidate": {
+        "kind": "tilelang_full",
+        "slice_width": 16,
+        "sync": "grid"
+      },
+      "lane": 1
+    }
+  ],
+  "unavailable": [],
+  "policy_table": {
+    "lstm/float16/b16/t1024/h1/d768": {
+      "family": "tilelang",
+      "slice_width": 16,
+      "sync": "grid"
+    },
+    "lstm/float16/b64/t1024/h1/d768": {
+      "family": "tilelang",
+      "slice_width": 32,
+      "sync": "grid"
+    },
+    "lstm/float16/b1/t32/h1/d768": {
+      "family": "tilelang",
+      "slice_width": 16,
+      "sync": "grid"
+    },
+    "lstm/float16/b16/t32/h1/d768": {
+      "family": "tilelang",
+      "slice_width": 16,
+      "sync": "grid"
+    },
+    "lstm/float16/b32/t128/h1/d768": {
+      "family": "tilelang",
+      "slice_width": 16,
+      "sync": "grid"
+    },
+    "slstm/float16/b16/t1024/h1/d768": {
+      "family": "tilelang",
+      "slice_width": 16,
+      "sync": "grid"
+    },
+    "slstm/float16/b64/t1024/h1/d768": {
+      "family": "tilelang",
+      "slice_width": 32,
+      "sync": "grid"
+    },
+    "slstm/float16/b1/t32/h1/d768": {
+      "family": "tilelang",
+      "slice_width": 16,
+      "sync": "grid"
+    },
+    "slstm/float16/b16/t32/h1/d768": {
+      "family": "tilelang",
+      "slice_width": 16,
+      "sync": "grid"
+    },
+    "slstm/float16/b32/t128/h1/d768": {
+      "family": "tilelang",
+      "slice_width": 16,
+      "sync": "grid"
+    }
+  },
+  "policy_identity": {
+    "gpu": "NVIDIA H100",
+    "capability": [
+      9,
+      0
+    ],
+    "triton": "3.6.0",
+    "tilelang": "0.1.15"
+  },
+  "frozen": 1792016578.0048728,
+  "selection_split": 0,
+  "timing_split": 1
+}
