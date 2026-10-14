@@ -47,8 +47,9 @@ def _group_barrier(SYNC, slot, target, ERR, SPIN: tl.constexpr):
 
 
 # Runtime integers are not value-specialized: one compiled kernel per
-# (dtype, D, S, K parts, output mode, snapshot dtype) serves every B/T/H/chunk.
-@triton.jit(do_not_specialize=["B", "T", "TOTAL_T", "STEP_BASE", "SEQUENCE_START", "GROUPS", "SLOTS", "H",
+# (dtype, H, D, S, K parts, output mode, snapshot dtype) serves every B/T/chunk.
+# H stays a compile-time constant: as a runtime value it raised spills.
+@triton.jit(do_not_specialize=["B", "T", "TOTAL_T", "STEP_BASE", "SEQUENCE_START", "GROUPS", "SLOTS",
                                "PERSISTENT"])
 def _rtiled(
     WX,
@@ -68,8 +69,8 @@ def _rtiled(
     SEQUENCE_START,
     GROUPS,
     SLOTS,
-    H,
     PERSISTENT,
+    H: tl.constexpr,
     D: tl.constexpr,
     SLSTM: tl.constexpr,
     BM: tl.constexpr,
@@ -297,7 +298,7 @@ def recurrence(
             wx, recurrent, bias, previous, output, carry, xbuf, sync_counts[index], err,
             sequence_context.zero_normalizer,
             batch, length, steps, base, int(start and base == 0), groups, slots,
-            heads, int(sync == "grid"), width, cell == "slstm", 16, slice_width, k1, k2, mode, SPIN_LIMIT,
+            int(sync == "grid"), heads, width, cell == "slstm", 16, slice_width, k1, k2, mode, SPIN_LIMIT,
             num_warps=num_warps,
             enable_fp_fusion=False,
             # The driver rejects a non-co-resident grid instead of deadlocking.

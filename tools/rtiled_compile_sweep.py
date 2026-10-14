@@ -27,10 +27,10 @@ def compile_one(cell, dtype, width, s, warps, pad, mode=0):
         WX=f"*{t}", R=f"*{t}", BIAS=f"*{t}", INITIAL="*fp32", OUTPUT="*fp32", FINAL="*fp32",
         XBUF=f"*{t}", SYNC="*i32", ERR="*i32", ZERO_NORMALIZER="*i1",
         B="i32", T="i32", TOTAL_T="i32", STEP_BASE="i32", SEQUENCE_START="i32", GROUPS="i32", SLOTS="i32",
-        H="i32", PERSISTENT="i32", D="constexpr", SLSTM="constexpr", BM="constexpr", S="constexpr", K1="constexpr",
+        PERSISTENT="i32", H="constexpr", D="constexpr", SLSTM="constexpr", BM="constexpr", S="constexpr", K1="constexpr",
         K2="constexpr", OUTPUT_MODE="constexpr", SPIN="constexpr",
     )
-    const = dict(D=width, SLSTM=cell == "slstm", BM=16, S=s, K1=k1, K2=k2, OUTPUT_MODE=mode,
+    const = dict(H=1, D=width, SLSTM=cell == "slstm", BM=16, S=s, K1=k1, K2=k2, OUTPUT_MODE=mode,
                  SPIN=SPIN_LIMIT)
     src = triton.compiler.ASTSource(fn=_rtiled, signature=sig, constexprs=const)
     k = triton.compile(src, target=GPUTarget("cuda", 90, 32),
