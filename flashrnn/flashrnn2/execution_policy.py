@@ -3,7 +3,9 @@
 No request-time benchmarking or unqualified automatic SIMT selection occurs.
 Tables must be bound to a GPU/compiler identity by their producing experiment.
 """
+import json
 from dataclasses import asdict, dataclass
+from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -78,6 +80,9 @@ def shape_key(cell, dtype, batch, steps, heads, width):
     return f"{cell}/{dtype}/b{batch}/t{steps}/h{heads}/d{width}"
 
 
+TABLES = Path(__file__).resolve().parent / "tables"
+
+
 class ExecutionPolicy:
     """Exact-shape table with a conservative existing-kernel fallback."""
 
@@ -87,6 +92,14 @@ class ExecutionPolicy:
             key: value if isinstance(value, KernelConfig) else KernelConfig(**value)
             for key, value in (table or {}).items()
         }
+
+    @classmethod
+    def from_json(cls, path):
+        """Load a measured table file (identity + exact-shape entries), e.g. TABLES / "h100-rtiled-m6-20261014.json"."""
+        data = json.loads(Path(path).read_text())
+        if data.get("format") != "flashrnn2-execution-policy-table/1":
+            raise ValueError("unknown execution-policy table format")
+        return cls(data["table"], identity=data["identity"])
 
     def select(self, cell, dtype, batch, steps, heads, width, *, identity=None):
         if self.table and (not self.identity or identity != self.identity):

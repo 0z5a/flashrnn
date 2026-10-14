@@ -1,6 +1,6 @@
 # FlashRNN2 跨 SM 的 R 切分：H100 迭代报告
 
-日期：2026-10-14（Europe/Berlin）。分支 `flashrnn2-rtiled-20261014`。全部 GPU 结果来自 MareNostrum 5 ACC 节点（H100 SXM，驱动 595.91），Triton 3.6.0、PyTorch 2.4.0a0（cu118），TileLang 0.1.15。本报告逐项对应《FlashRNN2 迭代计划：跨 SM 的 R 切分与多后端》的 G1–G4 与 E1–E4。
+日期：2026-10-14（Europe/Berlin）。分支 `flashrnn2-rtiled-20261014`。全部 GPU 结果来自 MareNostrum 5 ACC 节点（H100 SXM，驱动 595.91.07），Triton 3.6.0、PyTorch 2.4.0a0（cu118），TileLang 0.1.15。本报告逐项对应《FlashRNN2 迭代计划：跨 SM 的 R 切分与多后端》的 G1–G4 与 E1–E4。
 
 ## 结论
 
@@ -14,6 +14,7 @@
   
   以上比较的是本次写的两份实现，不代表两个框架的上限。
 * **契约不变。** full / hidden / last、FP32 compute carry、分块续跑、sLSTM full-call 初始化、PreparedSequence 与 CUDA Graph 在 R 切分路径上全部逐位一致。
+* **G4 完成：TileLang 成为完整契约的合格后端，并接入查表（M6）。** 完整契约版 TileLang（`tilelang_cluster`）40/40 个配置（LSTM/sLSTM × FP16/BF16 × 10 种 (D, S)）全部通过 M0 标准：E1 160/160，逐位协议 1440/1440，压力 80/80；compute-sanitizer memcheck、synccheck 0 错误，racecheck 0 hazard。按 split 0 冻结的查表在 40 个形状里选 TileLang 37 个、Triton 3 个（B = 1 的 LSTM D384/512、sLSTM D512）。与保守默认（Triton 8 warps）配对计时，40/40 更快，1.01×–2.33×，几何平均 1.44×，区间全部高于 1。这张表作为注册表文件随代码提交。
 
 ## 目标完成情况
 
@@ -22,7 +23,7 @@
 | G1 D > 128 可运行并过数值门槛 | 达成：LSTM/sLSTM FP16/BF16，D = 192、256、384、512、768 | M0 job 47298120，E1 1120/1120 PASS |
 | G2 输出契约不变 | 达成：full / hidden / last、FP32 compute carry、分块续跑、sLSTM full-call 初始化；PreparedSequence 与 CUDA Graph | M0 protocol 1260/1260；M1 job 47298769 432/432 |
 | G3 对 v1 CUDA fused 的大 D 配对计时 | 达成：30/30 更快，1.12×–1.72×，区间均高于 1 | M4 job 47299690，5 启动 × 20 配对块 |
-| G4 合格 fallback 后端 | 部分达成：TileLang v2 与 ThunderKittens 均通过 spike 契约下的数值与 20 次逐位重复检查（各 20/20），TileLang v2 全面更快；尚未补齐完整契约（分块续跑、full/last 输出、BF16）也未接入注册表 | M3 job 47298769；M5 job 47301466、47303121 |
+| G4 合格 fallback 后端 | 达成：TileLang 完整契约 40/40 配置通过 M0 标准与 sanitizer；精确形状查表（37 TileLang + 3 Triton）对保守默认 40/40 更快（1.01×–2.33×），表文件 `flashrnn/flashrnn2/tables/h100-rtiled-m6-20261014.json` 绑定 GPU/Triton/TileLang 身份 | M6 job 47304776；M5 job 47301466、47303121 |
 
 ## 设计决定（M0）
 
@@ -109,6 +110,46 @@ ThunderKittens 对 Triton 的结果来自作业 47301466；另外两行来自作
 
 仍然存在的实现差异：屏障装填方式各按框架习惯（ThunderKittens 由接收方每步装填一次，TileLang 的 `copy_cluster` 由每个发送方远程装填），交换前 TileLang 有两次块级屏障、ThunderKittens 一次。这两点都对 ThunderKittens 有利，解释不了差距。
 
+## G4 收尾：完整契约 TileLang 与查表（M6）
+
+`flashrnn/flashrnn2/tilelang_cluster.py` 沿用 M5 的 TileLang v2 算法，补齐完整契约：
+
+* full / hidden / last 三种输出，FP32 最终 carry，快照可选输入 dtype 或 FP32；
+* 分块续跑：步数是运行时循环上界，kernel 接收全局起始步 `BASE` 和"是否为整次调用开头" `START`，读取上一块的 FP32 carry；
+* sLSTM 的 normalizer 只在整次调用第一步初始化；
+* `KernelConfig` 新增 `tilelang` 家族（batch tile 16，S = 16/32/64，`sync="cluster"`）；`PreparedSequence` 支持预分块与 CUDA Graph；`ExecutionPolicy` 在表选了 TileLang、运行环境却没有 TileLang 时直接报错，不会静默换后端。
+
+### 资格（作业 47304776，名 39，节点 as03r3b16）
+
+| 门槛 | 结果 |
+| --- | --- |
+| E1，fixture_math `CELL_BUDGET`，FP64 oracle；history、FP32 carry、hidden、last | 40/40 配置，160/160 用例，最差占预算 0.42%（BF16 sLSTM D192） |
+| 逐位协议：逐步启动、不规则预分块、公开分块调用、hidden/last = full、20 次重复、带生产者的侧流、CUDA Graph 重放、Graph 跟随绑定的初始状态 | 1440/1440 |
+| 压力：50 次重复逐位一致，最多 1024 个 CTA | 80/80 |
+| compute-sanitizer memcheck / synccheck（LSTM FP16 D256 S16 小用例） | 退出码 0，`ERROR SUMMARY: 0 errors` |
+| compute-sanitizer racecheck（同一用例，不阻断） | 退出码 0，`RACECHECK SUMMARY: 0 hazards displayed` |
+
+驱动收据把 racecheck 标成 FAIL：判定规则找的是 `ERROR SUMMARY` 行，而 racecheck 打印的是 `RACECHECK SUMMARY`。原始日志是干净的，收据保持原样。sanitizer 只覆盖一个小形状；racecheck 对 TMA/cluster 批量拷贝的覆盖可能不完整。TileLang 编译时仍然对单线程拷贝分支打印 `[ThreadSync] Hoisting sync` 警告，上面所有门槛都没有观察到竞争。
+
+### 查表与配对计时
+
+split 0 在 M0 合格的 Triton 配置和 40 个合格 TileLang 配置之间选择，冻结表（SHA256 3b1b8167…）后再在 split 1 上计时。200 次启动全部经由 `ExecutionPolicy.select(..., identity=runtime_identity())` 取配置，并与冻结表一致。基线是 `default_config(D)`（Triton R 切分，8 warps）。
+
+| 层级 | 行数 | 选中 | 加速比范围 | 几何平均 | 区间高于 1 |
+| --- | ---: | --- | --- | ---: | ---: |
+| 内核级（B = 16/64，T = 1024） | 16 | TileLang | 1.37×–2.33× | 1.68× | 16/16 |
+| 分类器（B = 1/16/32，T = 32/128） | 21 | TileLang | 1.01×–1.98× | 1.32× | 21/21 |
+| 分类器 | 3 | Triton 4 warps | 1.08×–1.18× | 1.13× | 3/3 |
+| 全部 | 40 | | 1.01×–2.33× | 1.44× | 40/40 |
+
+增益最大的是 sLSTM D192（内核级 2.24×–2.33×），最小的是 sLSTM D384 B1（1.012×，区间 1.006–1.020）。这里对比的是保守默认，不是最优 Triton 配置；对最优 Triton 配置的对比见 M5（内核级 1.24×–1.85×，分类器 1.05×–1.52×）。
+
+注册表：冻结表连同身份、适用范围、来源和逐行计时写入 `flashrnn/flashrnn2/tables/h100-rtiled-m6-20261014.json`，用 `ExecutionPolicy.from_json(TABLES / "h100-rtiled-m6-20261014.json")` 加载。身份为 `{gpu: "NVIDIA H100", capability: [9, 0], triton: "3.6.0", tilelang: "0.1.15"}`，任何不同的身份都会被 `select` 拒绝；表外形状保持 `default_config(D)`。`tests/test_execution_policy.py` 检查这个文件（12 个测试通过）。
+
+副产品（v1，作业 47304358）：TileLang 资格因测试工具 bug 中止后，驱动仍只在 Triton 配置之间选择并计时。Triton 按形状调参对保守默认 33/33 更快（1.003×–1.374×，几何平均 1.10×）；另外 7 行选中的就是默认配置，相当于 A/A 对照，结果 0.998×–1.001×，区间都覆盖 1。这张表只有 Triton，不是 G4 结果，没有作为注册表提交。
+
+详细数据见 `docs/flashrnn2/rtiled-m6.md`。
+
 ## 失败与修复记录
 
 | 作业 | 现象 | 原因 | 修复 |
@@ -118,6 +159,7 @@ ThunderKittens 对 Triton 的结果来自作业 47301466；另外两行来自作
 
 | 47301466（32） | TileLang v2 首检 `CUDA_ERROR_LAUNCH_FAILED`，其余 TileLang 检查跳过；ThunderKittens 对 Triton 正常完成 | TileLang 的 `tma_store_cluster` 自己会在接收方远程装填屏障，内核又按计数 1 装填了一次，到达数和字节数对不上，等待超时被捕获（调试作业 47301592 用 compute-sanitizer 定位） | 接收方计数改为 k − 1、不再自行装填；调试作业 47301920 全部用例通过、memcheck 干净 |
 | 47302393（36） | 数值检查全过，但选择阶段 TileLang 角色全部为空，没有计时 | 驱动按臂名 `tilelang` 判断是否加载 TileLang 环境，新臂名是 `tilelang_v2` | 选择阶段一律加载；重跑为作业 47303121 |
+| 47304358（38） | M6 首个资格配置 E1 与压力通过，protocol 阶段报 ERROR，其余 39 个未跑；sanitizer 实际没有执行；phase 1/2 只在 Triton 配置间选择 | 测试工具在 T = 17 时生成了长度为 0 的尾块；runtime.sh 忽略了 `FRNN_PREFIX`；驱动在没有合格 TileLang 配置时没有停止 | 尾块恒为正（T = 1–299 本地检查，旧写法复现 0 尾块）；恢复前缀并加登录节点对照（v1 runtime 复现缺失）；sanitizer 以工具退出码和汇总行判定；phase 0 不合格即停止；重跑为作业 47304776 |
 
 每次失败的原始输出都已归档并独立校验。
 
@@ -130,11 +172,14 @@ ThunderKittens 对 Triton 的结果来自作业 47301466；另外两行来自作
 * E4 的 TileLang 分支是未优化的 M3 spike（逐元素 SIMT 远程写 + 每步 cluster_sync），不代表 TileLang 上限；M5 的 TileLang v2 换了算法。
 * M5 的 ThunderKittens 与 TileLang 只实现 spike 契约（一次完整调用、hidden 与 FP32 carry），只在 FP16 下资格认证。
 * 计划中的 D/B/T 网格尚未与原作者确认；本次用计划暂定的 D = 192–768 与现有分类器负载。
+* M6 的 sanitizer 检查（memcheck、synccheck 阻断，racecheck 记录）是 M0 标准之外新增的，只覆盖一个小形状。
+* TileLang 的 BF16 已资格认证，但只计时并登记 FP16；查表只含 h = 1 的 40 个精确形状。
 
 ## 下一步
 
-* **选定 fallback：建议 TileLang v2。** 同一算法下它在 40 个对比里都比 ThunderKittens 快，也在 D = 192–512 的全部 40 个对比里快过 Triton R 切分；它还提供 `sync_grid`，可以覆盖 D = 768。
-* **补齐完整契约（G4）。** 分块续跑（起始步、续跑 carry、sLSTM 只在整次调用第一步初始化）、full 与 last 输出、BF16，再按 M0 的标准重新跑逐位协议、E1 数值和屏障压力。
-* **接入注册表。** 在 `KernelConfig` 增加 `tilelang` 家族，identity 记录 TileLang 版本；按形状冻结查表，没有合格后端时显式报错。由于 TileLang v2 在 D = 192–512 比 Triton 快，查表会把它选为这些形状的主路径，Triton 留给 D = 768 和 TileLang 不覆盖的形状，直到 TileLang 的 `sync_grid` 路径完成。
+* G1–G4 已全部达成。剩下的都是扩展，不是收尾必需：
+* **D = 768。** TileLang cluster 上限 16 个 CTA，D = 768 目前仍走 Triton R 切分；可以试 TileLang 的 `sync_grid`（k > 16），再按 M0 + M6 的标准资格认证和计时。
+* **扩大查表。** 现在的表只含 40 个精确形状（FP16、h = 1）。确认原作者的目标 D、B、T 网格后，按同样流程（split 0 选择 → 冻结 → split 1 计时）补表；BF16 已经资格认证，可以直接加入计时。
+* **打包检查。** `pyproject.toml` 已加入 `flashrnn/flashrnn2/tables/*.json`，但本地 setuptools 58 低于项目要求的 77，没有实际构建 wheel 验证表文件被打包。
 * D ≤ 128 保持单 CTA；如需再探索，应在预分配的 PreparedSequence 路径上单独配对计时。
 * 与原作者确认目标 D、B、T 网格，并回复原作者、更新 PR。

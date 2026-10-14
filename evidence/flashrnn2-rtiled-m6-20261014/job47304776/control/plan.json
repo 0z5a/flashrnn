@@ -1,0 +1,4127 @@
+{
+  "batch": "flashrnn2-rtiled-m6-20261014-v2",
+  "purpose": "G4 for the TileLang cluster backend: full-contract qualification at the M0 standard, then the exact-shape policy table (TileLang and Triton R tiling, D=192-512) against the conservative default (Triton mma_rtiled, eight warps) with paired timing",
+  "protocol": "phase 0: fixture_math CELL_BUDGET E1 (FP16/BF16; full/hidden/last; sLSTM zero/mixed/warm), bitwise per-step launches = ragged chunks = public chunked calls = one call, hidden/last = full, 20 repeats, side stream with producer, prepared CUDA Graph replay and bound-initial tracking, 50-repeat stress with up to 1024 CTAs, compute-sanitizer memcheck and synccheck (blocking: exit 0 and every ERROR SUMMARY line '0 errors'), racecheck recorded (non-blocking; coverage of TMA/cluster copies may be partial); phase 0 stops the batch when the first configuration ERRORs, a blocking sanitizer is not clean, or no FP16 TileLang configuration qualifies; phase 1: split-0 selection among qualified configurations; frozen comparison + policy tables (identity gpu/capability/triton/tilelang); phase 2: split-1 5 starts x 20 ABBA/BAAB blocks, policy served through ExecutionPolicy.select",
+  "minutes": 160,
+  "starts": 5,
+  "blocks": 20,
+  "qualification_timeout_s": 2400,
+  "tk_root": "",
+  "tk_cache": "/scratch/tmp/tueb043681-rtiled-m6-{job}-tk",
+  "qualifications": [
+    [
+      "lstm",
+      "bfloat16",
+      256,
+      16
+    ],
+    [
+      "lstm",
+      "float16",
+      256,
+      16
+    ],
+    [
+      "slstm",
+      "bfloat16",
+      256,
+      16
+    ],
+    [
+      "slstm",
+      "float16",
+      256,
+      16
+    ],
+    [
+      "lstm",
+      "bfloat16",
+      128,
+      32
+    ],
+    [
+      "lstm",
+      "bfloat16",
+      128,
+      64
+    ],
+    [
+      "lstm",
+      "bfloat16",
+      192,
+      16
+    ],
+    [
+      "lstm",
+      "bfloat16",
+      192,
+      32
+    ],
+    [
+      "lstm",
+      "bfloat16",
+      192,
+      64
+    ],
+    [
+      "lstm",
+      "bfloat16",
+      256,
+      32
+    ],
+    [
+      "lstm",
+      "bfloat16",
+      256,
+      64
+    ],
+    [
+      "lstm",
+      "bfloat16",
+      384,
+      32
+    ],
+    [
+      "lstm",
+      "bfloat16",
+      512,
+      32
+    ],
+    [
+      "lstm",
+      "float16",
+      128,
+      32
+    ],
+    [
+      "lstm",
+      "float16",
+      128,
+      64
+    ],
+    [
+      "lstm",
+      "float16",
+      192,
+      16
+    ],
+    [
+      "lstm",
+      "float16",
+      192,
+      32
+    ],
+    [
+      "lstm",
+      "float16",
+      192,
+      64
+    ],
+    [
+      "lstm",
+      "float16",
+      256,
+      32
+    ],
+    [
+      "lstm",
+      "float16",
+      256,
+      64
+    ],
+    [
+      "lstm",
+      "float16",
+      384,
+      32
+    ],
+    [
+      "lstm",
+      "float16",
+      512,
+      32
+    ],
+    [
+      "slstm",
+      "bfloat16",
+      128,
+      32
+    ],
+    [
+      "slstm",
+      "bfloat16",
+      128,
+      64
+    ],
+    [
+      "slstm",
+      "bfloat16",
+      192,
+      16
+    ],
+    [
+      "slstm",
+      "bfloat16",
+      192,
+      32
+    ],
+    [
+      "slstm",
+      "bfloat16",
+      192,
+      64
+    ],
+    [
+      "slstm",
+      "bfloat16",
+      256,
+      32
+    ],
+    [
+      "slstm",
+      "bfloat16",
+      256,
+      64
+    ],
+    [
+      "slstm",
+      "bfloat16",
+      384,
+      32
+    ],
+    [
+      "slstm",
+      "bfloat16",
+      512,
+      32
+    ],
+    [
+      "slstm",
+      "float16",
+      128,
+      32
+    ],
+    [
+      "slstm",
+      "float16",
+      128,
+      64
+    ],
+    [
+      "slstm",
+      "float16",
+      192,
+      16
+    ],
+    [
+      "slstm",
+      "float16",
+      192,
+      32
+    ],
+    [
+      "slstm",
+      "float16",
+      192,
+      64
+    ],
+    [
+      "slstm",
+      "float16",
+      256,
+      32
+    ],
+    [
+      "slstm",
+      "float16",
+      256,
+      64
+    ],
+    [
+      "slstm",
+      "float16",
+      384,
+      32
+    ],
+    [
+      "slstm",
+      "float16",
+      512,
+      32
+    ]
+  ],
+  "sanitizer_case": [
+    "lstm",
+    "float16",
+    256,
+    16
+  ],
+  "sanitizer_runs": [
+    {
+      "tool": "memcheck",
+      "prefix": "/apps/ACC/CUDA/12.8/bin/compute-sanitizer --target-processes application-only --error-exitcode 99 --tool memcheck",
+      "stages": "sanity",
+      "blocking": true
+    },
+    {
+      "tool": "synccheck",
+      "prefix": "/apps/ACC/CUDA/12.8/bin/compute-sanitizer --target-processes application-only --error-exitcode 99 --tool synccheck",
+      "stages": "sanity",
+      "blocking": true
+    },
+    {
+      "tool": "racecheck",
+      "prefix": "/apps/ACC/CUDA/12.8/bin/compute-sanitizer --target-processes application-only --error-exitcode 99 --tool racecheck --racecheck-report all",
+      "stages": "sanity",
+      "blocking": false
+    }
+  ],
+  "select_cases": [
+    {
+      "name": "k6-lstm-d192-b16-t1024",
+      "level": "kernel",
+      "lane": 0,
+      "cell": "lstm",
+      "width": 192,
+      "batch": 16,
+      "concurrency": 16,
+      "steps": 1024,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 128,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 128,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 16
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 64
+          }
+        ]
+      }
+    },
+    {
+      "name": "k6-lstm-d192-b64-t1024",
+      "level": "kernel",
+      "lane": 1,
+      "cell": "lstm",
+      "width": 192,
+      "batch": 64,
+      "concurrency": 64,
+      "steps": 1024,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 128,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 128,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 16
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 64
+          }
+        ]
+      }
+    },
+    {
+      "name": "k6-lstm-d256-b16-t1024",
+      "level": "kernel",
+      "lane": 2,
+      "cell": "lstm",
+      "width": 256,
+      "batch": 16,
+      "concurrency": 16,
+      "steps": 1024,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 16
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 64
+          }
+        ]
+      }
+    },
+    {
+      "name": "k6-lstm-d256-b64-t1024",
+      "level": "kernel",
+      "lane": 3,
+      "cell": "lstm",
+      "width": 256,
+      "batch": 64,
+      "concurrency": 64,
+      "steps": 1024,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 16
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 64
+          }
+        ]
+      }
+    },
+    {
+      "name": "k6-lstm-d384-b16-t1024",
+      "level": "kernel",
+      "lane": 0,
+      "cell": "lstm",
+      "width": 384,
+      "batch": 16,
+      "concurrency": 16,
+      "steps": 1024,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          }
+        ]
+      }
+    },
+    {
+      "name": "k6-lstm-d384-b64-t1024",
+      "level": "kernel",
+      "lane": 1,
+      "cell": "lstm",
+      "width": 384,
+      "batch": 64,
+      "concurrency": 64,
+      "steps": 1024,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          }
+        ]
+      }
+    },
+    {
+      "name": "k6-lstm-d512-b16-t1024",
+      "level": "kernel",
+      "lane": 2,
+      "cell": "lstm",
+      "width": 512,
+      "batch": 16,
+      "concurrency": 16,
+      "steps": 1024,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          }
+        ]
+      }
+    },
+    {
+      "name": "k6-lstm-d512-b64-t1024",
+      "level": "kernel",
+      "lane": 3,
+      "cell": "lstm",
+      "width": 512,
+      "batch": 64,
+      "concurrency": 64,
+      "steps": 1024,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          }
+        ]
+      }
+    },
+    {
+      "name": "k6-slstm-d192-b16-t1024",
+      "level": "kernel",
+      "lane": 0,
+      "cell": "slstm",
+      "width": 192,
+      "batch": 16,
+      "concurrency": 16,
+      "steps": 1024,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 128,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 128,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 16
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 64
+          }
+        ]
+      }
+    },
+    {
+      "name": "k6-slstm-d192-b64-t1024",
+      "level": "kernel",
+      "lane": 1,
+      "cell": "slstm",
+      "width": 192,
+      "batch": 64,
+      "concurrency": 64,
+      "steps": 1024,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 128,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 128,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 16
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 64
+          }
+        ]
+      }
+    },
+    {
+      "name": "k6-slstm-d256-b16-t1024",
+      "level": "kernel",
+      "lane": 2,
+      "cell": "slstm",
+      "width": 256,
+      "batch": 16,
+      "concurrency": 16,
+      "steps": 1024,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 16
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 64
+          }
+        ]
+      }
+    },
+    {
+      "name": "k6-slstm-d256-b64-t1024",
+      "level": "kernel",
+      "lane": 3,
+      "cell": "slstm",
+      "width": 256,
+      "batch": 64,
+      "concurrency": 64,
+      "steps": 1024,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 16
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 64
+          }
+        ]
+      }
+    },
+    {
+      "name": "k6-slstm-d384-b16-t1024",
+      "level": "kernel",
+      "lane": 0,
+      "cell": "slstm",
+      "width": 384,
+      "batch": 16,
+      "concurrency": 16,
+      "steps": 1024,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          }
+        ]
+      }
+    },
+    {
+      "name": "k6-slstm-d384-b64-t1024",
+      "level": "kernel",
+      "lane": 1,
+      "cell": "slstm",
+      "width": 384,
+      "batch": 64,
+      "concurrency": 64,
+      "steps": 1024,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          }
+        ]
+      }
+    },
+    {
+      "name": "k6-slstm-d512-b16-t1024",
+      "level": "kernel",
+      "lane": 2,
+      "cell": "slstm",
+      "width": 512,
+      "batch": 16,
+      "concurrency": 16,
+      "steps": 1024,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          }
+        ]
+      }
+    },
+    {
+      "name": "k6-slstm-d512-b64-t1024",
+      "level": "kernel",
+      "lane": 3,
+      "cell": "slstm",
+      "width": 512,
+      "batch": 64,
+      "concurrency": 64,
+      "steps": 1024,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          }
+        ]
+      }
+    },
+    {
+      "name": "m6-lstm-d192-b1-c8-t32",
+      "lane": 0,
+      "cell": "lstm",
+      "width": 192,
+      "batch": 1,
+      "concurrency": 8,
+      "steps": 32,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 128,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 128,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 16
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 64
+          }
+        ]
+      }
+    },
+    {
+      "name": "m6-lstm-d192-b16-c32-t32",
+      "lane": 1,
+      "cell": "lstm",
+      "width": 192,
+      "batch": 16,
+      "concurrency": 32,
+      "steps": 32,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 128,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 128,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 16
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 64
+          }
+        ]
+      }
+    },
+    {
+      "name": "m6-lstm-d192-b32-c64-t128",
+      "lane": 2,
+      "cell": "lstm",
+      "width": 192,
+      "batch": 32,
+      "concurrency": 64,
+      "steps": 128,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 128,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 128,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 16
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 64
+          }
+        ]
+      }
+    },
+    {
+      "name": "m6-lstm-d256-b1-c8-t32",
+      "lane": 3,
+      "cell": "lstm",
+      "width": 256,
+      "batch": 1,
+      "concurrency": 8,
+      "steps": 32,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 16
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 64
+          }
+        ]
+      }
+    },
+    {
+      "name": "m6-lstm-d256-b16-c32-t32",
+      "lane": 0,
+      "cell": "lstm",
+      "width": 256,
+      "batch": 16,
+      "concurrency": 32,
+      "steps": 32,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 16
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 64
+          }
+        ]
+      }
+    },
+    {
+      "name": "m6-lstm-d256-b32-c64-t128",
+      "lane": 1,
+      "cell": "lstm",
+      "width": 256,
+      "batch": 32,
+      "concurrency": 64,
+      "steps": 128,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 16
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 64
+          }
+        ]
+      }
+    },
+    {
+      "name": "m6-lstm-d384-b1-c8-t32",
+      "lane": 2,
+      "cell": "lstm",
+      "width": 384,
+      "batch": 1,
+      "concurrency": 8,
+      "steps": 32,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          }
+        ]
+      }
+    },
+    {
+      "name": "m6-lstm-d384-b16-c32-t32",
+      "lane": 3,
+      "cell": "lstm",
+      "width": 384,
+      "batch": 16,
+      "concurrency": 32,
+      "steps": 32,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          }
+        ]
+      }
+    },
+    {
+      "name": "m6-lstm-d384-b32-c64-t128",
+      "lane": 0,
+      "cell": "lstm",
+      "width": 384,
+      "batch": 32,
+      "concurrency": 64,
+      "steps": 128,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          }
+        ]
+      }
+    },
+    {
+      "name": "m6-lstm-d512-b1-c8-t32",
+      "lane": 1,
+      "cell": "lstm",
+      "width": 512,
+      "batch": 1,
+      "concurrency": 8,
+      "steps": 32,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          }
+        ]
+      }
+    },
+    {
+      "name": "m6-lstm-d512-b16-c32-t32",
+      "lane": 2,
+      "cell": "lstm",
+      "width": 512,
+      "batch": 16,
+      "concurrency": 32,
+      "steps": 32,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          }
+        ]
+      }
+    },
+    {
+      "name": "m6-lstm-d512-b32-c64-t128",
+      "lane": 3,
+      "cell": "lstm",
+      "width": 512,
+      "batch": 32,
+      "concurrency": 64,
+      "steps": 128,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          }
+        ]
+      }
+    },
+    {
+      "name": "m6-slstm-d192-b1-c8-t32",
+      "lane": 0,
+      "cell": "slstm",
+      "width": 192,
+      "batch": 1,
+      "concurrency": 8,
+      "steps": 32,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 128,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 128,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 16
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 64
+          }
+        ]
+      }
+    },
+    {
+      "name": "m6-slstm-d192-b16-c32-t32",
+      "lane": 1,
+      "cell": "slstm",
+      "width": 192,
+      "batch": 16,
+      "concurrency": 32,
+      "steps": 32,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 128,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 128,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 16
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 64
+          }
+        ]
+      }
+    },
+    {
+      "name": "m6-slstm-d192-b32-c64-t128",
+      "lane": 2,
+      "cell": "slstm",
+      "width": 192,
+      "batch": 32,
+      "concurrency": 64,
+      "steps": 128,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 128,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 128,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 16
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 64
+          }
+        ]
+      }
+    },
+    {
+      "name": "m6-slstm-d256-b1-c8-t32",
+      "lane": 3,
+      "cell": "slstm",
+      "width": 256,
+      "batch": 1,
+      "concurrency": 8,
+      "steps": 32,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 16
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 64
+          }
+        ]
+      }
+    },
+    {
+      "name": "m6-slstm-d256-b16-c32-t32",
+      "lane": 0,
+      "cell": "slstm",
+      "width": 256,
+      "batch": 16,
+      "concurrency": 32,
+      "steps": 32,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 16
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 64
+          }
+        ]
+      }
+    },
+    {
+      "name": "m6-slstm-d256-b32-c64-t128",
+      "lane": 1,
+      "cell": "slstm",
+      "width": 256,
+      "batch": 32,
+      "concurrency": 64,
+      "steps": 128,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 16
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 64
+          }
+        ]
+      }
+    },
+    {
+      "name": "m6-slstm-d384-b1-c8-t32",
+      "lane": 2,
+      "cell": "slstm",
+      "width": 384,
+      "batch": 1,
+      "concurrency": 8,
+      "steps": 32,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          }
+        ]
+      }
+    },
+    {
+      "name": "m6-slstm-d384-b16-c32-t32",
+      "lane": 3,
+      "cell": "slstm",
+      "width": 384,
+      "batch": 16,
+      "concurrency": 32,
+      "steps": 32,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          }
+        ]
+      }
+    },
+    {
+      "name": "m6-slstm-d384-b32-c64-t128",
+      "lane": 0,
+      "cell": "slstm",
+      "width": 384,
+      "batch": 32,
+      "concurrency": 64,
+      "steps": 128,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": true
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 64,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          }
+        ]
+      }
+    },
+    {
+      "name": "m6-slstm-d512-b1-c8-t32",
+      "lane": 1,
+      "cell": "slstm",
+      "width": 512,
+      "batch": 1,
+      "concurrency": 8,
+      "steps": 32,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          }
+        ]
+      }
+    },
+    {
+      "name": "m6-slstm-d512-b16-c32-t32",
+      "lane": 2,
+      "cell": "slstm",
+      "width": 512,
+      "batch": 16,
+      "concurrency": 32,
+      "steps": 32,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          }
+        ]
+      }
+    },
+    {
+      "name": "m6-slstm-d512-b32-c64-t128",
+      "lane": 3,
+      "cell": "slstm",
+      "width": 512,
+      "batch": 32,
+      "concurrency": 64,
+      "steps": 128,
+      "roles": {
+        "default": [
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          }
+        ],
+        "policy": [
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 16,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 4,
+            "pad_k": false
+          },
+          {
+            "kind": "rtiled",
+            "slice_width": 32,
+            "warps": 8,
+            "pad_k": false
+          },
+          {
+            "kind": "tilelang_full",
+            "slice_width": 32
+          }
+        ]
+      }
+    }
+  ],
+  "comparisons": [
+    {
+      "cell": "lstm",
+      "width": 192,
+      "batch": 16,
+      "concurrency": 16,
+      "steps": 1024,
+      "select_case": "k6-lstm-d192-b16-t1024",
+      "level": "kernel",
+      "name": "k6-lstm-d192-b16-t1024-policy-vs-default",
+      "experiment": "K_POLICY_VS_DEFAULT",
+      "lane": 0,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "lstm",
+      "width": 192,
+      "batch": 64,
+      "concurrency": 64,
+      "steps": 1024,
+      "select_case": "k6-lstm-d192-b64-t1024",
+      "level": "kernel",
+      "name": "k6-lstm-d192-b64-t1024-policy-vs-default",
+      "experiment": "K_POLICY_VS_DEFAULT",
+      "lane": 1,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "lstm",
+      "width": 256,
+      "batch": 16,
+      "concurrency": 16,
+      "steps": 1024,
+      "select_case": "k6-lstm-d256-b16-t1024",
+      "level": "kernel",
+      "name": "k6-lstm-d256-b16-t1024-policy-vs-default",
+      "experiment": "K_POLICY_VS_DEFAULT",
+      "lane": 2,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "lstm",
+      "width": 256,
+      "batch": 64,
+      "concurrency": 64,
+      "steps": 1024,
+      "select_case": "k6-lstm-d256-b64-t1024",
+      "level": "kernel",
+      "name": "k6-lstm-d256-b64-t1024-policy-vs-default",
+      "experiment": "K_POLICY_VS_DEFAULT",
+      "lane": 3,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "lstm",
+      "width": 384,
+      "batch": 16,
+      "concurrency": 16,
+      "steps": 1024,
+      "select_case": "k6-lstm-d384-b16-t1024",
+      "level": "kernel",
+      "name": "k6-lstm-d384-b16-t1024-policy-vs-default",
+      "experiment": "K_POLICY_VS_DEFAULT",
+      "lane": 0,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "lstm",
+      "width": 384,
+      "batch": 64,
+      "concurrency": 64,
+      "steps": 1024,
+      "select_case": "k6-lstm-d384-b64-t1024",
+      "level": "kernel",
+      "name": "k6-lstm-d384-b64-t1024-policy-vs-default",
+      "experiment": "K_POLICY_VS_DEFAULT",
+      "lane": 1,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "lstm",
+      "width": 512,
+      "batch": 16,
+      "concurrency": 16,
+      "steps": 1024,
+      "select_case": "k6-lstm-d512-b16-t1024",
+      "level": "kernel",
+      "name": "k6-lstm-d512-b16-t1024-policy-vs-default",
+      "experiment": "K_POLICY_VS_DEFAULT",
+      "lane": 2,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "lstm",
+      "width": 512,
+      "batch": 64,
+      "concurrency": 64,
+      "steps": 1024,
+      "select_case": "k6-lstm-d512-b64-t1024",
+      "level": "kernel",
+      "name": "k6-lstm-d512-b64-t1024-policy-vs-default",
+      "experiment": "K_POLICY_VS_DEFAULT",
+      "lane": 3,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "slstm",
+      "width": 192,
+      "batch": 16,
+      "concurrency": 16,
+      "steps": 1024,
+      "select_case": "k6-slstm-d192-b16-t1024",
+      "level": "kernel",
+      "name": "k6-slstm-d192-b16-t1024-policy-vs-default",
+      "experiment": "K_POLICY_VS_DEFAULT",
+      "lane": 0,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "slstm",
+      "width": 192,
+      "batch": 64,
+      "concurrency": 64,
+      "steps": 1024,
+      "select_case": "k6-slstm-d192-b64-t1024",
+      "level": "kernel",
+      "name": "k6-slstm-d192-b64-t1024-policy-vs-default",
+      "experiment": "K_POLICY_VS_DEFAULT",
+      "lane": 1,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "slstm",
+      "width": 256,
+      "batch": 16,
+      "concurrency": 16,
+      "steps": 1024,
+      "select_case": "k6-slstm-d256-b16-t1024",
+      "level": "kernel",
+      "name": "k6-slstm-d256-b16-t1024-policy-vs-default",
+      "experiment": "K_POLICY_VS_DEFAULT",
+      "lane": 2,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "slstm",
+      "width": 256,
+      "batch": 64,
+      "concurrency": 64,
+      "steps": 1024,
+      "select_case": "k6-slstm-d256-b64-t1024",
+      "level": "kernel",
+      "name": "k6-slstm-d256-b64-t1024-policy-vs-default",
+      "experiment": "K_POLICY_VS_DEFAULT",
+      "lane": 3,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "slstm",
+      "width": 384,
+      "batch": 16,
+      "concurrency": 16,
+      "steps": 1024,
+      "select_case": "k6-slstm-d384-b16-t1024",
+      "level": "kernel",
+      "name": "k6-slstm-d384-b16-t1024-policy-vs-default",
+      "experiment": "K_POLICY_VS_DEFAULT",
+      "lane": 0,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "slstm",
+      "width": 384,
+      "batch": 64,
+      "concurrency": 64,
+      "steps": 1024,
+      "select_case": "k6-slstm-d384-b64-t1024",
+      "level": "kernel",
+      "name": "k6-slstm-d384-b64-t1024-policy-vs-default",
+      "experiment": "K_POLICY_VS_DEFAULT",
+      "lane": 1,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "slstm",
+      "width": 512,
+      "batch": 16,
+      "concurrency": 16,
+      "steps": 1024,
+      "select_case": "k6-slstm-d512-b16-t1024",
+      "level": "kernel",
+      "name": "k6-slstm-d512-b16-t1024-policy-vs-default",
+      "experiment": "K_POLICY_VS_DEFAULT",
+      "lane": 2,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "slstm",
+      "width": 512,
+      "batch": 64,
+      "concurrency": 64,
+      "steps": 1024,
+      "select_case": "k6-slstm-d512-b64-t1024",
+      "level": "kernel",
+      "name": "k6-slstm-d512-b64-t1024-policy-vs-default",
+      "experiment": "K_POLICY_VS_DEFAULT",
+      "lane": 3,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "lstm",
+      "width": 192,
+      "batch": 1,
+      "concurrency": 8,
+      "steps": 32,
+      "select_case": "m6-lstm-d192-b1-c8-t32",
+      "name": "m6-lstm-d192-b1-c8-t32-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "lane": 0,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "lstm",
+      "width": 192,
+      "batch": 16,
+      "concurrency": 32,
+      "steps": 32,
+      "select_case": "m6-lstm-d192-b16-c32-t32",
+      "name": "m6-lstm-d192-b16-c32-t32-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "lane": 1,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "lstm",
+      "width": 192,
+      "batch": 32,
+      "concurrency": 64,
+      "steps": 128,
+      "select_case": "m6-lstm-d192-b32-c64-t128",
+      "name": "m6-lstm-d192-b32-c64-t128-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "lane": 2,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "lstm",
+      "width": 256,
+      "batch": 1,
+      "concurrency": 8,
+      "steps": 32,
+      "select_case": "m6-lstm-d256-b1-c8-t32",
+      "name": "m6-lstm-d256-b1-c8-t32-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "lane": 3,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "lstm",
+      "width": 256,
+      "batch": 16,
+      "concurrency": 32,
+      "steps": 32,
+      "select_case": "m6-lstm-d256-b16-c32-t32",
+      "name": "m6-lstm-d256-b16-c32-t32-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "lane": 0,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "lstm",
+      "width": 256,
+      "batch": 32,
+      "concurrency": 64,
+      "steps": 128,
+      "select_case": "m6-lstm-d256-b32-c64-t128",
+      "name": "m6-lstm-d256-b32-c64-t128-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "lane": 1,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "lstm",
+      "width": 384,
+      "batch": 1,
+      "concurrency": 8,
+      "steps": 32,
+      "select_case": "m6-lstm-d384-b1-c8-t32",
+      "name": "m6-lstm-d384-b1-c8-t32-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "lane": 2,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "lstm",
+      "width": 384,
+      "batch": 16,
+      "concurrency": 32,
+      "steps": 32,
+      "select_case": "m6-lstm-d384-b16-c32-t32",
+      "name": "m6-lstm-d384-b16-c32-t32-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "lane": 3,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "lstm",
+      "width": 384,
+      "batch": 32,
+      "concurrency": 64,
+      "steps": 128,
+      "select_case": "m6-lstm-d384-b32-c64-t128",
+      "name": "m6-lstm-d384-b32-c64-t128-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "lane": 0,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "lstm",
+      "width": 512,
+      "batch": 1,
+      "concurrency": 8,
+      "steps": 32,
+      "select_case": "m6-lstm-d512-b1-c8-t32",
+      "name": "m6-lstm-d512-b1-c8-t32-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "lane": 1,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "lstm",
+      "width": 512,
+      "batch": 16,
+      "concurrency": 32,
+      "steps": 32,
+      "select_case": "m6-lstm-d512-b16-c32-t32",
+      "name": "m6-lstm-d512-b16-c32-t32-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "lane": 2,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "lstm",
+      "width": 512,
+      "batch": 32,
+      "concurrency": 64,
+      "steps": 128,
+      "select_case": "m6-lstm-d512-b32-c64-t128",
+      "name": "m6-lstm-d512-b32-c64-t128-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "lane": 3,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "slstm",
+      "width": 192,
+      "batch": 1,
+      "concurrency": 8,
+      "steps": 32,
+      "select_case": "m6-slstm-d192-b1-c8-t32",
+      "name": "m6-slstm-d192-b1-c8-t32-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "lane": 0,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "slstm",
+      "width": 192,
+      "batch": 16,
+      "concurrency": 32,
+      "steps": 32,
+      "select_case": "m6-slstm-d192-b16-c32-t32",
+      "name": "m6-slstm-d192-b16-c32-t32-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "lane": 1,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "slstm",
+      "width": 192,
+      "batch": 32,
+      "concurrency": 64,
+      "steps": 128,
+      "select_case": "m6-slstm-d192-b32-c64-t128",
+      "name": "m6-slstm-d192-b32-c64-t128-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "lane": 2,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "slstm",
+      "width": 256,
+      "batch": 1,
+      "concurrency": 8,
+      "steps": 32,
+      "select_case": "m6-slstm-d256-b1-c8-t32",
+      "name": "m6-slstm-d256-b1-c8-t32-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "lane": 3,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "slstm",
+      "width": 256,
+      "batch": 16,
+      "concurrency": 32,
+      "steps": 32,
+      "select_case": "m6-slstm-d256-b16-c32-t32",
+      "name": "m6-slstm-d256-b16-c32-t32-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "lane": 0,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "slstm",
+      "width": 256,
+      "batch": 32,
+      "concurrency": 64,
+      "steps": 128,
+      "select_case": "m6-slstm-d256-b32-c64-t128",
+      "name": "m6-slstm-d256-b32-c64-t128-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "lane": 1,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "slstm",
+      "width": 384,
+      "batch": 1,
+      "concurrency": 8,
+      "steps": 32,
+      "select_case": "m6-slstm-d384-b1-c8-t32",
+      "name": "m6-slstm-d384-b1-c8-t32-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "lane": 2,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "slstm",
+      "width": 384,
+      "batch": 16,
+      "concurrency": 32,
+      "steps": 32,
+      "select_case": "m6-slstm-d384-b16-c32-t32",
+      "name": "m6-slstm-d384-b16-c32-t32-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "lane": 3,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "slstm",
+      "width": 384,
+      "batch": 32,
+      "concurrency": 64,
+      "steps": 128,
+      "select_case": "m6-slstm-d384-b32-c64-t128",
+      "name": "m6-slstm-d384-b32-c64-t128-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "lane": 0,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "slstm",
+      "width": 512,
+      "batch": 1,
+      "concurrency": 8,
+      "steps": 32,
+      "select_case": "m6-slstm-d512-b1-c8-t32",
+      "name": "m6-slstm-d512-b1-c8-t32-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "lane": 1,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "slstm",
+      "width": 512,
+      "batch": 16,
+      "concurrency": 32,
+      "steps": 32,
+      "select_case": "m6-slstm-d512-b16-c32-t32",
+      "name": "m6-slstm-d512-b16-c32-t32-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "lane": 2,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    },
+    {
+      "cell": "slstm",
+      "width": 512,
+      "batch": 32,
+      "concurrency": 64,
+      "steps": 128,
+      "select_case": "m6-slstm-d512-b32-c64-t128",
+      "name": "m6-slstm-d512-b32-c64-t128-policy-vs-default",
+      "experiment": "POLICY_VS_DEFAULT",
+      "lane": 3,
+      "baseline": {
+        "from_role": "default"
+      },
+      "candidate_role": "policy"
+    }
+  ],
+  "node_reason": "One ACC node (4 H100): qualification tasks in parallel lanes, then selection and paired timing pinned to GPU-local cores",
+  "deviations": [
+    "D <= 128 stays outside the policy table (E2 kept the single-CTA default)",
+    "D = 768 is not covered by the cluster path (k > 16)",
+    "lanes time concurrently",
+    "v2 rerun of v1 (job 47304358): v1 stopped on a harness bug (ragged chunk list with a zero-length tail for T=17), its sanitizer runs did not execute under compute-sanitizer (runtime.sh ignored FRNN_PREFIX), and its phase 1/2 ran Triton-only; v2 fixes the chunk construction, restores the prefix with a dry-run control, gates the sanitizer on the tool's own exit code and summary, and stops after phase 0 without a qualified TileLang backend"
+  ],
+  "not_claimed": [
+    "E2E model quality",
+    "backward",
+    "multi-GPU"
+  ]
+}

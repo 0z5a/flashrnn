@@ -83,5 +83,45 @@ class TileLangPolicyContract(unittest.TestCase):
         self.assertEqual(ExecutionPolicy().select("lstm", "float16", 16, 1024, 1, 256).family, "mma_rtiled")
 
 
+class PackagedTableContract(unittest.TestCase):
+    """The M6 H100 table (job 47304776) as shipped: every entry valid, bound to its identity, no silent switch."""
+
+    path = module.TABLES / "h100-rtiled-m6-20261014.json"
+
+    def test_every_entry_is_a_valid_config_for_its_shape(self):
+        policy = ExecutionPolicy.from_json(self.path)
+        self.assertEqual(len(policy.table), 40)
+        families = sorted(c.family for c in policy.table.values())
+        self.assertEqual((families.count("tilelang"), families.count("mma_rtiled")), (37, 3))
+        for key, config in policy.table.items():
+            cell, dtype, batch, steps, heads, width = key.split("/")
+            self.assertEqual((cell in ("lstm", "slstm"), dtype, heads), (True, "float16", "h1"))
+            self.assertGreater(int(width[1:]), 128)
+            self.assertEqual(int(width[1:]) % config.slice_width, 0)
+
+    def test_selects_only_under_the_measured_identity(self):
+        policy = ExecutionPolicy.from_json(self.path)
+        identity = dict(policy.identity)
+        self.assertEqual(set(identity), {"gpu", "capability", "triton", "tilelang"})
+        shape = ("slstm", "float16", 16, 1024, 1, 192)
+        self.assertEqual(policy.select(*shape, identity=identity),
+                         KernelConfig(family="tilelang", slice_width=16, sync="cluster"))
+        self.assertEqual(policy.select("lstm", "float16", 1, 32, 1, 512, identity=identity).family, "mma_rtiled")
+        self.assertEqual(policy.select("lstm", "float16", 2, 32, 1, 512, identity=identity),
+                         module.default_config(512))
+        for wrong in (dict(identity, tilelang=None), dict(identity, triton="3.5.0"), dict(identity, gpu="NVIDIA A100")):
+            with self.assertRaises(ValueError):
+                policy.select(*shape, identity=wrong)
+
+    def test_unknown_format_is_rejected(self):
+        import json
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            bad = Path(d) / "t.json"
+            bad.write_text(json.dumps(dict(json.loads(self.path.read_text()), format="other")))
+            with self.assertRaises(ValueError):
+                ExecutionPolicy.from_json(bad)
+
+
 if __name__ == "__main__":
     unittest.main()
