@@ -74,11 +74,13 @@ rtiled_kernel(const half *__restrict__ wx, const half *__restrict__ R, const hal
         init_semaphore(ready[1], 1, 0);
         asm volatile("fence.mbarrier_init.release.cluster;\n" ::: "memory");
     }
-    // R slice, gate-major rows: q = g*S + j  ->  R[g, head, s*S + j, :]
-    for (int idx = tid; idx < L::NT * 64 * D; idx += THREADS) {
-        const int q = idx / D, k = idx % D;
+    // R slice, gate-major rows: q = g*S + j  ->  R[g, head, s*S + j, :], 16-byte vector loads along k.
+    // The tile swizzle permutes whole 16-byte chunks, so an aligned 8-half chunk stays contiguous.
+    for (int idx = tid; idx < L::NT * 64 * (D / 8); idx += THREADS) {
+        const int q = idx / (D / 8), k = (idx % (D / 8)) * 8;
         const int g = q / S, j = q % S;
-        rt[q / 64][{q % 64, k}] = R[((size_t)(g * H + head) * D + s * S + j) * D + k];
+        *reinterpret_cast<uint4 *>(&rt[q / 64][{q % 64, k}]) =
+            *reinterpret_cast<const uint4 *>(&R[((size_t)(g * H + head) * D + s * S + j) * D + k]);
     }
     // h0^T into buffer 0 (every CTA loads the full initial hidden state)
     for (int idx = tid; idx < D * BM; idx += THREADS) {

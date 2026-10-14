@@ -386,7 +386,17 @@ def mode_cellcheck(args):
                               carry=fm.compare(carry.cpu().numpy(), final.cpu().numpy(), fm.CELL_BUDGET))
                 case_ok = all(c["pass_"] for c in checks.values())
                 ok &= case_ok
+                repeat_bitwise = None
+                if batch == 16:
+                    # A protocol race shows up as run-to-run differences: require 20 bit-identical repeats.
+                    with torch.inference_mode():
+                        repeat_bitwise = all(
+                            torch.equal(a, y) and torch.equal(b, carry)
+                            for a, b in (fn(*vals, args.cell, slice_width=args.slice) for _ in range(20)))
+                    case_ok &= repeat_bitwise
+                    ok &= repeat_bitwise
                 rec["cases"].append(dict(batch=batch, steps=steps, heads=heads, mode=mode, checks=checks,
+                                         repeat_20_bitwise=repeat_bitwise,
                                          vs_triton_hidden_max_abs=float((y.float() - ty.float()).abs().max()),
                                          vs_triton_hidden_bitwise=bool(torch.equal(y, ty)),
                                          status="PASS" if case_ok else "NUMERICAL_FAIL"))
@@ -397,6 +407,141 @@ def mode_cellcheck(args):
     write(Path(args.out) / "cellcheck.json", rec)
     print(json.dumps({k: rec[k] for k in ("backend", "cell", "width", "slice_width", "status", "seconds")}), flush=True)
     return 0
+
+
+def kernel_fn(spec, cell):
+    """Raw backend call on preallocated inputs (hidden history, input dtype)."""
+    kind = spec["kind"]
+    if kind == "tk":
+        from flashrnn.flashrnn2 import tk_rtiled
+        return lambda v: tk_rtiled.recurrence(*v, cell, slice_width=spec["slice_width"])[0]
+    if kind == "tilelang_v2":
+        from flashrnn.flashrnn2 import tilelang_rtiled
+        return lambda v: tilelang_rtiled.recurrence_v2(*v, cell, slice_width=spec["slice_width"])[0]
+    if kind == "rtiled":
+        def run(v):
+            ctx = begin_sequence(v[3], cell, v[0].dtype)
+            return triton_rtiled.recurrence(*v, cell, sequence_context=ctx, slice_width=spec["slice_width"],
+                                            num_warps=spec["warps"], pad_k=spec.get("pad_k", False),
+                                            output_mode="hidden")[0]
+        return run
+    raise ValueError(kind)
+
+
+def kernel_values(cell, batch, width, steps, split):
+    return cell_inputs(cell, batch, steps, 1, width, "warm", 20261100 + 1000 * split + width + batch)
+
+
+def kernel_qualify(values, cell, fns):
+    import fixture_math as fm
+    with torch.inference_mode():
+        ref, _ = reference.recurrence(*(v.double() for v in values), cell, torch.float16)
+        outs = {name: fn(values) for name, fn in fns.items()}
+    torch.cuda.synchronize()
+    checks = {name: fm.compare(y.float().cpu().numpy(), ref[0].cpu().numpy(), fm.CELL_BUDGET) for name, y in
+              outs.items()}
+    return checks, outs
+
+
+def event_ms(fn, values, calls):
+    start, end = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+    start.record()
+    for _ in range(calls):
+        y = fn(values)
+    end.record()
+    torch.cuda.synchronize()
+    return start.elapsed_time(end) / calls, y
+
+
+def mode_kselect(args):
+    case = json.loads(args.case)
+    cell, width, batch, steps = case["cell"], case["width"], case["batch"], case["steps"]
+    rec = dict(mode="kselect", case=case, identity=identity(), split=0, candidates={})
+    values = kernel_values(cell, batch, width, steps, 0)
+    for role, specs in case["roles"].items():
+        fns, qual = {}, {}
+        for spec in specs:
+            name = json.dumps(spec, sort_keys=True)
+            try:
+                fn = kernel_fn(spec, cell)
+                checks, _ = kernel_qualify(values, cell, {"x": fn})
+                qual[name] = "PASS" if checks["x"]["pass_"] else "NUMERICAL_FAIL"
+                if checks["x"]["pass_"]:
+                    fns[name] = fn
+            except Exception as e:  # noqa: BLE001
+                qual[name] = f"ERROR: {type(e).__name__}: {str(e)[:300]}"
+        med = {}
+        if fns:
+            with torch.inference_mode():
+                for fn in fns.values():
+                    event_ms(fn, values, 2)
+                names, times = list(fns), {n: [] for n in fns}
+                for r in range(6):
+                    for n in names[r % len(names):] + names[:r % len(names)]:
+                        times[n].append(event_ms(fns[n], values, 3)[0])
+            med = {n: sorted(v)[len(v) // 2] for n, v in times.items()}
+        best = min(med, key=med.get) if med else None
+        rec["candidates"][role] = dict(qualification=qual, median_ms=med, selected=json.loads(best) if best else None)
+        print(json.dumps(dict(case=case["name"], role=role, selected=best)), flush=True)
+    rec["status"] = "SELECTED" if all(v["selected"] for v in rec["candidates"].values()) else "INCOMPLETE"
+    write(Path(args.out) / "select.json", rec)
+    return 0
+
+
+def mode_kstart(args):
+    table_path = Path(args.table)
+    table = json.loads(table_path.read_text())
+    assert sha(table_path) == args.table_sha256, "frozen table changed"
+    comp = next(c for c in table["comparisons"] if c["name"] == args.comparison)
+    cell, width, batch, steps = (comp[k] for k in ("cell", "width", "batch", "steps"))
+    out = Path(args.out)
+    meta = dict(comparison=comp, start=args.start, split=1, identity=identity(), table_sha256=args.table_sha256,
+                pid=os.getpid(), host=os.uname().nodename, gpu_uuid=os.environ.get("FRNN_GPU_UUID"),
+                cpu_affinity=sorted(os.sched_getaffinity(0)), started=time.time(), blocks=args.blocks,
+                order="ABBA even blocks, BAAB odd blocks",
+                arm_unit="CUDA-event time per call over a fixed number of back-to-back calls on preallocated inputs",
+                budget="fixture_math.CELL_BUDGET")
+    write(out / "meta.json", meta)
+    values = kernel_values(cell, batch, width, steps, 1)
+    fns = {"baseline": kernel_fn(comp["baseline"], cell), "candidate": kernel_fn(comp["candidate"], cell)}
+    import fixture_math as fm
+    checks, outs = kernel_qualify(values, cell, fns)
+    checks["candidate_vs_baseline"] = fm.compare(outs["candidate"].float().cpu().numpy(),
+                                                 outs["baseline"].float().cpu().numpy(), fm.CELL_BUDGET)
+    write(out / "qualification.json", checks)
+    if not all(c["pass_"] for c in checks.values()):
+        meta.update(status="NUMERICAL_FAIL_NO_TIMING", finished=time.time())
+        write(out / "meta.json", meta)
+        return 3
+    with torch.inference_mode():
+        for fn in fns.values():
+            event_ms(fn, values, 3)
+        trial = max(event_ms(fns["baseline"], values, 1)[0], event_ms(fns["candidate"], values, 1)[0])
+        calls = max(2, min(20, int(20.0 / max(trial, 0.05))))
+        blocks = []
+        for i in range(args.blocks):
+            order = "ABBA" if i % 2 == 0 else "BAAB"
+            times = {"A": [], "B": []}
+            same = True
+            for arm in order:
+                name = "baseline" if arm == "A" else "candidate"
+                ms, y = event_ms(fns[name], values, calls)
+                same &= bool(torch.equal(y, outs[name]))
+                times[arm].append(ms)
+            blocks.append(dict(block=i, order=order, calls=calls, a_ms=sum(times["A"]) / 2,
+                               b_ms=sum(times["B"]) / 2, a_raw=times["A"], b_raw=times["B"],
+                               outputs_within_budget=same))
+            if not same:
+                break
+    status = "PASS" if len(blocks) == args.blocks and all(b["outputs_within_budget"] for b in blocks) else "FAIL"
+    write(out / "timing.json", dict(blocks=blocks, status=status,
+                                    note="outputs_within_budget = bit-identical to the qualified output"))
+    meta.update(status=status, finished=time.time(), calls_per_measurement=calls)
+    write(out / "meta.json", meta)
+    print(json.dumps(dict(comparison=args.comparison, start=args.start, status=status,
+                          ratio=sum(b["a_ms"] for b in blocks) / max(1e-9, sum(b["b_ms"] for b in blocks)))),
+          flush=True)
+    return 0 if status == "PASS" else 4
 
 
 def screen(model, groups, arms, rounds=8):
@@ -506,7 +651,7 @@ def mode_start(args):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("mode", choices=("v1check", "cellcheck", "select", "start"))
+    p.add_argument("mode", choices=("v1check", "cellcheck", "select", "start", "kselect", "kstart"))
     p.add_argument("--backend")
     p.add_argument("--slice", type=int)
     p.add_argument("--out", required=True)
@@ -522,8 +667,8 @@ def main():
     args = p.parse_args()
     torch.backends.cuda.matmul.allow_tf32 = False
     Path(args.out).mkdir(parents=True, exist_ok=True)
-    code = {"v1check": mode_v1check, "cellcheck": mode_cellcheck, "select": mode_select,
-            "start": mode_start}[args.mode](args)
+    code = {"v1check": mode_v1check, "cellcheck": mode_cellcheck, "select": mode_select, "start": mode_start,
+            "kselect": mode_kselect, "kstart": mode_kstart}[args.mode](args)
     write(Path(args.out) / "DONE.json", dict(finished=time.strftime("%Y-%m-%dT%H:%M:%S%z"), exit=code))
     return code
 

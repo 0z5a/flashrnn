@@ -205,23 +205,24 @@ def build_v2(batch, steps, heads, width, slice_width, *, cell="lstm", dtype="flo
             gates = T.alloc_fragment((4 * S, BM), acc)
             stage = T.alloc_shared((4 * S, BM), acc)
             ready = T.alloc_cluster_barrier([1, 1])
-            c = T.alloc_fragment((S, BM), acc)
-            n = T.alloc_fragment((S, BM), acc)
-            m = T.alloc_fragment((S, BM), acc)
-            hid = T.alloc_fragment((S, BM), acc)
+            # (batch, unit) fragments: consecutive threads take consecutive units, so Wx/OUT accesses coalesce.
+            c = T.alloc_fragment((BM, S), acc)
+            n = T.alloc_fragment((BM, S), acc)
+            m = T.alloc_fragment((BM, S), acc)
+            hid = T.alloc_fragment((BM, S), acc)
 
             for q, kk in T.Parallel(4 * S, D):
                 rs[q, kk] = R[q // S, head, s * S + q % S, kk]
             for kk, b in T.Parallel(D, BM):
                 h0[kk, b] = T.if_then_else(bt * BM + b < B, T.cast(INIT[0, bt * BM + b, 0, head, kk], dtype),
                                            T.cast(0, dtype))
-            for j, b in T.Parallel(S, BM):
+            for b, j in T.Parallel(BM, S):
                 valid = bt * BM + b < B
-                c[j, b] = T.if_then_else(valid, INIT[1, bt * BM + b, 0, head, s * S + j], 0.0)
-                hid[j, b] = 0.0
+                c[b, j] = T.if_then_else(valid, INIT[1, bt * BM + b, 0, head, s * S + j], 0.0)
+                hid[b, j] = 0.0
                 if slstm:
-                    n[j, b] = T.if_then_else(valid, INIT[2, bt * BM + b, 0, head, s * S + j], 1.0)
-                    m[j, b] = T.if_then_else(valid, INIT[3, bt * BM + b, 0, head, s * S + j], 0.0)
+                    n[b, j] = T.if_then_else(valid, INIT[2, bt * BM + b, 0, head, s * S + j], 1.0)
+                    m[b, j] = T.if_then_else(valid, INIT[3, bt * BM + b, 0, head, s * S + j], 0.0)
             tx = T.get_thread_binding()
             # One arrival per phase: the barriers were initialized with an arrive count of 1.
             if tx == 0:
@@ -239,7 +240,7 @@ def build_v2(batch, steps, heads, width, slice_width, *, cell="lstm", dtype="flo
                 T.copy(gates, stage)
                 if t >= 1 and t + 1 < steps and tx == 0:
                     T.mbarrier_arrive_expect_tx(ready[(t + 1) % 2], (k - 1) * slice_bytes)
-                for j, b in T.Parallel(S, BM):
+                for b, j in T.Parallel(BM, S):
                     row = bt * BM + b
                     col = s * S + j
                     valid = row < B
@@ -254,44 +255,48 @@ def build_v2(batch, steps, heads, width, slice_width, *, cell="lstm", dtype="flo
                     zv = 2.0 / (1.0 + T.exp(-2.0 * gz)) - 1.0
                     og = 1.0 / (1.0 + T.exp(-go))
                     if slstm:
-                        logf = T.min(gf, 0.0) - T.log(1.0 + T.exp(-T.abs(gf))) + m[j, b]
+                        logf = T.min(gf, 0.0) - T.log(1.0 + T.exp(-T.abs(gf))) + m[b, j]
                         nm = T.if_then_else((t == 0) & (ZERO[0] != 0), gi, T.max(gi, logf))
                         ig = T.exp(gi - nm)
                         fg = T.exp(logf - nm)
-                        c[j, b] = fg * c[j, b] + ig * zv
-                        n[j, b] = T.max(fg * n[j, b] + ig, 1.0)
-                        hid[j, b] = og * c[j, b] / n[j, b]
-                        m[j, b] = nm
+                        c[b, j] = fg * c[b, j] + ig * zv
+                        n[b, j] = T.max(fg * n[b, j] + ig, 1.0)
+                        hid[b, j] = og * c[b, j] / n[b, j]
+                        m[b, j] = nm
                     else:
-                        c[j, b] = 1.0 / (1.0 + T.exp(-gf)) * c[j, b] + 1.0 / (1.0 + T.exp(-gi)) * zv
-                        hid[j, b] = og * (2.0 / (1.0 + T.exp(-2.0 * c[j, b])) - 1.0)
+                        c[b, j] = 1.0 / (1.0 + T.exp(-gf)) * c[b, j] + 1.0 / (1.0 + T.exp(-gi)) * zv
+                        hid[b, j] = og * (2.0 / (1.0 + T.exp(-2.0 * c[b, j])) - 1.0)
                     if valid:
-                        OUT[row, t, head, col] = T.cast(hid[j, b], dtype)
+                        OUT[row, t, head, col] = T.cast(hid[b, j], dtype)
                     if t + 1 < steps:
                         if t % 2 == 0:
-                            h1[col, b] = T.cast(hid[j, b], dtype)
+                            h1[col, b] = T.cast(hid[b, j], dtype)
                         else:
-                            h0[col, b] = T.cast(hid[j, b], dtype)
+                            h0[col, b] = T.cast(hid[b, j], dtype)
                 if t + 1 < steps:
+                    # Own slice written by all threads -> async-proxy fence -> one block barrier -> thread 0
+                    # issues the k-1 bulk copies (same order as the ThunderKittens kernel).
                     T.fence_proxy_async()
-                    for r in T.serial(k):
-                        if r != s:
-                            if t % 2 == 0:
-                                T.copy_cluster(h1[s * S:(s + 1) * S, 0:BM], h1[s * S:(s + 1) * S, 0:BM],
-                                               dst_block=r, remote_barrier=ready[1])
-                            else:
-                                T.copy_cluster(h0[s * S:(s + 1) * S, 0:BM], h0[s * S:(s + 1) * S, 0:BM],
-                                               dst_block=r, remote_barrier=ready[0])
+                    T.sync_threads()
+                    if tx == 0:
+                        for r in T.serial(k):
+                            if r != s:
+                                if t % 2 == 0:
+                                    T.copy_cluster(h1[s * S:(s + 1) * S, 0:BM], h1[s * S:(s + 1) * S, 0:BM],
+                                                   dst_block=r, remote_barrier=ready[1])
+                                else:
+                                    T.copy_cluster(h0[s * S:(s + 1) * S, 0:BM], h0[s * S:(s + 1) * S, 0:BM],
+                                                   dst_block=r, remote_barrier=ready[0])
 
-            for j, b in T.Parallel(S, BM):
+            for b, j in T.Parallel(BM, S):
                 row = bt * BM + b
                 col = s * S + j
                 if row < B:
-                    FINAL[0, row, 0, head, col] = hid[j, b]
-                    FINAL[1, row, 0, head, col] = c[j, b]
+                    FINAL[0, row, 0, head, col] = hid[b, j]
+                    FINAL[1, row, 0, head, col] = c[b, j]
                     if slstm:
-                        FINAL[2, row, 0, head, col] = n[j, b]
-                        FINAL[3, row, 0, head, col] = m[j, b]
+                        FINAL[2, row, 0, head, col] = n[b, j]
+                        FINAL[3, row, 0, head, col] = m[b, j]
             T.cluster_sync()
 
     return main
