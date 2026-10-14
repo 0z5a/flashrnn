@@ -7,9 +7,11 @@ operand h_t crosses CTAs. It is exchanged through a double-buffered L2-resident
 global buffer (loads bypass L1) and ordered by a per-group counter barrier
 (release arrive, acquire spin) once per step.
 
-All CTAs of a launch must be co-resident. The launcher bounds the grid to one
-CTA per SM and lets each slot of k CTAs process several (batch tile, head)
-groups serially. A bounded spin raises an error flag instead of hanging.
+All CTAs of a launch must be co-resident. The persistent path uses a CUDA
+cooperative launch, so the driver rejects a grid that cannot be resident. The
+launcher bounds the grid to one CTA per SM and lets each slot of k CTAs process
+several (batch tile, head) groups serially. A bounded spin raises an error flag
+instead of hanging.
 
 ``sync="launch"`` replaces every in-kernel barrier by a kernel boundary (one
 launch per step through the FP32 compute carry). It performs the same
@@ -293,6 +295,8 @@ def recurrence(
             sync == "grid", SPIN_LIMIT,
             num_warps=num_warps,
             enable_fp_fusion=False,
+            # The driver rejects a non-co-resident grid instead of deadlocking.
+            launch_cooperative_grid=sync == "grid",
         )
         previous = carry
     if diagnostics is not None:

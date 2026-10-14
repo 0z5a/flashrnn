@@ -39,6 +39,7 @@ def identity():
 
 
 SOURCES = [
+    "fixture_math.py",
     "flashrnn/flashrnn2/triton_rtiled.py",
     "flashrnn/flashrnn2/triton_persistent.py",
     "flashrnn/flashrnn2/state_contract.py",
@@ -104,7 +105,7 @@ def ptx_features(ptx):
 
 def stage_resources(out, args):
     rows = []
-    for cell in ("lstm", "slstm"):
+    for cell in args.cells:
         for width in args.widths:
             for s in (16, 32, 64, 128):
                 if s > triton.next_power_of_2(width):
@@ -241,6 +242,54 @@ def stage_stress(out, args, feasible):
     write(out / "stress.json", dict(identity=identity(), rows=rows))
 
 
+def stage_e1(out, args, feasible):
+    """PR #79 cell budget against the frozen FP64 NumPy oracle (fixture_math)."""
+    import fixture_math as fm
+
+    configs = {}
+    for c in feasible:
+        configs.setdefault((c["cell"], c["width"]), []).append(c)
+    rows = []
+    for cell in args.cells:
+        for dtype in ("float16", "bfloat16"):
+            for width in args.widths:
+                for batch, steps, heads in ((3, 17, 2), (16, 128, 1)):
+                    for mode in (("warm",) if cell == "lstm" else ("zero", "mixed", "warm")):
+                        if past(args):
+                            break
+                        case = dict(family="rtiled", cell=cell, dtype=dtype, batch=batch, steps=steps,
+                                    width=width, heads=heads, mode=mode)
+                        fx = fm.make_fixture(case)
+                        values = tuple(torch.tensor(fx[k], device="cuda", dtype=DT[dtype])
+                                       for k in ("wx", "r", "bias", "initial"))
+                        ref, final = fx["reference_fp64"], fx["reference_final_fp64"]
+                        arms = [(dict(c), lambda c=c, **kw: run(values, cell, slice_width=c["slice_width"],
+                                num_warps=c["warps"], pad_k=c["pad_k"], **kw)) for c in configs.get((cell, width), [])]
+                        if width <= 128:
+                            ctx = begin_sequence(values[3], cell, values[0].dtype)
+                            arms.append((dict(single_cta=True), lambda **kw: triton_persistent.recurrence(
+                                *values, cell, return_compute_carry=True, sequence_context=ctx, **kw)))
+                        for cfg, fn in arms:
+                            rec = dict(case=fm.case_name(case), arm=cfg)
+                            try:
+                                y, carry = fn(snapshot_dtype=torch.float32)
+                                yh, _ = fn(snapshot_dtype=torch.float32, output_mode="hidden")
+                                yl, _ = fn(snapshot_dtype=torch.float32, output_mode="last")
+                                checks = dict(
+                                    history=fm.compare(y.cpu().numpy(), ref, fm.CELL_BUDGET),
+                                    carry=fm.compare(carry.cpu().numpy(), final, fm.CELL_BUDGET),
+                                    hidden=fm.compare(yh.cpu().numpy(), ref[0], fm.CELL_BUDGET),
+                                    last=fm.compare(yl.cpu().numpy(), ref[0][:, -1:], fm.CELL_BUDGET),
+                                )
+                                rec.update(checks=checks, status="PASS" if all(v["pass_"] for v in checks.values())
+                                           else "NUMERICAL_FAIL")
+                            except Exception:  # noqa: BLE001
+                                rec.update(status="ERROR", error=traceback.format_exc()[-1500:])
+                            rows.append(rec)
+                            print(json.dumps(dict(case=rec["case"], arm=cfg, status=rec["status"])), flush=True)
+    write(out / "e1-numerics.json", dict(identity=identity(), budget="fixture_math.CELL_BUDGET", rows=rows))
+
+
 def timed(fn, n=20):
     for _ in range(3):
         fn()
@@ -279,13 +328,15 @@ def stage_explore(out, args, feasible):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--out", required=True)
-    p.add_argument("--stages", default="resources,protocol,stress,explore")
+    p.add_argument("--stages", default="resources,protocol,e1,stress,explore")
+    p.add_argument("--cells", default="lstm,slstm")
     p.add_argument("--widths", default="64,96,128,192,256,384,512,768")
     p.add_argument("--stress-reps", type=int, default=50)
     p.add_argument("--minutes", type=float, default=100.0)
     args = p.parse_args()
     args.deadline = time.time() + 60 * args.minutes
     args.widths = [int(x) for x in args.widths.split(",")]
+    args.cells = args.cells.split(",")
     out = Path(args.out)
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
@@ -300,6 +351,8 @@ def main():
     checked = [c for c in feasible if c["warps"] == 4 and (not c["pad_k"] or c["width"] in (192, 384))]
     if "protocol" in stages:
         stage_protocol(out, args, checked)
+    if "e1" in stages:
+        stage_e1(out, args, checked)
     if "stress" in stages:
         stage_stress(out, args, feasible)
     if "explore" in stages:
