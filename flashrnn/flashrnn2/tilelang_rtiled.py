@@ -174,7 +174,8 @@ def build_v2(batch, steps, heads, width, slice_width, *, cell="lstm", dtype="flo
              exchange="bulk"):
     """Same algorithm as tk_rtiled.cu: gates = R_slice[4S x D] @ h^T[D x 16] (weights as operand A), h slices
     exchanged by asynchronous SM-to-SM copies that complete on the receiver's mbarrier (no per-step cluster
-    barrier). Double-buffered h^T; one mbarrier per buffer."""
+    barrier). Double-buffered h^T; one mbarrier per buffer. Barrier arming follows TileLang's copy_cluster
+    convention (each sender arrives and announces its bytes); the ThunderKittens kernel arms on the receiver."""
     if width % slice_width:
         raise ValueError("D must be divisible by the slice width")
     k = width // slice_width
@@ -185,7 +186,6 @@ def build_v2(batch, steps, heads, width, slice_width, *, cell="lstm", dtype="flo
     slstm = cell == "slstm"
     states = 4 if slstm else 2
     acc = "float32"
-    slice_bytes = S * BM * 2
 
     @T.prim_func
     def main(
@@ -205,7 +205,9 @@ def build_v2(batch, steps, heads, width, slice_width, *, cell="lstm", dtype="flo
             h1 = T.alloc_shared((D, BM), dtype)
             gates = T.alloc_fragment((4 * S, BM), acc)
             stage = T.alloc_shared((4 * S, BM), acc)
-            ready = T.alloc_cluster_barrier([1, 1])
+            # tma_store_cluster arrives on the receiver's barrier and arms its byte count itself (one remote
+            # mbarrier.arrive.expect_tx per copy), so each phase completes after the k-1 senders' copies land.
+            ready = T.alloc_cluster_barrier([k - 1, k - 1])
             # (batch, unit) fragments: consecutive threads take consecutive units, so Wx/OUT accesses coalesce.
             c = T.alloc_fragment((BM, S), acc)
             n = T.alloc_fragment((BM, S), acc)
@@ -226,9 +228,6 @@ def build_v2(batch, steps, heads, width, slice_width, *, cell="lstm", dtype="flo
                     m[b, j] = T.if_then_else(valid, INIT[3, bt * BM + b, 0, head, s * S + j], 0.0)
             tx = T.get_thread_binding()
             # One arrival per phase: the barriers were initialized with an arrive count of 1.
-            if exchange == "bulk":
-                if tx == 0:
-                    T.mbarrier_arrive_expect_tx(ready[1], (k - 1) * slice_bytes)
             T.fence_proxy_async()
             T.cluster_sync()
 
@@ -241,9 +240,6 @@ def build_v2(batch, steps, heads, width, slice_width, *, cell="lstm", dtype="flo
                 else:
                     T.gemm(rs, h1, gates, clear_accum=True)
                 T.copy(gates, stage)
-                if exchange == "bulk":
-                    if t >= 1 and t + 1 < steps and tx == 0:
-                        T.mbarrier_arrive_expect_tx(ready[(t + 1) % 2], (k - 1) * slice_bytes)
                 for b, j in T.Parallel(BM, S):
                     row = bt * BM + b
                     col = s * S + j
