@@ -6,7 +6,13 @@
 
 * **D > 128 已可用，且比原版快。** FlashRNN2 的 R 切分路径（Triton，L2 计数器屏障 + cooperative launch）支持 LSTM/sLSTM FP16/BF16，D = 192–768，数值全部通过 PR #79 原预算。在原有分类器负载上与钉住的 FlashRNN1 CUDA fused（0b84fc3）配对计时，30/30 个对比更快，加速 1.12×–1.72×，95% 置信区间全部在 1 以上，30 个对比的几何平均 1.37×。
 * **D ≤ 128 不切换。** 在 D = 96、128 上，现有单 CTA 路径在 24/24 个对比中都快于 R 切分（0.80×–0.96×，区间全部低于 1）。按计划规则，D ≤ 128 的默认保持单 CTA。
-* **TileLang spike 合格但更慢。** cluster + DSMEM 的 TileLang spike 数值 96/96 通过，配对计时 6/6 慢于 Triton R 切分（0.71×–0.88×）。它是未优化的 spike，结论只针对这一实现。
+* **TileLang 第一版原型合格但更慢。** cluster + DSMEM 的 TileLang spike 数值 96/96 通过，配对计时 6/6 慢于 Triton R 切分（0.71×–0.88×）。它是未优化的 spike，结论只针对这一实现。
+* **同一算法下 TileLang v2 最快（M5）。** 改用"WGMMA（权重作 A 操作数）+ `cp.async.bulk` 跨 CTA 拷贝 + mbarrier、每步不做 cluster 屏障"之后：
+  * TileLang v2 对 Triton R 切分 40/40 更快（内核级 1.24×–1.85×，分类器 1.05×–1.52×），D = 192–512 全覆盖；
+  * ThunderKittens 对 TileLang v2 40/40 更慢（内核级 0.59×–0.86×，分类器 0.75×–0.96×）；
+  * ThunderKittens 对 Triton 只在 D = 192、256 更快（1.26×–1.55×），D = 384、512 持平或更慢。
+  
+  以上比较的是本次写的两份实现，不代表两个框架的上限。
 * **契约不变。** full / hidden / last、FP32 compute carry、分块续跑、sLSTM full-call 初始化、PreparedSequence 与 CUDA Graph 在 R 切分路径上全部逐位一致。
 
 ## 目标完成情况
@@ -16,7 +22,7 @@
 | G1 D > 128 可运行并过数值门槛 | 达成：LSTM/sLSTM FP16/BF16，D = 192、256、384、512、768 | M0 job 47298120，E1 1120/1120 PASS |
 | G2 输出契约不变 | 达成：full / hidden / last、FP32 compute carry、分块续跑、sLSTM full-call 初始化；PreparedSequence 与 CUDA Graph | M0 protocol 1260/1260；M1 job 47298769 432/432 |
 | G3 对 v1 CUDA fused 的大 D 配对计时 | 达成：30/30 更快，1.12×–1.72×，区间均高于 1 | M4 job 47299690，5 启动 × 20 配对块 |
-| G4 合格 fallback 后端 | TileLang cluster + DSMEM spike 数值合格（96/96），但比 Triton 路径慢；尚未实现完整契约 | M3 job 47298769；E4 |
+| G4 合格 fallback 后端 | 部分达成：TileLang v2 与 ThunderKittens 均通过 spike 契约下的数值与 20 次逐位重复检查（各 20/20），TileLang v2 全面更快；尚未补齐完整契约（分块续跑、full/last 输出、BF16）也未接入注册表 | M3 job 47298769；M5 job 47301466、47303121 |
 
 ## 设计决定（M0）
 
@@ -82,6 +88,27 @@ v1 的 30 个 (cell, D, B) 构建全部成功并通过单层 FP64 检查；Const
 
 数值为 Triton 时间 / TileLang 时间，低于 1 表示 TileLang 更慢。完整表格（每个对比的基线/候选毫秒数、所选配置）见 `docs/flashrnn2/rtiled-m4.md`。
 
+## ThunderKittens 与 TileLang（M5）
+
+两份实现用同一个算法：每个 (batch tile, head) 一个 k = D/S 的线程块 cluster；每步用 WGMMA 计算 R 切片[4S × D] · hᵀ[D × 16]；每个 CTA 把自己舍入后的 h 切片写进自己的下一步缓冲，再用 `cp.async.bulk.shared::cluster` 拷进每个邻居的缓冲，在接收方的 mbarrier 上完成。双缓冲加上这条数据依赖已经保证了顺序，所以每步不需要 cluster 屏障。
+
+* ThunderKittens 固定在提交 67845f5（经 VPS 流式取到 MN5，tarball SHA256 38386831…），用 CUDA 12.8 单独编译成共享库，通过 ctypes 调用；本集群的 PyTorch 是 CUDA 11.8 版本，不能编成 torch 扩展。
+* TileLang 0.1.15。
+* 两者目前都是 spike 契约：一次完整调用，输出 hidden 历史和 FP32 最终 carry；都只在 FP16 下资格认证。
+* D = 768 需要超过 16 个 CTA 的 cluster，两者都不覆盖。
+
+资格：每个 (后端, cell, D, S) 都对 FP64 GPU oracle 检查 hidden 与 FP32 carry（PR #79 原 `CELL_BUDGET`），并要求 20 次重复逐位一致。ThunderKittens 20/20，TileLang v2 20/20。
+
+| 对比（基线 → 候选） | 内核级（T = 1024） | 分类器负载 |
+| --- | --- | --- |
+| Triton → ThunderKittens | D 192/256：1.43×–1.55×；D 384/512：0.89×–1.01× | D 192/256：1.26×–1.45×；D 384/512：0.88×–1.22× |
+| TileLang v2 → ThunderKittens | 0.59×–0.86×（16/16 更慢） | 0.75×–0.96×（24/24 更慢） |
+| Triton → TileLang v2 | 1.24×–1.85×（16/16 更快） | 1.05×–1.52×（24/24 更快） |
+
+ThunderKittens 对 Triton 的结果来自作业 47301466；另外两行来自作业 47303121。三类对比都按 split 0 选配置、冻结表格，再在 split 1 上做 5 次启动 × 20 个配对块，95% 区间全部落在 1 的同一侧。完整表格见 `docs/flashrnn2/rtiled-m5.md`。
+
+仍然存在的实现差异：屏障装填方式各按框架习惯（ThunderKittens 由接收方每步装填一次，TileLang 的 `copy_cluster` 由每个发送方远程装填），交换前 TileLang 有两次块级屏障、ThunderKittens 一次。这两点都对 ThunderKittens 有利，解释不了差距。
+
 ## 失败与修复记录
 
 | 作业 | 现象 | 原因 | 修复 |
@@ -89,7 +116,10 @@ v1 的 30 个 (cell, D, B) 构建全部成功并通过单层 FP64 检查；Const
 | 47297792（58） | 四路 canary 全部异常，62 秒结束，无 kernel 执行 | module 激活设置 `CC=nvc`，Triton 启动器 C 模块需要 gcc | runtime 导出 `CC=/usr/bin/gcc`；登录节点 dry run 实际构建启动器（无修复时复现原错误） |
 | 47299215（63） | phase 0 前几个 v1 构建失败，2 分 47 秒后由本人取消，未计时 | 并发构建争用共享 `gpu_info` 模块；缺少外部基线队列已有的 `torch.amp` 命名空间适配 | 首个 v1 检查单独运行；沿用原适配；未修改任何钉住的 v1 文件 |
 
-两次失败的原始输出都已归档并独立校验。
+| 47301466（32） | TileLang v2 首检 `CUDA_ERROR_LAUNCH_FAILED`，其余 TileLang 检查跳过；ThunderKittens 对 Triton 正常完成 | TileLang 的 `tma_store_cluster` 自己会在接收方远程装填屏障，内核又按计数 1 装填了一次，到达数和字节数对不上，等待超时被捕获（调试作业 47301592 用 compute-sanitizer 定位） | 接收方计数改为 k − 1、不再自行装填；调试作业 47301920 全部用例通过、memcheck 干净 |
+| 47302393（36） | 数值检查全过，但选择阶段 TileLang 角色全部为空，没有计时 | 驱动按臂名 `tilelang` 判断是否加载 TileLang 环境，新臂名是 `tilelang_v2` | 选择阶段一律加载；重跑为作业 47303121 |
+
+每次失败的原始输出都已归档并独立校验。
 
 ## 偏离计划之处
 
@@ -97,11 +127,14 @@ v1 的 30 个 (cell, D, B) 构建全部成功并通过单层 FP64 检查；Const
 * 分支之间不比较最终状态（FP32 compute carry 与输入 dtype 快照的 dtype 不同），改为比较 logits 和每层 hidden 历史。
 * 保存的资格张量只含 logits 与每层最后一步 hidden（体积原因）；完整历史只在 GPU 上检查。
 * 四个 GPU 通道并发计时，各自绑定本地 NUMA 核；此前的外部基线队列是单 GPU 串行。
-* E4 的 TileLang 分支是未优化的 M3 spike（逐元素 SIMT 远程写 + 每步 cluster_sync），不代表 TileLang 上限。
+* E4 的 TileLang 分支是未优化的 M3 spike（逐元素 SIMT 远程写 + 每步 cluster_sync），不代表 TileLang 上限；M5 的 TileLang v2 换了算法。
+* M5 的 ThunderKittens 与 TileLang 只实现 spike 契约（一次完整调用、hidden 与 FP32 carry），只在 FP16 下资格认证。
 * 计划中的 D/B/T 网格尚未与原作者确认；本次用计划暂定的 D = 192–768 与现有分类器负载。
 
 ## 下一步
 
-* **ThunderKittens 与 TileLang 对比（进行中）。** 已按固定提交 67845f5 取得 ThunderKittens 源码（经 VPS 流式传到 MN5，SHA256 38386831…），写好 `tk_rtiled.cu`：WGMMA（权重作 A 操作数）+ `cp.async.bulk` 跨 CTA 共享内存拷贝 + mbarrier，每步无 cluster barrier；sm_90a 编译通过，尚未上 GPU。为公平比较，TileLang 也写了同一算法的 v2（`tma_store_cluster` + mbarrier，wgmma），编译通过。下一批 GPU 作业做两者的数值资格和配对计时，并与 Triton R 切分对照。
-* D ≤ 128：保持单 CTA 默认；若要再探索，需在 PreparedSequence 路径（预分配、CUDA Graph）上单独做配对计时，而不是逐次调用 API。
-* 与原作者确认目标 D、B、T 网格；D > 768 与 grid barrier 的 TileLang `sync_grid` 路径尚未覆盖。
+* **选定 fallback：建议 TileLang v2。** 同一算法下它在 40 个对比里都比 ThunderKittens 快，也在 D = 192–512 的全部 40 个对比里快过 Triton R 切分；它还提供 `sync_grid`，可以覆盖 D = 768。
+* **补齐完整契约（G4）。** 分块续跑（起始步、续跑 carry、sLSTM 只在整次调用第一步初始化）、full 与 last 输出、BF16，再按 M0 的标准重新跑逐位协议、E1 数值和屏障压力。
+* **接入注册表。** 在 `KernelConfig` 增加 `tilelang` 家族，identity 记录 TileLang 版本；按形状冻结查表，没有合格后端时显式报错。由于 TileLang v2 在 D = 192–512 比 Triton 快，查表会把它选为这些形状的主路径，Triton 留给 D = 768 和 TileLang 不覆盖的形状，直到 TileLang 的 `sync_grid` 路径完成。
+* D ≤ 128 保持单 CTA；如需再探索，应在预分配的 PreparedSequence 路径上单独配对计时。
+* 与原作者确认目标 D、B、T 网格，并回复原作者、更新 PR。
