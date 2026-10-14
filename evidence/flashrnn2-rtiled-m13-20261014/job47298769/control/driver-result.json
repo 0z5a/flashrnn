@@ -1,0 +1,282 @@
+{
+  "job": "47298769",
+  "node": "as07r3b04",
+  "started": 1791997411.2873166,
+  "plan": {
+    "batch": "flashrnn2-rtiled-m13-20261014-v1",
+    "purpose": "M1 PreparedSequence R-tiling checks (eager/chunks/CUDA Graph bitwise), M3 TileLang cluster+DSMEM spike numerics vs FP64 oracle and vs Triton R tiling, exploratory prepared-graph candidate screening",
+    "lane_minutes": 120,
+    "lanes": [
+      {
+        "gpu": 0,
+        "tasks": [
+          {
+            "name": "m1_prepared",
+            "argv": [
+              "tools/rtiled_m1_prepared.py",
+              "--out",
+              "{out}"
+            ]
+          }
+        ]
+      },
+      {
+        "gpu": 1,
+        "tasks": [
+          {
+            "name": "m3_lstm",
+            "argv": [
+              "tools/rtiled_m3_tilelang.py",
+              "--out",
+              "{out}",
+              "--cells",
+              "lstm"
+            ]
+          }
+        ]
+      },
+      {
+        "gpu": 2,
+        "tasks": [
+          {
+            "name": "m3_slstm",
+            "argv": [
+              "tools/rtiled_m3_tilelang.py",
+              "--out",
+              "{out}",
+              "--cells",
+              "slstm",
+              "--stages",
+              "numerics"
+            ]
+          }
+        ]
+      },
+      {
+        "gpu": 3,
+        "tasks": [
+          {
+            "name": "explore_lstm",
+            "argv": [
+              "tools/rtiled_explore_prepared.py",
+              "--out",
+              "{out}",
+              "--configs",
+              "{control}/configs.json",
+              "--cell",
+              "lstm"
+            ]
+          },
+          {
+            "name": "explore_slstm",
+            "argv": [
+              "tools/rtiled_explore_prepared.py",
+              "--out",
+              "{out}",
+              "--configs",
+              "{control}/configs.json",
+              "--cell",
+              "slstm",
+              "--widths",
+              "192,256,384,512,768"
+            ]
+          }
+        ]
+      }
+    ],
+    "node_reason": "One ACC node (4 H100): four independent single-GPU lanes (M1 checks, TileLang LSTM, TileLang sLSTM, exploratory timing); no cross-GPU requirement",
+    "frozen_configs": "configs.json copied unchanged from flashrnn2-rtiled-m0-20261014-v2/control/configs.json (M0 compile sweep, 140 configs)",
+    "not_claimed": [
+      "E2E PASS",
+      "paired speedup",
+      "E3 v1 comparison"
+    ]
+  },
+  "runs": [
+    {
+      "gpu": 3,
+      "gpu_uuid": "GPU-80dee3a5-457b-81d0-e856-64f923da4cef",
+      "task": "explore_lstm",
+      "argv": [
+        "bash",
+        "/gpfs/scratch/ehpc390/tueb043681/flashrnn2-rtiled-m13-20261014-v1/control/runtime.sh",
+        "tools/rtiled_explore_prepared.py",
+        "--out",
+        "/gpfs/scratch/ehpc390/tueb043681/flashrnn2-rtiled-m13-20261014-v1/science/gpu3/explore_lstm",
+        "--configs",
+        "/gpfs/scratch/ehpc390/tueb043681/flashrnn2-rtiled-m13-20261014-v1/control/configs.json",
+        "--cell",
+        "lstm"
+      ],
+      "started": 1791997411.6743934,
+      "exit": 0,
+      "timed_out": false,
+      "joined": true,
+      "finished": 1791997474.3504624,
+      "done": true,
+      "status": "EXITED"
+    },
+    {
+      "gpu": 3,
+      "gpu_uuid": "GPU-80dee3a5-457b-81d0-e856-64f923da4cef",
+      "task": "explore_slstm",
+      "argv": [
+        "bash",
+        "/gpfs/scratch/ehpc390/tueb043681/flashrnn2-rtiled-m13-20261014-v1/control/runtime.sh",
+        "tools/rtiled_explore_prepared.py",
+        "--out",
+        "/gpfs/scratch/ehpc390/tueb043681/flashrnn2-rtiled-m13-20261014-v1/science/gpu3/explore_slstm",
+        "--configs",
+        "/gpfs/scratch/ehpc390/tueb043681/flashrnn2-rtiled-m13-20261014-v1/control/configs.json",
+        "--cell",
+        "slstm",
+        "--widths",
+        "192,256,384,512,768"
+      ],
+      "started": 1791997474.352781,
+      "exit": 0,
+      "timed_out": false,
+      "joined": true,
+      "finished": 1791997510.1856484,
+      "done": true,
+      "status": "EXITED"
+    },
+    {
+      "gpu": 2,
+      "gpu_uuid": "GPU-0e773d47-ead4-8cee-bcb5-1cfb0938311d",
+      "task": "m3_slstm",
+      "argv": [
+        "bash",
+        "/gpfs/scratch/ehpc390/tueb043681/flashrnn2-rtiled-m13-20261014-v1/control/runtime.sh",
+        "tools/rtiled_m3_tilelang.py",
+        "--out",
+        "/gpfs/scratch/ehpc390/tueb043681/flashrnn2-rtiled-m13-20261014-v1/science/gpu2/m3_slstm",
+        "--cells",
+        "slstm",
+        "--stages",
+        "numerics"
+      ],
+      "started": 1791997411.6705317,
+      "exit": 0,
+      "timed_out": false,
+      "joined": true,
+      "finished": 1791997578.0607343,
+      "done": true,
+      "status": "EXITED"
+    },
+    {
+      "gpu": 1,
+      "gpu_uuid": "GPU-7bed8f75-9fe8-a719-fc16-db69c2c95206",
+      "task": "m3_lstm",
+      "argv": [
+        "bash",
+        "/gpfs/scratch/ehpc390/tueb043681/flashrnn2-rtiled-m13-20261014-v1/control/runtime.sh",
+        "tools/rtiled_m3_tilelang.py",
+        "--out",
+        "/gpfs/scratch/ehpc390/tueb043681/flashrnn2-rtiled-m13-20261014-v1/science/gpu1/m3_lstm",
+        "--cells",
+        "lstm"
+      ],
+      "started": 1791997411.6731682,
+      "exit": 0,
+      "timed_out": false,
+      "joined": true,
+      "finished": 1791997620.0290132,
+      "done": true,
+      "status": "EXITED"
+    },
+    {
+      "gpu": 0,
+      "gpu_uuid": "GPU-0cc9d1d9-ac30-9096-5d84-c87a552b2115",
+      "task": "m1_prepared",
+      "argv": [
+        "bash",
+        "/gpfs/scratch/ehpc390/tueb043681/flashrnn2-rtiled-m13-20261014-v1/control/runtime.sh",
+        "tools/rtiled_m1_prepared.py",
+        "--out",
+        "/gpfs/scratch/ehpc390/tueb043681/flashrnn2-rtiled-m13-20261014-v1/science/gpu0/m1_prepared"
+      ],
+      "started": 1791997411.6737509,
+      "exit": 0,
+      "timed_out": false,
+      "joined": true,
+      "finished": 1791997666.407422,
+      "done": true,
+      "status": "EXITED"
+    }
+  ],
+  "scientific_pass": false,
+  "gpus_at_start": [
+    {
+      "index": "0",
+      "uuid": "GPU-0cc9d1d9-ac30-9096-5d84-c87a552b2115",
+      "name": "NVIDIA H100",
+      "memory_used": "0 MiB",
+      "util": "0 %",
+      "driver": "595.91.07"
+    },
+    {
+      "index": "1",
+      "uuid": "GPU-7bed8f75-9fe8-a719-fc16-db69c2c95206",
+      "name": "NVIDIA H100",
+      "memory_used": "0 MiB",
+      "util": "0 %",
+      "driver": "595.91.07"
+    },
+    {
+      "index": "2",
+      "uuid": "GPU-0e773d47-ead4-8cee-bcb5-1cfb0938311d",
+      "name": "NVIDIA H100",
+      "memory_used": "0 MiB",
+      "util": "0 %",
+      "driver": "595.91.07"
+    },
+    {
+      "index": "3",
+      "uuid": "GPU-80dee3a5-457b-81d0-e856-64f923da4cef",
+      "name": "NVIDIA H100",
+      "memory_used": "0 MiB",
+      "util": "0 %",
+      "driver": "595.91.07"
+    }
+  ],
+  "compute_apps_at_start": "",
+  "gpfs_free_bytes": 98213822464,
+  "gpus_at_end": [
+    {
+      "index": "0",
+      "uuid": "GPU-0cc9d1d9-ac30-9096-5d84-c87a552b2115",
+      "name": "NVIDIA H100",
+      "memory_used": "0 MiB",
+      "util": "0 %",
+      "driver": "595.91.07"
+    },
+    {
+      "index": "1",
+      "uuid": "GPU-7bed8f75-9fe8-a719-fc16-db69c2c95206",
+      "name": "NVIDIA H100",
+      "memory_used": "0 MiB",
+      "util": "0 %",
+      "driver": "595.91.07"
+    },
+    {
+      "index": "2",
+      "uuid": "GPU-0e773d47-ead4-8cee-bcb5-1cfb0938311d",
+      "name": "NVIDIA H100",
+      "memory_used": "0 MiB",
+      "util": "0 %",
+      "driver": "595.91.07"
+    },
+    {
+      "index": "3",
+      "uuid": "GPU-80dee3a5-457b-81d0-e856-64f923da4cef",
+      "name": "NVIDIA H100",
+      "memory_used": "0 MiB",
+      "util": "0 %",
+      "driver": "595.91.07"
+    }
+  ],
+  "compute_apps_at_end": "",
+  "finished": 1791997666.7640224,
+  "status": "ALL_TASKS_EXITED_0_WITH_DONE"
+}
