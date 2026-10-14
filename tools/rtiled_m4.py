@@ -226,13 +226,13 @@ def arm_tilelang_v2(cell, slice_width):
     return run
 
 
-def arm_tilelang_full(cell, slice_width):
+def arm_tilelang_full(cell, slice_width, sync="cluster"):
     from flashrnn.flashrnn2 import tilelang_cluster
 
     def run(wx, r, b, init):
         ctx = begin_sequence(init, cell, wx.dtype)
         y, _ = tilelang_cluster.recurrence(wx, r, b, init, cell, sequence_context=ctx, slice_width=slice_width,
-                                           output_mode="hidden")
+                                           output_mode="hidden", sync=sync)
         return y
     return run
 
@@ -240,7 +240,7 @@ def arm_tilelang_full(cell, slice_width):
 def make_arm(spec, cell, batch, width):
     kind = spec["kind"]
     if kind == "tilelang_full":
-        return arm_tilelang_full(cell, spec["slice_width"])
+        return arm_tilelang_full(cell, spec["slice_width"], spec.get("sync", "cluster"))
     if kind == "tk":
         return arm_tk(cell, spec["slice_width"])
     if kind == "tilelang_v2":
@@ -432,7 +432,7 @@ def kernel_fn(spec, cell):
         def run_full(v):
             ctx = begin_sequence(v[3], cell, v[0].dtype)
             return tilelang_cluster.recurrence(*v, cell, sequence_context=ctx, slice_width=spec["slice_width"],
-                                               output_mode="hidden")[0]
+                                               output_mode="hidden", sync=spec.get("sync", "cluster"))[0]
         return run_full
     if kind == "tk":
         from flashrnn.flashrnn2 import tk_rtiled
@@ -612,15 +612,18 @@ def mode_select(args):
 
 def check_policy(table, comp):
     """Serve the candidate through the frozen exact-shape table and the runtime identity (public path)."""
-    if comp["experiment"] not in ("K_POLICY_VS_DEFAULT", "POLICY_VS_DEFAULT"):
+    if not comp["experiment"].endswith("POLICY_VS_DEFAULT"):
         return None
     from flashrnn.flashrnn2.execution_policy import runtime_identity
     policy = ExecutionPolicy(table["policy_table"], identity=table["policy_identity"])
     cfg = policy.select(comp["cell"], "float16", comp["batch"], comp["steps"], 1, comp["width"],
                         identity=runtime_identity())
     cand = comp["candidate"]
-    expect = ("tilelang", cand["slice_width"]) if cand["kind"] == "tilelang_full" else ("mma_rtiled", cand["slice_width"])
-    assert (cfg.family, cfg.slice_width) == expect, (cfg, cand)
+    expect = (("tilelang", cand["slice_width"], cand.get("sync", "cluster")) if cand["kind"] == "tilelang_full" else
+              ("mma_rtiled", cand["slice_width"], "grid"))
+    assert (cfg.family, cfg.slice_width, cfg.sync) == expect, (cfg, cand)
+    if cand["kind"] == "rtiled":
+        assert (cfg.warps, cfg.pad_k) == (cand["warps"], cand.get("pad_k", False)), (cfg, cand)
     return cfg.as_dict()
 
 

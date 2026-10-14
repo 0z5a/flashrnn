@@ -39,8 +39,10 @@ class PreparedSequence:
                 from . import tilelang_cluster
             except ImportError as error:  # chosen before the call: no silent switch to another backend
                 raise RuntimeError("the selected TileLang backend is not installed") from error
-            if not tilelang_cluster.supported(width, config.slice_width):
-                raise ValueError("the TileLang cluster path does not support this (D, slice width)")
+            ok = (tilelang_cluster.supported(width, config.slice_width) if config.sync == "cluster" else
+                  tilelang_cluster.supported_grid(width, config.slice_width, tilelang_cluster.sm_count()))
+            if not ok:
+                raise ValueError(f"the TileLang {config.sync} path does not support this (D, slice width)")
         if recurrent.shape != (4, heads, width, width) or bias.shape != (4, heads, width):
             raise ValueError("invalid recurrent-weight or bias shape")
         if initial.shape != (states, batch, 1, heads, width):
@@ -85,10 +87,13 @@ class PreparedSequence:
                 raise ValueError("the TileLang cluster path supports FP16 and BF16")
             self.tilelang_kernel = tilelang_cluster.kernel(
                 batch, steps, heads, width, config.slice_width, cell=cell, dtype=names[wx.dtype],
-                mode=output_mode, snapshot=names[dtype])
+                mode=output_mode, snapshot=names[dtype], sync=config.sync)
             # Fixed FP32 initial state and int32 normalizer flag, refreshed inside every (captured) run.
             self.initial32 = torch.empty(initial.shape, dtype=torch.float32, device=wx.device)
             self.zero32 = torch.empty((1,), dtype=torch.int32, device=wx.device)
+            # Grid sync: double-buffered global h exchange, rewritten before it is read in every chunk.
+            self.tilelang_extra = () if config.sync == "cluster" else (
+                torch.empty((2, (batch + 15) // 16 * heads, width, 16), dtype=wx.dtype, device=wx.device),)
         self._graph = None
         self.compiler_records = []
 
@@ -113,7 +118,7 @@ class PreparedSequence:
             carry = self.carries[index % 2]
             if cfg.family == "tilelang":
                 self.tilelang_kernel(self.wx, self.recurrent, self.bias, previous, self.zero32, self.output, carry,
-                                     length, start, int(start == 0))
+                                     *self.tilelang_extra, length, start, int(start == 0))
                 kernel = None
             elif cfg.family == "mma_rtiled":
                 splits, groups, slots = self.rtiled_plan
