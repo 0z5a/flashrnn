@@ -37,6 +37,7 @@ V1_BASE = Path("/gpfs/scratch/ehpc390/tueb043681/paper-baselines-20261013-v1")
 SOURCES = ["tools/rtiled_m4.py", "flashrnn/flashrnn2/triton_rtiled.py", "flashrnn/flashrnn2/triton_persistent.py",
            "flashrnn/flashrnn2/tilelang_rtiled.py", "flashrnn/flashrnn2/reference.py",
            "flashrnn/flashrnn2/tk_rtiled.cu", "flashrnn/flashrnn2/tk_rtiled.py",
+           "flashrnn/flashrnn2/tilelang_cluster.py",
            "flashrnn/flashrnn2/execution_policy.py", "flashrnn/flashrnn2/state_contract.py"]
 
 
@@ -225,8 +226,21 @@ def arm_tilelang_v2(cell, slice_width):
     return run
 
 
+def arm_tilelang_full(cell, slice_width):
+    from flashrnn.flashrnn2 import tilelang_cluster
+
+    def run(wx, r, b, init):
+        ctx = begin_sequence(init, cell, wx.dtype)
+        y, _ = tilelang_cluster.recurrence(wx, r, b, init, cell, sequence_context=ctx, slice_width=slice_width,
+                                           output_mode="hidden")
+        return y
+    return run
+
+
 def make_arm(spec, cell, batch, width):
     kind = spec["kind"]
+    if kind == "tilelang_full":
+        return arm_tilelang_full(cell, spec["slice_width"])
     if kind == "tk":
         return arm_tk(cell, spec["slice_width"])
     if kind == "tilelang_v2":
@@ -412,6 +426,14 @@ def mode_cellcheck(args):
 def kernel_fn(spec, cell):
     """Raw backend call on preallocated inputs (hidden history, input dtype)."""
     kind = spec["kind"]
+    if kind == "tilelang_full":
+        from flashrnn.flashrnn2 import tilelang_cluster
+
+        def run_full(v):
+            ctx = begin_sequence(v[3], cell, v[0].dtype)
+            return tilelang_cluster.recurrence(*v, cell, sequence_context=ctx, slice_width=spec["slice_width"],
+                                               output_mode="hidden")[0]
+        return run_full
     if kind == "tk":
         from flashrnn.flashrnn2 import tk_rtiled
         return lambda v: tk_rtiled.recurrence(*v, cell, slice_width=spec["slice_width"])[0]

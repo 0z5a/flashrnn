@@ -20,9 +20,16 @@ class KernelConfig:
     pad_k: bool = False
 
     def __post_init__(self):
-        if self.family not in ("mma", "simt", "mma_rtiled"):
+        if self.family not in ("mma", "simt", "mma_rtiled", "tilelang"):
             raise ValueError("unknown kernel family")
-        if self.family == "mma_rtiled":
+        if self.family == "tilelang":
+            # Thread-block cluster of k = D / slice_width CTAs, one warpgroup each, h exchanged through
+            # distributed shared memory with an mbarrier per step (flashrnn2.tilelang_cluster).
+            if self.batch_tile != 16 or self.weight_operand != "b" or self.warps != 4 or self.pad_k:
+                raise ValueError("the TileLang cluster path uses 16-row batch tiles and one warpgroup")
+            if self.slice_width not in (16, 32, 64) or self.sync != "cluster":
+                raise ValueError("the TileLang cluster path needs a slice of 16, 32 or 64 and cluster sync")
+        elif self.family == "mma_rtiled":
             if self.batch_tile != 16 or self.weight_operand != "b":
                 raise ValueError("R tiling uses MMA16 batch tiles and weight operand b")
             if self.slice_width not in (16, 32, 64, 128) or self.sync != "grid":
@@ -53,6 +60,20 @@ def default_config(width):
     return KernelConfig(family="mma_rtiled", warps=8, slice_width=64 if width <= 256 else 32, sync="grid")
 
 
+def runtime_identity():
+    """GPU and compiler identity a measured table is bound to; TileLang is None when not installed."""
+    import torch
+    import triton
+
+    try:
+        import tilelang
+        tilelang_version = tilelang.__version__
+    except ImportError:
+        tilelang_version = None
+    return dict(gpu=torch.cuda.get_device_name(), capability=list(torch.cuda.get_device_capability()),
+                triton=triton.__version__, tilelang=tilelang_version)
+
+
 def shape_key(cell, dtype, batch, steps, heads, width):
     return f"{cell}/{dtype}/b{batch}/t{steps}/h{heads}/d{width}"
 
@@ -71,4 +92,8 @@ class ExecutionPolicy:
         if self.table and (not self.identity or identity != self.identity):
             raise ValueError("a measured table requires its matching execution identity")
         key = shape_key(cell, dtype, batch, steps, heads, width)
-        return self.table.get(key, default_config(width))
+        config = self.table.get(key, default_config(width))
+        if config.family == "tilelang" and not (identity or {}).get("tilelang"):
+            # A table entry is chosen before the call; it never falls back to another backend.
+            raise ValueError("the table selects the TileLang backend but this runtime has no TileLang")
+        return config

@@ -29,10 +29,18 @@ class PreparedSequence:
         states = len(contract.components)
         config = config or default_config(width)
         rtiled = config.family == "mma_rtiled"
+        cluster = config.family == "tilelang"
         if gates != 4 or batch < 1 or steps < 1 or heads < 1 or width < 16:
             raise ValueError("expected nonempty B/T/H and D >= 16")
-        if (not rtiled and width > 128) or (rtiled and width % 16):
+        if (not (rtiled or cluster) and width > 128) or (rtiled and width % 16):
             raise ValueError("single-CTA families need D <= 128; R tiling needs D a multiple of 16")
+        if cluster:
+            try:
+                from . import tilelang_cluster
+            except ImportError as error:  # chosen before the call: no silent switch to another backend
+                raise RuntimeError("the selected TileLang backend is not installed") from error
+            if not tilelang_cluster.supported(width, config.slice_width):
+                raise ValueError("the TileLang cluster path does not support this (D, slice width)")
         if recurrent.shape != (4, heads, width, width) or bias.shape != (4, heads, width):
             raise ValueError("invalid recurrent-weight or bias shape")
         if initial.shape != (states, batch, 1, heads, width):
@@ -71,6 +79,16 @@ class PreparedSequence:
             self.xbuf = torch.empty((slots, 2, 16, width), dtype=wx.dtype, device=wx.device)
             self.sync_counts = torch.zeros((len(lengths), slots), dtype=torch.int32, device=wx.device)
             self.error_flag = torch.zeros((1,), dtype=torch.int32, device=wx.device)
+        if cluster:
+            names = {torch.float16: "float16", torch.bfloat16: "bfloat16", torch.float32: "float32"}
+            if wx.dtype not in (torch.float16, torch.bfloat16):
+                raise ValueError("the TileLang cluster path supports FP16 and BF16")
+            self.tilelang_kernel = tilelang_cluster.kernel(
+                batch, steps, heads, width, config.slice_width, cell=cell, dtype=names[wx.dtype],
+                mode=output_mode, snapshot=names[dtype])
+            # Fixed FP32 initial state and int32 normalizer flag, refreshed inside every (captured) run.
+            self.initial32 = torch.empty(initial.shape, dtype=torch.float32, device=wx.device)
+            self.zero32 = torch.empty((1,), dtype=torch.int32, device=wx.device)
         self._graph = None
         self.compiler_records = []
 
@@ -86,9 +104,18 @@ class PreparedSequence:
         start = 0
         if cfg.family == "mma_rtiled":
             self.sync_counts.zero_()
+        if cfg.family == "tilelang":
+            # Input-dtype -> FP32 is exact, so the FP32 copy leaves the arithmetic unchanged.
+            self.initial32.copy_(self.initial)
+            self.zero32.copy_(self.zero.reshape(1))
+            previous = self.initial32
         for index, length in enumerate(self.chunks):
             carry = self.carries[index % 2]
-            if cfg.family == "mma_rtiled":
+            if cfg.family == "tilelang":
+                self.tilelang_kernel(self.wx, self.recurrent, self.bias, previous, self.zero32, self.output, carry,
+                                     length, start, int(start == 0))
+                kernel = None
+            elif cfg.family == "mma_rtiled":
                 splits, groups, slots = self.rtiled_plan
                 kernel = triton_rtiled._rtiled[(splits, slots)](
                     self.wx, self.recurrent, self.bias, previous, self.output, carry, self.xbuf,
@@ -114,7 +141,7 @@ class PreparedSequence:
                     triton.next_power_of_2(width), total, start, self.output_mode, start == 0,
                     num_warps=cfg.warps, enable_fp_fusion=False,
                 )
-            if diagnostics:
+            if diagnostics and kernel is not None:
                 self.compiler_records.append({
                     "step_base": start, "steps": length, "registers": kernel.n_regs,
                     "spills": kernel.n_spills, "shared_bytes": kernel.metadata.shared,

@@ -55,5 +55,33 @@ class RTiledPolicyContract(unittest.TestCase):
                 KernelConfig(**kwargs)
 
 
+class TileLangPolicyContract(unittest.TestCase):
+    def test_tilelang_fields_are_validated(self):
+        cfg = KernelConfig(family="tilelang", slice_width=16, sync="cluster")
+        self.assertEqual((cfg.family, cfg.slice_width, cfg.warps), ("tilelang", 16, 4))
+        for kwargs in (dict(family="tilelang", slice_width=16), dict(family="tilelang", slice_width=128, sync="cluster"),
+                       dict(family="tilelang", slice_width=32, sync="grid"),
+                       dict(family="tilelang", slice_width=32, sync="cluster", warps=8),
+                       dict(family="tilelang", slice_width=32, sync="cluster", pad_k=True), dict(sync="cluster")):
+            with self.assertRaises(ValueError):
+                KernelConfig(**kwargs)
+
+    def test_tilelang_entry_requires_tilelang_in_identity(self):
+        key = shape_key("lstm", "float16", 16, 1024, 1, 256)
+        entry = {"family": "tilelang", "slice_width": 16, "sync": "cluster"}
+        with_tl = {"gpu": "H100", "triton": "3.6.0", "tilelang": "0.1.15"}
+        policy = ExecutionPolicy({key: entry}, identity=with_tl)
+        self.assertEqual(policy.select("lstm", "float16", 16, 1024, 1, 256, identity=with_tl).family, "tilelang")
+        without = dict(with_tl, tilelang=None)
+        with self.assertRaises(ValueError):
+            policy.select("lstm", "float16", 16, 1024, 1, 256, identity=without)
+        unbound = ExecutionPolicy({key: entry}, identity=without)
+        with self.assertRaises(ValueError):
+            unbound.select("lstm", "float16", 16, 1024, 1, 256, identity=without)
+
+    def test_unmeasured_large_width_keeps_triton_default(self):
+        self.assertEqual(ExecutionPolicy().select("lstm", "float16", 16, 1024, 1, 256).family, "mma_rtiled")
+
+
 if __name__ == "__main__":
     unittest.main()
