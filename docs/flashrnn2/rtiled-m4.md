@@ -122,9 +122,11 @@ Summary:
 * **E2:** the existing single-CTA path is faster than R tiling at D=96 and
   D=128 in all 24 comparisons (0.799×–0.957×; every interval below 1). The
   D ≤ 128 default therefore stays single CTA. The earlier unpaired
-  prepared-graph screen had favored R tiling at these widths; through the
-  public per-call API in this workload, R tiling's extra per-call buffers and
-  barrier-counter memsets and the per-step barrier outweigh that.
+  prepared-graph screen (kernels only, CUDA Graph replay) had slightly favored
+  R tiling at these widths. Here both arms go through the public per-call API,
+  and the R-tiled call allocates more per call (exchange buffer, two carries,
+  zeroed barrier counters and error flag). That host-side cost is a likely
+  contributor; this run does not isolate it.
 * **E4:** the TileLang cluster spike is slower than Triton R tiling in all six
   comparisons (0.705×–0.878×). This measures the unoptimized M3 spike.
 
