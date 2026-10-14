@@ -151,7 +151,9 @@ the hierarchical bootstrap.
 | Classifier | 3 | Triton, 4 warps | 1.078–1.180 | 1.132 | 3/3 |
 | All | 40 | | 1.012–2.331 | 1.435 | 40/40 |
 
-Per-row values: `job47304776/analysis/m4-summary.csv`. The largest gains are
+Per-row values: `job47304776/analysis/m4-summary.csv`. As in v1, `analysis/` was
+computed after the archive was written; it is reproducible from the archived
+`science/` tree with `tools/rtiled_m4_analyze.py`. The largest gains are
 sLSTM D192 (kernel 2.24–2.33×, classifier B32 1.98×); the smallest is sLSTM
 D384 B1 (1.012×, interval 1.006–1.020).
 
@@ -171,6 +173,13 @@ tilelang: "0.1.15"}`; `select` rejects any other identity, and a TileLang entry
 on a runtime without TileLang raises instead of switching backend. Shapes
 outside the table keep `default_config(D)`. `tests/test_execution_policy.py`
 checks the shipped file (entries, identity binding, fallback, format).
+
+The table takes effect through `ExecutionPolicy.select → KernelConfig →
+PreparedSequence(config=…)`; `PreparedSequence` is the only library code that
+dispatches on `KernelConfig.family`, and the public one-call recurrence
+functions do not consult a table. The file is package data
+(`"flashrnn.flashrnn2" = ["tables/*.json"]`): a wheel built on MN5 with
+setuptools 80.9.0 contains it, while the earlier pattern under `"*"` did not.
 
 ### Not claimed
 

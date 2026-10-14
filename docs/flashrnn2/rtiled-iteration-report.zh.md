@@ -144,7 +144,7 @@ split 0 在 M0 合格的 Triton 配置和 40 个合格 TileLang 配置之间选�
 
 增益最大的是 sLSTM D192（内核级 2.24×–2.33×），最小的是 sLSTM D384 B1（1.012×，区间 1.006–1.020）。这里对比的是保守默认，不是最优 Triton 配置；对最优 Triton 配置的对比见 M5（内核级 1.24×–1.85×，分类器 1.05×–1.52×）。
 
-注册表：冻结表连同身份、适用范围、来源和逐行计时写入 `flashrnn/flashrnn2/tables/h100-rtiled-m6-20261014.json`，用 `ExecutionPolicy.from_json(TABLES / "h100-rtiled-m6-20261014.json")` 加载。身份为 `{gpu: "NVIDIA H100", capability: [9, 0], triton: "3.6.0", tilelang: "0.1.15"}`，任何不同的身份都会被 `select` 拒绝；表外形状保持 `default_config(D)`。`tests/test_execution_policy.py` 检查这个文件（12 个测试通过）。
+注册表：冻结表连同身份、适用范围、来源和逐行计时写入 `flashrnn/flashrnn2/tables/h100-rtiled-m6-20261014.json`，用 `ExecutionPolicy.from_json(TABLES / "h100-rtiled-m6-20261014.json")` 加载。身份为 `{gpu: "NVIDIA H100", capability: [9, 0], triton: "3.6.0", tilelang: "0.1.15"}`，任何不同的身份都会被 `select` 拒绝；表外形状保持 `default_config(D)`。`tests/test_execution_policy.py` 检查这个文件（12 个测试通过）。查表经由 `ExecutionPolicy.select → KernelConfig → PreparedSequence(config=…)` 生效：库里只有 `PreparedSequence` 按 `KernelConfig.family` 分派，公开的一次性 recurrence 函数不读查表。表文件已作为包数据打包（`"flashrnn.flashrnn2" = ["tables/*.json"]`），在 MN5 上用 setuptools 80.9.0 构建的 wheel 中确认存在；原先写在 `"*"` 下的写法打不进去。
 
 副产品（v1，作业 47304358）：TileLang 资格因测试工具 bug 中止后，驱动仍只在 Triton 配置之间选择并计时。Triton 按形状调参对保守默认 33/33 更快（1.003×–1.374×，几何平均 1.10×）；另外 7 行选中的就是默认配置，相当于 A/A 对照，结果 0.998×–1.001×，区间都覆盖 1。这张表只有 Triton，不是 G4 结果，没有作为注册表提交。
 
@@ -180,6 +180,6 @@ split 0 在 M0 合格的 Triton 配置和 40 个合格 TileLang 配置之间选�
 * G1–G4 已全部达成。剩下的都是扩展，不是收尾必需：
 * **D = 768。** TileLang cluster 上限 16 个 CTA，D = 768 目前仍走 Triton R 切分；可以试 TileLang 的 `sync_grid`（k > 16），再按 M0 + M6 的标准资格认证和计时。
 * **扩大查表。** 现在的表只含 40 个精确形状（FP16、h = 1）。确认原作者的目标 D、B、T 网格后，按同样流程（split 0 选择 → 冻结 → split 1 计时）补表；BF16 已经资格认证，可以直接加入计时。
-* **打包检查。** `pyproject.toml` 已加入 `flashrnn/flashrnn2/tables/*.json`，但本地 setuptools 58 低于项目要求的 77，没有实际构建 wheel 验证表文件被打包。
+* **公开接口接入。** 目前查表只在 `PreparedSequence` 路径上生效；如果希望一次性 recurrence 调用也按表选后端，需要另加分派并重新做契约检查。
 * D ≤ 128 保持单 CTA；如需再探索，应在预分配的 PreparedSequence 路径上单独配对计时。
 * 与原作者确认目标 D、B、T 网格，并回复原作者、更新 PR。
