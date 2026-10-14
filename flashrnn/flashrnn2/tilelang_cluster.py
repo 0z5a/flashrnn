@@ -28,10 +28,19 @@ def cluster_smem(width, slice_width, bm=16):
     return 4 * slice_width * width * 2 + 2 * width * bm * 2 + 4 * slice_width * bm * 4
 
 
+CLUSTER_BATCH_TILES = (16, 32, 64)
+
+
 def supported(width, slice_width, bm=16):
     """Cluster size 2..16 and the shared-memory bound (no BM = 16 shape lies between the M5 bound of
-    200 KiB and the hardware limit, so the qualified BM = 16 set is unchanged)."""
-    if slice_width not in SLICE_WIDTHS or width % slice_width or bm not in BATCH_TILES:
+    200 KiB and the hardware limit, so the qualified BM = 16 set is unchanged).
+
+    BM <= 64: h^T is the WGMMA B operand, whose swizzled shared layout stores 64-column atoms one after
+    another. Only within one atom are a CTA's S rows contiguous, which the single bulk copy per peer needs;
+    TileLang 0.1.15 splits a narrower region into per-row copies at swizzled addresses (job 47306925, BM = 128:
+    nondeterministic, wrong values), so BM = 128 is excluded here.
+    """
+    if slice_width not in SLICE_WIDTHS or width % slice_width or bm not in CLUSTER_BATCH_TILES:
         return False
     k = width // slice_width
     return 2 <= k <= 16 and cluster_smem(width, slice_width, bm) <= SMEM_LIMIT
