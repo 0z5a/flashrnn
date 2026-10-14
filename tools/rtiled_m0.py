@@ -368,6 +368,10 @@ def main():
     stages = args.stages.split(",")
     write(out / "identity.json", identity())
     grid_ok = canary(out)
+    if json.loads((out / "canary.json").read_text())["status"] == "ERROR":
+        # An exception (not a barrier mismatch) means the runtime itself is broken: stop this worker.
+        write(out / "DONE.json", dict(finished=time.strftime("%Y-%m-%dT%H:%M:%S%z"), fatal="canary_error"))
+        raise SystemExit(3)
     args.sync = "grid" if grid_ok else "launch"
     rows = stage_resources(out, args)
     ok = [r for r in rows if r["status"] == "COMPILED" and r["error_flag"] == 0 and r["sync_ok"]]
