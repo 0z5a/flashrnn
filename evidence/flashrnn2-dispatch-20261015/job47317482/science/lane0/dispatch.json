@@ -1,0 +1,336 @@
+{
+  "started": 1792046699.187879,
+  "gates": {
+    "unit": "PASS",
+    "contract0": "PASS",
+    "contract1": "PASS",
+    "contract2": "PASS"
+  },
+  "unit": {
+    "table_hit": true,
+    "table_miss_default": true,
+    "identity_mismatch_defaults": true,
+    "explicit_policy_wrong_identity_raises": true,
+    "continuation_without_config_raises": true,
+    "no_one_call_path_raises": true
+  },
+  "identity": {
+    "gpu": "NVIDIA H100",
+    "capability": [
+      9,
+      0
+    ],
+    "triton": "3.6.0",
+    "tilelang": "0.1.15"
+  },
+  "contract": [
+    {
+      "case": {
+        "cell": "lstm",
+        "dtype": "float16",
+        "batch": 16,
+        "steps": 128,
+        "heads": 1,
+        "width": 64
+      },
+      "served": {
+        "config": {
+          "family": "mma",
+          "batch_tile": 16,
+          "warps": 4,
+          "weight_operand": "b",
+          "slice_width": 0,
+          "sync": "none",
+          "pad_k": false,
+          "prefetch": false
+        },
+        "source": "default",
+        "expected": {
+          "family": "mma",
+          "batch_tile": 16,
+          "warps": 4,
+          "weight_operand": "b",
+          "slice_width": 0,
+          "sync": "none",
+          "pad_k": false,
+          "prefetch": false
+        },
+        "pass_": true
+      },
+      "backend": {
+        "full_fp32": true,
+        "full_input": true,
+        "hidden_input": true,
+        "last_input": true
+      },
+      "prepared": {
+        "full": true,
+        "hidden": true,
+        "last": true
+      },
+      "chunked": {
+        "chunks": [
+          1,
+          3,
+          13,
+          111
+        ],
+        "bitwise": true
+      },
+      "e1": [
+        {
+          "mode": "warm",
+          "fixture": "dispatch-lstm-float16-b16-t128-d64-h1-warm",
+          "config_for_fixture_shape": {
+            "family": "mma",
+            "batch_tile": 16,
+            "warps": 4,
+            "weight_operand": "b",
+            "slice_width": 0,
+            "sync": "none",
+            "pad_k": false,
+            "prefetch": false
+          },
+          "checks": {
+            "history": {
+              "pass_": true,
+              "max_abs": 9.110329691787433e-07,
+              "failed_elements": 0,
+              "worst_normalized": 0.00039006749632868347,
+              "bitwise": false
+            },
+            "carry": {
+              "pass_": true,
+              "max_abs": 4.501816192395425e-07,
+              "failed_elements": 0,
+              "worst_normalized": 0.0001779199498312014,
+              "bitwise": false
+            },
+            "hidden": {
+              "pass_": true,
+              "max_abs": 5.147287921326155e-07,
+              "failed_elements": 0,
+              "worst_normalized": 0.0002375185542705732,
+              "bitwise": false
+            },
+            "last": {
+              "pass_": true,
+              "max_abs": 2.4802930896801467e-07,
+              "failed_elements": 0,
+              "worst_normalized": 0.00010937968635683981,
+              "bitwise": false
+            }
+          },
+          "pass_": true
+        }
+      ],
+      "pass_": true
+    },
+    {
+      "case": {
+        "cell": "lstm",
+        "dtype": "float16",
+        "batch": 16,
+        "steps": 1024,
+        "heads": 1,
+        "width": 192
+      },
+      "served": {
+        "config": {
+          "family": "tilelang",
+          "batch_tile": 16,
+          "warps": 4,
+          "weight_operand": "b",
+          "slice_width": 16,
+          "sync": "cluster",
+          "pad_k": false,
+          "prefetch": false
+        },
+        "source": "table",
+        "expected": {
+          "family": "tilelang",
+          "batch_tile": 16,
+          "warps": 4,
+          "weight_operand": "b",
+          "slice_width": 16,
+          "sync": "cluster",
+          "pad_k": false,
+          "prefetch": false
+        },
+        "pass_": true
+      },
+      "backend": {
+        "full_fp32": true,
+        "full_input": true,
+        "hidden_input": true,
+        "last_input": true
+      },
+      "prepared": {
+        "full": true,
+        "hidden": true,
+        "last": true
+      },
+      "chunked": {
+        "chunks": [
+          1,
+          3,
+          13,
+          1007
+        ],
+        "bitwise": true
+      },
+      "e1": [
+        {
+          "mode": "warm",
+          "fixture": "dispatch-lstm-float16-b16-t128-d192-h1-warm",
+          "config_for_fixture_shape": {
+            "family": "mma_rtiled",
+            "batch_tile": 16,
+            "warps": 8,
+            "weight_operand": "b",
+            "slice_width": 64,
+            "sync": "grid",
+            "pad_k": false,
+            "prefetch": false
+          },
+          "checks": {
+            "history": {
+              "pass_": true,
+              "max_abs": 8.36149260045882e-07,
+              "failed_elements": 0,
+              "worst_normalized": 0.0003148921999712285,
+              "bitwise": false
+            },
+            "carry": {
+              "pass_": true,
+              "max_abs": 3.455914186212272e-07,
+              "failed_elements": 0,
+              "worst_normalized": 0.00011941893039150321,
+              "bitwise": false
+            },
+            "hidden": {
+              "pass_": true,
+              "max_abs": 4.0848723371900153e-07,
+              "failed_elements": 0,
+              "worst_normalized": 0.00017225436741320313,
+              "bitwise": false
+            },
+            "last": {
+              "pass_": true,
+              "max_abs": 1.6993618165428437e-07,
+              "failed_elements": 0,
+              "worst_normalized": 7.841633964327366e-05,
+              "bitwise": false
+            }
+          },
+          "pass_": true
+        }
+      ],
+      "pass_": true
+    },
+    {
+      "case": {
+        "cell": "lstm",
+        "dtype": "bfloat16",
+        "batch": 32,
+        "steps": 128,
+        "heads": 1,
+        "width": 256
+      },
+      "served": {
+        "config": {
+          "family": "mma_rtiled",
+          "batch_tile": 16,
+          "warps": 8,
+          "weight_operand": "b",
+          "slice_width": 64,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        },
+        "source": "default",
+        "expected": {
+          "family": "mma_rtiled",
+          "batch_tile": 16,
+          "warps": 8,
+          "weight_operand": "b",
+          "slice_width": 64,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        },
+        "pass_": true
+      },
+      "backend": {
+        "full_fp32": true,
+        "full_input": true,
+        "hidden_input": true,
+        "last_input": true
+      },
+      "prepared": {
+        "full": true,
+        "hidden": true,
+        "last": true
+      },
+      "chunked": {
+        "chunks": [
+          1,
+          3,
+          13,
+          111
+        ],
+        "bitwise": true
+      },
+      "e1": [
+        {
+          "mode": "warm",
+          "fixture": "dispatch-lstm-bfloat16-b16-t128-d256-h1-warm",
+          "config_for_fixture_shape": {
+            "family": "mma_rtiled",
+            "batch_tile": 16,
+            "warps": 8,
+            "weight_operand": "b",
+            "slice_width": 64,
+            "sync": "grid",
+            "pad_k": false,
+            "prefetch": false
+          },
+          "checks": {
+            "history": {
+              "pass_": true,
+              "max_abs": 5.413003268527061e-06,
+              "failed_elements": 0,
+              "worst_normalized": 0.0017871624752985248,
+              "bitwise": false
+            },
+            "carry": {
+              "pass_": true,
+              "max_abs": 1.0314787477483378e-06,
+              "failed_elements": 0,
+              "worst_normalized": 0.0003710595369535435,
+              "bitwise": false
+            },
+            "hidden": {
+              "pass_": true,
+              "max_abs": 2.802136991990334e-06,
+              "failed_elements": 0,
+              "worst_normalized": 0.0011050895800858189,
+              "bitwise": false
+            },
+            "last": {
+              "pass_": true,
+              "max_abs": 5.538634594570713e-07,
+              "failed_elements": 0,
+              "worst_normalized": 0.00020694751086802106,
+              "bitwise": false
+            }
+          },
+          "pass_": true
+        }
+      ],
+      "pass_": true
+    }
+  ],
+  "status": "PASS",
+  "finished": 1792046759.6822045
+}
