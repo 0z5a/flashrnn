@@ -78,13 +78,19 @@ def step_fn(spec, case):
     raise ValueError(spec["kind"])
 
 
+_ORACLE = {}
+
+
 def qualify(spec, case):
     """Gradient gate at a reduced shape against the FP64 oracle (bw_qualify budget, no v1 term)."""
     small = dict(case, batch=min(case["batch"], 16), steps=min(case["steps"], 64), init="warm")
     leaves, cot_h, cot_f = bw_qualify.inputs(small, 31 + case["width"])
     grads = step_fn(spec, small)(leaves, cot_h)
     torch.cuda.synchronize()
-    ref = bw_qualify.run_oracle(leaves, cot_h, cot_f, small, "hist")
+    key = json.dumps({k: small[k] for k in ("cell", "dtype", "width", "batch", "steps")}, sort_keys=True)
+    if key not in _ORACLE:  # same inputs for every candidate of a case
+        _ORACLE[key] = bw_qualify.run_oracle(leaves, cot_h, cot_f, small, "hist")
+    ref = _ORACLE[key]
     m = bw_qualify.metrics(list(grads), ref, case["cell"])
     checks = bw_qualify.gate(m, case["dtype"])
     return all(checks.values()), m
