@@ -11,7 +11,8 @@ for the whole call: pass it as ``config``. A continuation chunk without one is r
 The default policy is the packaged H100 table set (M6 + M7), served only when this runtime's identity (GPU name,
 capability, Triton and TileLang versions) equals the identity the tables were measured under; otherwise every shape
 gets ``default_config``. A table entry that names TileLang on a runtime without TileLang raises; nothing falls back
-to another backend silently. Backward is not implemented.
+to another backend silently. Calls that require gradients go to ``training.recurrence`` (whole logical
+calls; LSTM/sLSTM; R-tiled Triton backward).
 """
 import functools
 
@@ -61,6 +62,12 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context=No
     if wx.dtype not in DTYPES:
         raise ValueError("the dispatched recurrence takes FP16/BF16 inputs")
     batch, steps, _, heads, width = wx.shape
+    if torch.is_grad_enabled() and any(x.requires_grad for x in (wx, recurrent, bias, initial)):
+        # Training: whole logical calls through the differentiable path (forward on the selected backend).
+        from . import training
+
+        return training.recurrence(wx, recurrent, bias, initial, cell, output_mode=output_mode,
+                                   snapshot_dtype=snapshot_dtype, config=config, sequence_context=sequence_context)
     if sequence_context is None:
         sequence_context = begin_sequence(initial, cell, wx.dtype)
     if config is None:
