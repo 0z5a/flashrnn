@@ -168,11 +168,25 @@ BM16 + prefetch and on grid D768 S16 BM64 256 threads + prefetch.
 | LSTM D768 C1024, grid S16 BM64, 256 threads | 34.4 ms | 43.1 ms |
 | sLSTM D768 C1024 | 34.0 ms | 42.7 ms |
 
-The prefetched loads are issued before the step's synchronization (the grid
-barrier's memory fence, the async-proxy fence before the cluster copies). They
-are not hidden behind it, and they add registers to kernels that are already at
-121–255. Not verified by a profile of the prefetch kernels. Recorded as a
-negative result; the option stays off.
+ptxas on the same kernels (prefetch identified by the use of its fragments)
+explains part of this:
+
+| Kernel | Registers / spill stores, without → with prefetch | Consequence |
+|---|---|---|
+| cluster S16 BM16, 128 threads | 121 / 0 → 130 / 0 | allocated 128 → 136 per thread: 16,384 → 17,408 per CTA, so 4 → 3 CTAs per SM |
+| cluster S16 BM32, 128 threads | 157 / 0 → 167 / 0 | 3 CTAs per SM before and after |
+| grid S16 BM32, 256 threads | 255 / 12 B → 255 / 56 B | more spilling |
+| grid S16 BM64, 256 threads | 255 / 0 → 255 / 0 | none (one CTA per SM either way) |
+
+* At D = 256 the occupancy cliff from 4 to 3 CTAs per SM fits the 1.22× slowdown.
+* For the grid BM64 kernel, registers and spills do not change, so the cause of
+  its 1.25× slowdown is not established. One possibility, unverified, is that
+  the loads issued before the grid barrier's memory fence must complete there.
+* The best D = 256 kernel is capped at 4 CTAs per SM by both registers
+  (≤ 128 per thread) and shared memory (53 KB). Any rewrite has to stay inside
+  that budget.
+
+Recorded as a negative result; the option stays off.
 
 **Paired timing** (split 1, 5 starts × 20 ABBA/BAAB blocks):
 
@@ -189,7 +203,8 @@ negative result; the option stays off.
 
 ## Where the goal stands after round 3
 
-The stop criterion is not met. At C = 1024 the best is 1.46–1.48× over s0p for
+The stop criterion is not met, and not every plane has been tried (congestion
+and NUMA have no experiment yet). At C = 1024 the best is 1.46–1.48× over s0p for
 D = 768 and 1.00–1.01× for D = 256. Against s0 alone, D = 768 reaches
 1.97–1.98× and D = 256 reaches 6.6–7.0×.
 
@@ -198,9 +213,9 @@ D = 768 and 1.00–1.01× for D = 256. Against s0 alone, D = 768 reaches
 | SM cost | batch tile BM > 16 | null (best at BM 16) |
 | Occupancy | two warpgroups per CTA (grid path) | **+1.27–1.29×** on D = 768; cluster path wrong, so disallowed |
 | Launch | CUDA Graph of the whole forward | null (0.99–1.00×) |
-| Latency | input-projection prefetch | negative (0.8×) |
-| Congestion | L2 / memory bandwidth | ncu: L2 ≤ 18%, DRAM ≤ 17%, so not the limiter |
-| NUMA | host placement | not run; one GPU is 0.98 busy at D = 768 |
+| Latency | input-projection prefetch | negative (0.8×): D = 256 loses a CTA per SM to registers |
+| Congestion | L2 / memory bandwidth | not run as an experiment; single-kernel ncu at one stream shows L2 ≤ 18% and DRAM ≤ 17% |
+| NUMA | host placement | not run (planned: whole node, four workers, local vs remote binding) |
 
 What remains is structural. Every measured kernel is latency-bound at one CTA per
 SM (6–25% occupancy) with the per-step chain on the critical path. A large gain at
