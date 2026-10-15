@@ -1,0 +1,79 @@
+{
+  "mode": "tselect",
+  "case": {
+    "name": "prebuild-lstm-d64-b16",
+    "lane": 0,
+    "cell": "lstm",
+    "dtype": "float16",
+    "width": 64,
+    "batch": 16,
+    "concurrency": 16,
+    "steps": 256,
+    "tilelang": false,
+    "roles": {
+      "v1": [
+        {
+          "kind": "v1"
+        }
+      ]
+    }
+  },
+  "identity": {
+    "gpu": "NVIDIA H100",
+    "torch": "2.4.0a0+gite3b9b71",
+    "triton": "3.6.0",
+    "capability": [
+      9,
+      0
+    ]
+  },
+  "split": 0,
+  "candidates": {
+    "v1": {
+      "qualification": {
+        "{\"kind\": \"v1\"}": {
+          "status": "PASS",
+          "metrics": {
+            "d_wx": {
+              "rel_fro": 0.0009227086051116662,
+              "max_abs_scaled": 0.0015769044026170784,
+              "finite": true,
+              "ref_max": 1.8405779233974913
+            },
+            "d_r": {
+              "rel_fro": 0.0014546696741860644,
+              "max_abs_scaled": 0.0014076623829708862,
+              "finite": true,
+              "ref_max": 5.978209987972272
+            },
+            "d_bias": {
+              "rel_fro": 0.0009862462808567492,
+              "max_abs_scaled": 0.0011061443679457612,
+              "finite": true,
+              "ref_max": 31.70994916033222
+            },
+            "d_init_h": {
+              "rel_fro": 0.0010291206574673424,
+              "max_abs_scaled": 0.0009180676378402469,
+              "finite": true,
+              "ref_max": 0.45368747384879127
+            },
+            "d_init_c": {
+              "rel_fro": 0.000833739938077082,
+              "max_abs_scaled": 0.0007697239434802612,
+              "finite": true,
+              "ref_max": 1.6510728796720855
+            }
+          }
+        }
+      },
+      "median_ms": {
+        "{\"kind\": \"v1\"}": 1.8797547022501628
+      },
+      "selected": {
+        "kind": "v1"
+      }
+    }
+  },
+  "status": "SELECTED"
+}

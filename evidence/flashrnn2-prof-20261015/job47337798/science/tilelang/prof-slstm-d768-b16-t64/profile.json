@@ -1,0 +1,152 @@
+{
+ "case": {
+  "cell": "slstm",
+  "dtype": "float16",
+  "width": 768,
+  "batch": 16,
+  "steps": 64,
+  "init": "warm"
+ },
+ "tilelang_env": true,
+ "started": 1792084615.0585403,
+ "fwd": {
+  "triton_default": {
+   "full": 0.49055999517440796,
+   "hidden": 0.4408319890499115
+  },
+  "triton_s32w4": {
+   "full": 0.3984319865703583,
+   "hidden": 0.350271999835968
+  },
+  "tilelang": {
+   "full": 0.2572160065174103,
+   "hidden": 0.2518399953842163
+  }
+ },
+ "bw_phases": {
+  "s16w4_base": {
+   "ms": {
+    "preactivation": 0.263808012008667,
+    "kernel": 0.7519999742507935,
+    "weight_gradients": 0.15324799716472626
+   },
+   "total": 1.1622719764709473,
+   "vs_base": 0.0
+  },
+  "s16w4_fast": {
+   "ms": {
+    "preactivation": 0.30134400725364685,
+    "kernel": 0.6022400259971619,
+    "weight_gradients": 0.15398399531841278
+   },
+   "total": 1.0125759840011597,
+   "vs_base": true
+  },
+  "s16w4_fast_tf32": {
+   "ms": {
+    "preactivation": 0.1523520052433014,
+    "kernel": 0.6249600052833557,
+    "weight_gradients": 0.07318399846553802
+   },
+   "total": 0.839136004447937,
+   "vs_base": 0.0001794640120351687
+  },
+  "s16w8_base": {
+   "ms": {
+    "preactivation": 0.2667199969291687,
+    "kernel": 0.9590719938278198,
+    "weight_gradients": 0.1536960005760193
+   },
+   "total": 1.3760960102081299,
+   "vs_base": 0.0
+  },
+  "s16w8_fast": {
+   "ms": {
+    "preactivation": 0.26895999908447266,
+    "kernel": 0.8126400113105774,
+    "weight_gradients": 0.15148800611495972
+   },
+   "total": 1.2236160039901733,
+   "vs_base": true
+  },
+  "s16w8_fast_tf32": {
+   "ms": {
+    "preactivation": 0.17564800381660461,
+    "kernel": 0.872223973274231,
+    "weight_gradients": 0.07203199714422226
+   },
+   "total": 1.1019840240478516,
+   "vs_base": 0.0001794640120351687
+  },
+  "s32w4_base": {
+   "ms": {
+    "preactivation": 0.2608959972858429,
+    "kernel": 0.7005760073661804,
+    "weight_gradients": 0.1518400013446808
+   },
+   "total": 1.1107200384140015,
+   "vs_base": 0.0
+  },
+  "s32w4_fast": {
+   "ms": {
+    "preactivation": 0.2667199969291687,
+    "kernel": 0.5760639905929565,
+    "weight_gradients": 0.1523520052433014
+   },
+   "total": 0.9858239889144897,
+   "vs_base": true
+  },
+  "s32w4_fast_tf32": {
+   "ms": {
+    "preactivation": 0.15334400534629822,
+    "kernel": 0.6021119952201843,
+    "weight_gradients": 0.07283200323581696
+   },
+   "total": 0.8125759959220886,
+   "vs_base": 0.0001794640120351687
+  },
+  "s32w8_base": {
+   "ms": {
+    "preactivation": 0.2574079930782318,
+    "kernel": 0.8217920064926147,
+    "weight_gradients": 0.15136000514030457
+   },
+   "total": 1.24726402759552,
+   "vs_base": 0.0
+  },
+  "s32w8_fast": {
+   "ms": {
+    "preactivation": 0.2710080146789551,
+    "kernel": 0.6908800005912781,
+    "weight_gradients": 0.15507200360298157
+   },
+   "total": 1.1118719577789307,
+   "vs_base": true
+  },
+  "s32w8_fast_tf32": {
+   "ms": {
+    "preactivation": 0.15644800662994385,
+    "kernel": 0.7150400280952454,
+    "weight_gradients": 0.07308799773454666
+   },
+   "total": 0.940608024597168,
+   "vs_base": 0.0001794640120351687
+  }
+ },
+ "step": {
+  "triton_default+s16w4_fast": 1.6636159420013428,
+  "triton_default+s32w4_fast": 1.624959945678711,
+  "triton_default+s32w8_base": 1.8695039749145508,
+  "triton_s32w4+s16w4_fast": 1.5728000402450562,
+  "triton_s32w4+s32w4_fast": 1.5599039793014526,
+  "triton_s32w4+s32w8_base": 1.8128960132598877,
+  "tilelang+s16w4_fast": 1.381119966506958,
+  "tilelang+s32w4_fast": 1.3591359853744507,
+  "tilelang+s32w8_base": 1.6036159992218018
+ },
+ "errors": {
+  "v1": "1/paper-baselines-20261013-v1/pinned/flashrnn/flashrnn/cuda_init.py\", line 168, in load\n    mod = _load(name + suffix, sources, **myargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/gpfs/scratch/ehpc390/tueb043681/flashrnn2-prof-20261015-v1/source/tools/rtiled_m4.py\", line 201, in load\n    return super().load(*positional, **keywords)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/gpfs/scratch/ehpc390/tueb043681/paper-baselines-20261013-v1/source/tools/flashrnn2/build_without_ninja.py\", line 110, in load\n    command.run()\n  File \"/gpfs/home/tueb/tueb043681/flashns-math376-job47032336/.venv/lib/python3.11/site-packages/setuptools/command/build_ext.py\", line 84, in run\n    _build_ext.run(self)\n  File \"/gpfs/home/tueb/tueb043681/flashns-math376-job47032336/.venv/lib/python3.11/site-packages/setuptools/_distutils/command/build_ext.py\", line 346, in run\n    self.build_extensions()\n  File \"/gpfs/apps/MN5/ACC/PYTORCH/2.4.0/build/lib.linux-x86_64-cpython-311/torch/utils/cpp_extension.py\", line 522, in build_extensions\n    _check_cuda_version(compiler_name, compiler_version)\n  File \"/gpfs/apps/MN5/ACC/PYTORCH/2.4.0/build/lib.linux-x86_64-cpython-311/torch/utils/cpp_extension.py\", line 417, in _check_cuda_version\n    raise RuntimeError(CUDA_MISMATCH_MESSAGE.format(cuda_str_version, torch.version.cuda))\nRuntimeError: \nThe detected CUDA version (12.8) mismatches the version that was used to compile\nPyTorch (11.8). Please make sure to use the same CUDA versions.\n\n"
+ },
+ "v1_status": "UNAVAILABLE",
+ "finished": 1792084626.3365545
+}

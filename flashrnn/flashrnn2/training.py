@@ -11,16 +11,19 @@ differentiated here.
 
 import torch
 
-BW_DEFAULTS = {"slice_width": None, "num_warps": 8}
+# Defaults from the B = 16 fix (training-step timing against FlashRNN1): the fast backward variant (bitwise identical
+# to the base kernel) and TF32 for the preactivation/dR GEMMs (gradient error unchanged: FP16 3.2e-4, BF16 2.4e-3
+# relative Frobenius against the FP64 oracle); eight warps, the qualified slice width per D.
+BW_DEFAULTS = {"slice_width": None, "num_warps": 8, "fast": True, "tf32": True}
 
 
 def backward_slice_width(width):
-    """Conservative default: one CTA per group up to D = 64, then slices that fit shared memory spill-light."""
-    if width <= 64:
-        return width if width in (16, 32, 64) else 64
-    if width <= 256:
+    """Qualified backward slice width per D (eight warps; shared memory fits, spill-light)."""
+    if width <= 128:
         return 32
-    return 16
+    if width <= 512:
+        return 16
+    return 32
 
 
 class _Recurrence(torch.autograd.Function):
