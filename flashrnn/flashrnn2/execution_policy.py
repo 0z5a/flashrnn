@@ -20,17 +20,24 @@ class KernelConfig:
     slice_width: int = 0
     sync: str = "none"
     pad_k: bool = False
+    # TileLang only: load the next step's input projections into registers after each step's epilogue.
+    prefetch: bool = False
 
     def __post_init__(self):
         if self.family not in ("mma", "simt", "mma_rtiled", "tilelang"):
             raise ValueError("unknown kernel family")
+        if self.prefetch and self.family != "tilelang":
+            raise ValueError("input-projection prefetch exists only on the TileLang paths")
         if self.family == "tilelang":
             # k = D / slice_width CTAs, one warpgroup each (flashrnn2.tilelang_cluster): sync "cluster"
             # exchanges h through distributed shared memory with an mbarrier per step (k <= 16); sync "grid"
             # exchanges it through global memory under one cooperative grid barrier per step.
             if self.batch_tile not in (16, 32, 64, 128) or self.weight_operand != "b" or self.pad_k:
                 raise ValueError("the TileLang R-tiled paths use 16/32/64/128-row batch tiles and weight operand b")
-            # warps: 4 (one warpgroup) or 8 (two warpgroups per CTA); checked with every family below.
+            # warps: 4 (one warpgroup) or, on the grid path only, 8 (two warpgroups per CTA). Two warpgroups on
+            # the cluster path gave wrong, nondeterministic results (job 47308040 screen: 0/12 bitwise twins).
+            if self.warps == 8 and (self.sync != "grid" or self.batch_tile < 32):
+                raise ValueError("two warpgroups per CTA are qualified only on the TileLang grid path with BM >= 32")
             if not ((self.sync == "cluster" and self.slice_width in (16, 32, 64))
                     or (self.sync == "grid" and self.slice_width in (16, 32))):
                 raise ValueError("TileLang needs cluster sync with a slice of 16/32/64 or grid sync with 16/32")

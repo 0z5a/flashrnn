@@ -60,7 +60,7 @@ def arm(cell, cfg):
             from flashrnn.flashrnn2 import tilelang_cluster
             y, _ = tilelang_cluster.recurrence(wx, r, b, init, cell, sequence_context=ctx, slice_width=cfg.slice_width,
                                                output_mode="hidden", sync=cfg.sync, batch_tile=cfg.batch_tile,
-                                               threads=32 * cfg.warps)
+                                               threads=32 * cfg.warps, prefetch=cfg.prefetch)
         elif cfg.family == "mma_rtiled":
             y, _ = triton_rtiled.recurrence(wx, r, b, init, cell, sequence_context=ctx, slice_width=cfg.slice_width,
                                             num_warps=cfg.warps, pad_k=cfg.pad_k, output_mode="hidden")

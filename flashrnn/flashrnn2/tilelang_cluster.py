@@ -47,11 +47,11 @@ def supported(width, slice_width, bm=16):
 
 
 def build(batch, total_steps, heads, width, slice_width, *, cell="lstm", dtype="float16", mode="full",
-          snapshot="float32", threads=128, bm=16):
+          snapshot="float32", threads=128, bm=16, prefetch=False):
     import tilelang.language as T
 
-    if not supported(width, slice_width, bm):
-        raise ValueError("unsupported (D, S, BM) for the cluster path")
+    if not supported(width, slice_width, bm) or threads != 128:
+        raise ValueError("unsupported (D, S, BM, threads) for the cluster path")
     k = width // slice_width
     S, D, H, B, BM, TT = slice_width, width, heads, batch, bm, total_steps
     groups = (B + BM - 1) // BM * H
@@ -87,12 +87,25 @@ def build(batch, total_steps, heads, width, slice_width, *, cell="lstm", dtype="
             n = T.alloc_fragment((BM, S), acc)
             m = T.alloc_fragment((BM, S), acc)
             hid = T.alloc_fragment((BM, S), acc)
+            # prefetch: this thread's input projections for the next step, loaded right after the current step's
+            # epilogue so their latency overlaps the exchange wait and the GEMM instead of the critical path.
+            xi = T.alloc_fragment((BM, S), acc)
+            xf = T.alloc_fragment((BM, S), acc)
+            xz = T.alloc_fragment((BM, S), acc)
+            xo = T.alloc_fragment((BM, S), acc)
 
             for q, kk in T.Parallel(4 * S, D):
                 rs[q, kk] = R[q // S, head, s * S + q % S, kk]
             for kk, b in T.Parallel(D, BM):
                 h0[kk, b] = T.if_then_else(bt * BM + b < B, T.cast(INIT[0, bt * BM + b, 0, head, kk], dtype),
                                            T.cast(0, dtype))
+            if prefetch:
+                for b, j in T.Parallel(BM, S):
+                    valid = bt * BM + b < B
+                    xi[b, j] = T.if_then_else(valid, T.cast(WX[bt * BM + b, BASE, 0, head, s * S + j], acc), 0.0)
+                    xf[b, j] = T.if_then_else(valid, T.cast(WX[bt * BM + b, BASE, 1, head, s * S + j], acc), 0.0)
+                    xz[b, j] = T.if_then_else(valid, T.cast(WX[bt * BM + b, BASE, 2, head, s * S + j], acc), 0.0)
+                    xo[b, j] = T.if_then_else(valid, T.cast(WX[bt * BM + b, BASE, 3, head, s * S + j], acc), 0.0)
             for b, j in T.Parallel(BM, S):
                 valid = bt * BM + b < B
                 c[b, j] = T.if_then_else(valid, INIT[1, bt * BM + b, 0, head, s * S + j], 0.0)
@@ -117,14 +130,25 @@ def build(batch, total_steps, heads, width, slice_width, *, cell="lstm", dtype="
                     col = s * S + j
                     valid = row < B
                     step = BASE + t
-                    gi = stage[j, b] + T.if_then_else(valid, T.cast(WX[row, step, 0, head, col], acc), 0.0) \
-                        + T.cast(BIAS[0, head, col], acc)
-                    gf = stage[S + j, b] + T.if_then_else(valid, T.cast(WX[row, step, 1, head, col], acc), 0.0) \
-                        + T.cast(BIAS[1, head, col], acc)
-                    gz = stage[2 * S + j, b] + T.if_then_else(valid, T.cast(WX[row, step, 2, head, col], acc), 0.0) \
-                        + T.cast(BIAS[2, head, col], acc)
-                    go = stage[3 * S + j, b] + T.if_then_else(valid, T.cast(WX[row, step, 3, head, col], acc), 0.0) \
-                        + T.cast(BIAS[3, head, col], acc)
+                    if prefetch:
+                        gi = stage[j, b] + xi[b, j] + T.cast(BIAS[0, head, col], acc)
+                        gf = stage[S + j, b] + xf[b, j] + T.cast(BIAS[1, head, col], acc)
+                        gz = stage[2 * S + j, b] + xz[b, j] + T.cast(BIAS[2, head, col], acc)
+                        go = stage[3 * S + j, b] + xo[b, j] + T.cast(BIAS[3, head, col], acc)
+                        nxt = valid & (t + 1 < NSTEPS)
+                        xi[b, j] = T.if_then_else(nxt, T.cast(WX[row, step + 1, 0, head, col], acc), 0.0)
+                        xf[b, j] = T.if_then_else(nxt, T.cast(WX[row, step + 1, 1, head, col], acc), 0.0)
+                        xz[b, j] = T.if_then_else(nxt, T.cast(WX[row, step + 1, 2, head, col], acc), 0.0)
+                        xo[b, j] = T.if_then_else(nxt, T.cast(WX[row, step + 1, 3, head, col], acc), 0.0)
+                    else:
+                        gi = stage[j, b] + T.if_then_else(valid, T.cast(WX[row, step, 0, head, col], acc), 0.0) \
+                            + T.cast(BIAS[0, head, col], acc)
+                        gf = stage[S + j, b] + T.if_then_else(valid, T.cast(WX[row, step, 1, head, col], acc), 0.0) \
+                            + T.cast(BIAS[1, head, col], acc)
+                        gz = stage[2 * S + j, b] + T.if_then_else(valid, T.cast(WX[row, step, 2, head, col], acc),
+                                                                  0.0) + T.cast(BIAS[2, head, col], acc)
+                        go = stage[3 * S + j, b] + T.if_then_else(valid, T.cast(WX[row, step, 3, head, col], acc),
+                                                                  0.0) + T.cast(BIAS[3, head, col], acc)
                     zv = 2.0 / (1.0 + T.exp(-2.0 * gz)) - 1.0
                     og = 1.0 / (1.0 + T.exp(-go))
                     if slstm:
@@ -208,7 +232,7 @@ def supported_grid(width, slice_width, sms=132, bm=16):
 
 
 def build_grid(batch, total_steps, heads, width, slice_width, *, sms, cell="lstm", dtype="float16", mode="full",
-               snapshot="float32", threads=128, bm=16):
+               snapshot="float32", threads=128, bm=16, prefetch=False):
     """Same per-CTA work as build(), for k beyond the 16-CTA cluster limit (D = 768).
 
     The h exchange goes through a double-buffered global buffer XBUF[2, groups, D, BM]:
@@ -255,6 +279,10 @@ def build_grid(batch, total_steps, heads, width, slice_width, *, sms, cell="lstm
             n = T.alloc_fragment((BM, S), acc)
             m = T.alloc_fragment((BM, S), acc)
             hid = T.alloc_fragment((BM, S), acc)
+            xi = T.alloc_fragment((BM, S), acc)  # prefetched input projections (see build)
+            xf = T.alloc_fragment((BM, S), acc)
+            xz = T.alloc_fragment((BM, S), acc)
+            xo = T.alloc_fragment((BM, S), acc)
 
             for slot in T.serial(slots):
                 g = slot * resident + gy
@@ -275,6 +303,11 @@ def build_grid(batch, total_steps, heads, width, slice_width, *, sms, cell="lstm
                         if slstm:
                             n[b, j] = T.if_then_else(valid, INIT[2, bt * BM + b, 0, head, s * S + j], 1.0)
                             m[b, j] = T.if_then_else(valid, INIT[3, bt * BM + b, 0, head, s * S + j], 0.0)
+                        if prefetch:
+                            xi[b, j] = T.if_then_else(valid, T.cast(WX[bt * BM + b, BASE, 0, head, s * S + j], acc), 0.0)
+                            xf[b, j] = T.if_then_else(valid, T.cast(WX[bt * BM + b, BASE, 1, head, s * S + j], acc), 0.0)
+                            xz[b, j] = T.if_then_else(valid, T.cast(WX[bt * BM + b, BASE, 2, head, s * S + j], acc), 0.0)
+                            xo[b, j] = T.if_then_else(valid, T.cast(WX[bt * BM + b, BASE, 3, head, s * S + j], acc), 0.0)
                 T.fence_proxy_async()
                 T.sync_threads()
 
@@ -291,14 +324,25 @@ def build_grid(batch, total_steps, heads, width, slice_width, *, sms, cell="lstm
                             col = s * S + j
                             valid = row < B
                             step = BASE + t
-                            gi = stage[j, b] + T.if_then_else(valid, T.cast(WX[row, step, 0, head, col], acc), 0.0) \
-                                + T.cast(BIAS[0, head, col], acc)
-                            gf = stage[S + j, b] + T.if_then_else(valid, T.cast(WX[row, step, 1, head, col], acc),
-                                                                  0.0) + T.cast(BIAS[1, head, col], acc)
-                            gz = stage[2 * S + j, b] + T.if_then_else(valid, T.cast(WX[row, step, 2, head, col], acc),
-                                                                      0.0) + T.cast(BIAS[2, head, col], acc)
-                            go = stage[3 * S + j, b] + T.if_then_else(valid, T.cast(WX[row, step, 3, head, col], acc),
-                                                                      0.0) + T.cast(BIAS[3, head, col], acc)
+                            if prefetch:
+                                gi = stage[j, b] + xi[b, j] + T.cast(BIAS[0, head, col], acc)
+                                gf = stage[S + j, b] + xf[b, j] + T.cast(BIAS[1, head, col], acc)
+                                gz = stage[2 * S + j, b] + xz[b, j] + T.cast(BIAS[2, head, col], acc)
+                                go = stage[3 * S + j, b] + xo[b, j] + T.cast(BIAS[3, head, col], acc)
+                                nxt = valid & (t + 1 < NSTEPS)
+                                xi[b, j] = T.if_then_else(nxt, T.cast(WX[row, step + 1, 0, head, col], acc), 0.0)
+                                xf[b, j] = T.if_then_else(nxt, T.cast(WX[row, step + 1, 1, head, col], acc), 0.0)
+                                xz[b, j] = T.if_then_else(nxt, T.cast(WX[row, step + 1, 2, head, col], acc), 0.0)
+                                xo[b, j] = T.if_then_else(nxt, T.cast(WX[row, step + 1, 3, head, col], acc), 0.0)
+                            else:
+                                gi = stage[j, b] + T.if_then_else(valid, T.cast(WX[row, step, 0, head, col], acc), 0.0) \
+                                    + T.cast(BIAS[0, head, col], acc)
+                                gf = stage[S + j, b] + T.if_then_else(valid, T.cast(WX[row, step, 1, head, col], acc),
+                                                                      0.0) + T.cast(BIAS[1, head, col], acc)
+                                gz = stage[2 * S + j, b] + T.if_then_else(
+                                    valid, T.cast(WX[row, step, 2, head, col], acc), 0.0) + T.cast(BIAS[2, head, col], acc)
+                                go = stage[3 * S + j, b] + T.if_then_else(
+                                    valid, T.cast(WX[row, step, 3, head, col], acc), 0.0) + T.cast(BIAS[3, head, col], acc)
                             zv = 2.0 / (1.0 + T.exp(-2.0 * gz)) - 1.0
                             og = 1.0 / (1.0 + T.exp(-go))
                             if slstm:
@@ -351,7 +395,7 @@ def sm_count():
 
 
 def kernel(batch, total_steps, heads, width, slice_width, *, cell, dtype, mode, snapshot, sync="cluster", sms=None,
-           bm=16, threads=128):
+           bm=16, threads=128, prefetch=False):
     """Compiled kernel for one logical-call shape; chunk length, offset and start are runtime arguments."""
     import tilelang
 
@@ -359,15 +403,18 @@ def kernel(batch, total_steps, heads, width, slice_width, *, cell, dtype, mode, 
         sms = sms or sm_count()
         key = ("grid", sms, batch, total_steps, heads, width, slice_width, cell, dtype, mode, snapshot)
         func = lambda: build_grid(batch, total_steps, heads, width, slice_width, sms=sms, cell=cell,  # noqa: E731
-                                  dtype=dtype, mode=mode, snapshot=snapshot, bm=bm, threads=threads)
+                                  dtype=dtype, mode=mode, snapshot=snapshot, bm=bm, threads=threads,
+                                  prefetch=prefetch)
     else:
         key = (batch, total_steps, heads, width, slice_width, cell, dtype, mode, snapshot)
         func = lambda: build(batch, total_steps, heads, width, slice_width, cell=cell, dtype=dtype,  # noqa: E731
-                             mode=mode, snapshot=snapshot, bm=bm, threads=threads)
+                             mode=mode, snapshot=snapshot, bm=bm, threads=threads, prefetch=prefetch)
     if bm != 16:
         key = key + (("bm", bm),)  # BM = 16 keys stay as they were
     if threads != 128:
         key = key + (("threads", threads),)
+    if prefetch:
+        key = key + (("prefetch", True),)
     if key not in _KERNELS:
         _KERNELS[key] = tilelang.compile(func(), target={"kind": "cuda", "arch": "sm_90a"})
     return _KERNELS[key]
@@ -380,7 +427,7 @@ def version():
 
 
 def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context, slice_width=32,
-               output_mode="full", snapshot_dtype=None, sync="cluster", batch_tile=16, threads=128):
+               output_mode="full", snapshot_dtype=None, sync="cluster", batch_tile=16, threads=128, prefetch=False):
     """Public per-call API with the triton_rtiled contract; returns (output, FP32 compute carry).
 
     sync="cluster" exchanges h inside a thread-block cluster (k <= 16); sync="grid" exchanges it
@@ -424,7 +471,7 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context, s
     names = {torch.float16: "float16", torch.bfloat16: "bfloat16", torch.float32: "float32"}
     snap = wx.dtype if snapshot_dtype is None else snapshot_dtype
     fn = kernel(batch, steps, heads, width, slice_width, cell=cell, dtype=names[wx.dtype], mode=output_mode,
-                snapshot=names[snap], sync=sync, bm=batch_tile, threads=threads)
+                snapshot=names[snap], sync=sync, bm=batch_tile, threads=threads, prefetch=prefetch)
     out_shape = {"full": (states, batch, steps, heads, width), "hidden": (batch, steps, heads, width),
                  "last": (batch, 1, heads, width)}[output_mode]
     output = torch.empty(out_shape, device=wx.device, dtype=snap)
