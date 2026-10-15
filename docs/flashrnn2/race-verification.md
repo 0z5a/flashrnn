@@ -58,5 +58,32 @@ positive control), 21 runs per variant (no delay and 20 seeds):
   * sLSTM cluster skipped wait: the variant corrupted the CUDA context ("unspecified launch failure") after 7 and 1
     flagged runs, and the later variants of the same process could not run.
 
-Round 2 (job 47332827) widens the delays to 0-65 us, moves the cluster consumer delay after the wait (inside the
-single-buffer window), runs every variant in its own process, and reports the no-barrier cluster variant only.
+## Round 2 (job 47332827, 8 min 2 s, archive verified, 229 files)
+
+Changes, written into the rule before submission: delays 0-65 us; the cluster consumer delay after the wait (inside
+the window a single buffer exposes); every variant in its own process (a run that corrupts the CUDA context ends only
+that variant); the cluster no-barrier variant reported only. 66 tasks, 65 PASS under the rule.
+
+| Path (D, configuration; LSTM and sLSTM) | correct | single buffer | skipped barrier / wait | arrive before store |
+| --- | --- | --- | --- | --- |
+| Triton forward, D 256 S32 / D 768 S32 | 0/21 flagged, bitwise | 20/21 | 21/21 | 21/21 |
+| Triton backward, D 256 S32 / D 768 S16 | 0/21 flagged, bitwise | 20/21 | 21/21 | 21/21 (outputs unchanged) |
+| TileLang cluster, D 256 S16 BM32 / S32 BM16 | 0/21 flagged, bitwise | 20/21 | wait: 1/1 completed, then context corrupted | -- |
+| TileLang grid, D 768 S16 BM16, one warpgroup | 0/21 flagged, bitwise | 21/21 | 21/21 | LSTM 11/21 (FAIL), sLSTM 19/21 |
+| TileLang grid, D 768 S16 BM64, two warpgroups | 0/21 flagged, bitwise | 21/21 | 21/21 | 21/21 |
+| positive control: cluster, two warpgroups | -- | -- | -- | 21/21 flagged, outputs differ |
+
+* All 16 correct configurations again count zero violations with outputs bitwise equal to the uninstrumented kernel
+  (336 runs, with and without delays).
+* No completed run in either round changed its output without being flagged.
+* The one control under 80%: arrive-before-store on the one-warpgroup grid kernel (LSTM) was flagged in 11/21 runs;
+  the other 10 runs neither flagged nor changed the output (the late store still landed before the readers' copy).
+* The skipped-wait cluster control corrupts the CUDA context ("unspecified launch failure") after its first run: a
+  peer's bulk copy that nobody waits for still lands in the shared memory of a CTA that has moved on. The completed
+  runs were flagged.
+* The cluster variant without the explicit block barrier compiles to the same synchronization (TileLang inserts the
+  `__syncthreads()` itself), as expected: 0/21, reported only.
+
+Conclusion: the content checks see every reordering of the exchange that changed a result, in every path, including
+TMA/DSMEM copies and global exchanges that compute-sanitizer's racecheck does not model; the shipped kernels show no
+exchange violation under 0-65 us perturbations.
