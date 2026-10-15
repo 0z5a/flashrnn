@@ -215,7 +215,7 @@ D = 768 and 1.00–1.01× for D = 256. Against s0 alone, D = 768 reaches
 | Launch | CUDA Graph of the whole forward | null (0.99–1.00×) |
 | Latency | input-projection prefetch | negative (0.8×): D = 256 loses a CTA per SM to registers |
 | Congestion | L2 / memory bandwidth | not run as an experiment; single-kernel ncu at one stream shows L2 ≤ 18% and DRAM ≤ 17% |
-| NUMA | host placement | not run (planned: whole node, four workers, local vs remote binding) |
+| NUMA | host placement, whole node (round 4) | null: local vs remote 1.0004–1.0024 |
 
 What remains is structural. Every measured kernel is latency-bound at one CTA per
 SM (6–25% occupancy) with the per-step chain on the critical path. A large gain at
@@ -227,3 +227,80 @@ D = 256 would need one of two things:
   resident R slice over many more rows.
 
 Either is multi-day kernel work.
+
+## Round 4: structural ablation ceilings and the whole-node NUMA plane (job 47312894, name 115)
+
+One node (`as05r1b19`), 8 min 57 s, `ALL_COMPLETED`; archive verified (438 files).
+Evidence: `evidence/flashrnn2-hc4-20261015/job47312894/` (task logs left on MN5).
+
+### A. Ablation ceilings (timing only; commit 3309c04)
+
+`tilelang_cluster` takes a private `_ablate` set that removes one component of
+the per-step chain. Ablated results are wrong by design. The switch cannot be
+reached through `KernelConfig` or `ExecutionPolicy`. Without it, the generated
+CUDA is identical to the qualified kernels.
+
+Each entry is the recurrence-call speedup if that component cost nothing. The
+two values are LSTM / sLSTM; the medians come from 15 interleaved repetitions.
+
+| Removed | D256 TL cluster S16 BM16, B = 1024 (1.33 / 1.30 ms) | D768 TL grid S16 BM64, 256 threads, B = 1024 (7.19 / 7.04 ms) |
+|---|---|---|
+| h exchange + its synchronization | 1.15 / 1.42 | **1.61 / 1.74** |
+| WGMMA | 1.32 / 1.34 | 1.17 / 1.18 |
+| FP32 gate stage round trip | 1.16 / 1.15 | 1.10 / 1.12 |
+| input-projection loads | 1.15 / 1.13 | 1.14 / 1.18 |
+| gate nonlinearities | 1.10 / 1.05 | 1.12 / 1.12 |
+| output stores | 1.04 / 1.01 | 1.04 / 1.05 |
+| everything except the WGMMA | **3.96 / 3.81** | **15.98 / 15.72** |
+
+B = 256 shows the same pattern. Reading the table:
+
+* The time is spread over the serial per-step chain. Apart from the exchange at
+  D = 768 (38–43%), no single component holds most of it.
+* What separates the full kernel from its GEMM floor (4× at D = 256, 16× at
+  D = 768) is the chain of exchange/synchronization, stage, loads and epilogue,
+  each waiting on the previous one. Removing any one component alone yields
+  1.05–1.74×.
+* To reach that headroom, the components have to overlap, not each be
+  optimized. Two ways to do that:
+  * Run two independent batch tiles per CTA in ping-pong: one warpgroup's
+    exchange wait hides behind the other's GEMM and epilogue.
+  * Warp-specialize: producer warps do the exchange and loads, consumer warps
+    do the GEMM and epilogue.
+* At D = 768 the exchange alone is worth up to 1.6–1.7× on the recurrence
+  (≈ 90% of the forward). An exchange that avoids the global round trip and the
+  grid barrier would be the first target there.
+
+### B. NUMA plane, whole node
+
+Four serving processes, one per GPU, each serving C = 1024 per burst; a go file
+starts them together after warm-up. Each GPU sits on its own NUMA node (0–3; 0/1
+and 2/3 share a socket, cross-socket distance 21). Conditions:
+
+* **local:** `numactl --physcpubind` with 4 cores of the GPU's node, plus
+  `--membind` to that node;
+* **remote:** the same on the farthest node, i.e. the other socket;
+* **unbound:** no binding.
+
+There were 5 rounds with the condition order rotated: 30 sets, all complete.
+`/proc/<pid>/numa_maps` confirms the binding. 85% of resident pages sat on the
+bound node for local, and 78–79% on the other socket for remote.
+
+| Case (4 GPUs × C = 1024) | local | remote | unbound | local / remote | local / unbound | burst P90 |
+|---|---|---|---|---|---|---|
+| LSTM D256 (Triton default) | 629.7 k req/s | 627.7 k | 627.9 k | 1.0024 | 1.0022 | 6.29–6.31 ms |
+| LSTM D768 (TL grid S16 BM64, 256 threads) | 117.4 k req/s | 117.4 k | 117.4 k | 1.0004 | 1.0002 | 34.47 ms |
+
+* The NUMA plane is null for this workload: host placement changes node
+  throughput by ≤ 0.25%.
+* The four GPUs also do not disturb each other. Per-GPU throughput matches the
+  single-GPU makespans (6.3 ms, 34.4 ms).
+
+## Status after round 4
+
+* The stop criterion is still not met.
+* The NUMA plane is now closed (null). Congestion has only the single-stream ncu
+  inference. Every remaining lever is the structural overlap above.
+* The ablation gives the ceilings that work would chase: up to about 4× on the
+  D = 256 recurrence and well beyond 2× at D = 768, and only if the chain
+  actually overlaps.
