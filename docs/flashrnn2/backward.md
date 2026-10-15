@@ -53,6 +53,10 @@ the same kernel with one CTA per group. `sync="launch"` runs one launch per step
 the stored dG instead of the exchange buffer: the same values and arithmetic, the bitwise oracle of the persistent
 kernel.
 
+Arithmetic check without a GPU (`tools/bw_interpret_check.py`, Triton interpreter, launch-per-step mode): 12 cases
+(LSTM warm; sLSTM zero and warm; k = 1, 2 and 3 CTAs per group; ragged batch tile; two heads; D = 48 with two K
+parts) against the FP64 oracle on the same FP16 inputs: worst relative Frobenius error 1.7e-4, all PASS.
+
 Login-node compile sweep (sm_90a, 8 warps): every planned (cell, dtype, D, S) fits shared memory, at most 260
 bytes of spill; S = 64 at D = 768 needs 426 KB and is not offered.
 
