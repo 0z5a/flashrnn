@@ -1,0 +1,867 @@
+{
+  "identity": {
+    "gpu": "NVIDIA H100",
+    "capability": [
+      9,
+      0
+    ],
+    "triton": "3.6.0",
+    "tilelang": "0.1.15"
+  },
+  "comparisons": [
+    {
+      "name": "hc3-lstm-d256-c256-t128-best-vs-s0p",
+      "experiment": "HC_BEST_VS_S0P",
+      "cell": "lstm",
+      "width": 256,
+      "batch": 256,
+      "concurrency": 256,
+      "steps": 128,
+      "lane": 0,
+      "baseline": {
+        "label": "s0p_default",
+        "strategy": "s0p",
+        "group": 256,
+        "config": {
+          "family": "mma_rtiled",
+          "batch_tile": 16,
+          "warps": 8,
+          "weight_operand": "b",
+          "slice_width": 64,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "candidate": {
+        "label": "tl_cluster_s16_bm16_w4",
+        "strategy": "s0p",
+        "group": 256,
+        "config": {
+          "family": "tilelang",
+          "batch_tile": 16,
+          "warps": 4,
+          "weight_operand": "b",
+          "slice_width": 16,
+          "sync": "cluster",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "baseline_label": "s0p_default",
+      "candidate_label": "tl_cluster_s16_bm16_w4"
+    },
+    {
+      "name": "hc3-lstm-d256-c256-t128-best-vs-r1",
+      "experiment": "HC_BEST_VS_R1",
+      "cell": "lstm",
+      "width": 256,
+      "batch": 256,
+      "concurrency": 256,
+      "steps": 128,
+      "lane": 0,
+      "baseline": {
+        "label": "r1_best",
+        "strategy": "s0p",
+        "group": 256,
+        "config": {
+          "family": "tilelang",
+          "batch_tile": 16,
+          "warps": 4,
+          "weight_operand": "b",
+          "slice_width": 16,
+          "sync": "cluster",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "candidate": {
+        "label": "tl_cluster_s16_bm16_w4",
+        "strategy": "s0p",
+        "group": 256,
+        "config": {
+          "family": "tilelang",
+          "batch_tile": 16,
+          "warps": 4,
+          "weight_operand": "b",
+          "slice_width": 16,
+          "sync": "cluster",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "baseline_label": "r1_best",
+      "candidate_label": "tl_cluster_s16_bm16_w4"
+    },
+    {
+      "name": "hc3-lstm-d256-c1024-t128-best-vs-s0p",
+      "experiment": "HC_BEST_VS_S0P",
+      "cell": "lstm",
+      "width": 256,
+      "batch": 1024,
+      "concurrency": 1024,
+      "steps": 128,
+      "lane": 1,
+      "baseline": {
+        "label": "s0p_default",
+        "strategy": "s0p",
+        "group": 1024,
+        "config": {
+          "family": "mma_rtiled",
+          "batch_tile": 16,
+          "warps": 8,
+          "weight_operand": "b",
+          "slice_width": 64,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "candidate": {
+        "label": "r1_best",
+        "strategy": "s0p",
+        "group": 1024,
+        "config": {
+          "family": "mma_rtiled",
+          "batch_tile": 16,
+          "warps": 8,
+          "weight_operand": "b",
+          "slice_width": 64,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "baseline_label": "s0p_default",
+      "candidate_label": "r1_best"
+    },
+    {
+      "name": "hc3-lstm-d256-c1024-t128-best-vs-r1",
+      "experiment": "HC_BEST_VS_R1",
+      "cell": "lstm",
+      "width": 256,
+      "batch": 1024,
+      "concurrency": 1024,
+      "steps": 128,
+      "lane": 1,
+      "baseline": {
+        "label": "r1_best",
+        "strategy": "s0p",
+        "group": 1024,
+        "config": {
+          "family": "mma_rtiled",
+          "batch_tile": 16,
+          "warps": 8,
+          "weight_operand": "b",
+          "slice_width": 64,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "candidate": {
+        "label": "r1_best",
+        "strategy": "s0p",
+        "group": 1024,
+        "config": {
+          "family": "mma_rtiled",
+          "batch_tile": 16,
+          "warps": 8,
+          "weight_operand": "b",
+          "slice_width": 64,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "baseline_label": "r1_best",
+      "candidate_label": "r1_best"
+    },
+    {
+      "name": "hc3-lstm-d256-c1024-t128-best-vs-s0",
+      "experiment": "HC_BEST_VS_S0",
+      "cell": "lstm",
+      "width": 256,
+      "batch": 1024,
+      "concurrency": 1024,
+      "steps": 128,
+      "lane": 1,
+      "baseline": {
+        "label": "s0",
+        "strategy": "s0",
+        "group": 32,
+        "config": {
+          "family": "tilelang",
+          "batch_tile": 16,
+          "warps": 4,
+          "weight_operand": "b",
+          "slice_width": 16,
+          "sync": "cluster",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "candidate": {
+        "label": "r1_best",
+        "strategy": "s0p",
+        "group": 1024,
+        "config": {
+          "family": "mma_rtiled",
+          "batch_tile": 16,
+          "warps": 8,
+          "weight_operand": "b",
+          "slice_width": 64,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "baseline_label": "s0",
+      "candidate_label": "r1_best"
+    },
+    {
+      "name": "hc3-slstm-d256-c256-t128-best-vs-s0p",
+      "experiment": "HC_BEST_VS_S0P",
+      "cell": "slstm",
+      "width": 256,
+      "batch": 256,
+      "concurrency": 256,
+      "steps": 128,
+      "lane": 2,
+      "baseline": {
+        "label": "s0p_default",
+        "strategy": "s0p",
+        "group": 256,
+        "config": {
+          "family": "mma_rtiled",
+          "batch_tile": 16,
+          "warps": 8,
+          "weight_operand": "b",
+          "slice_width": 64,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "candidate": {
+        "label": "tl_cluster_s16_bm16_w4",
+        "strategy": "s0p",
+        "group": 256,
+        "config": {
+          "family": "tilelang",
+          "batch_tile": 16,
+          "warps": 4,
+          "weight_operand": "b",
+          "slice_width": 16,
+          "sync": "cluster",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "baseline_label": "s0p_default",
+      "candidate_label": "tl_cluster_s16_bm16_w4"
+    },
+    {
+      "name": "hc3-slstm-d256-c256-t128-best-vs-r1",
+      "experiment": "HC_BEST_VS_R1",
+      "cell": "slstm",
+      "width": 256,
+      "batch": 256,
+      "concurrency": 256,
+      "steps": 128,
+      "lane": 2,
+      "baseline": {
+        "label": "r1_best",
+        "strategy": "s0p",
+        "group": 256,
+        "config": {
+          "family": "tilelang",
+          "batch_tile": 16,
+          "warps": 4,
+          "weight_operand": "b",
+          "slice_width": 16,
+          "sync": "cluster",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "candidate": {
+        "label": "tl_cluster_s16_bm16_w4",
+        "strategy": "s0p",
+        "group": 256,
+        "config": {
+          "family": "tilelang",
+          "batch_tile": 16,
+          "warps": 4,
+          "weight_operand": "b",
+          "slice_width": 16,
+          "sync": "cluster",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "baseline_label": "r1_best",
+      "candidate_label": "tl_cluster_s16_bm16_w4"
+    },
+    {
+      "name": "hc3-slstm-d256-c1024-t128-best-vs-s0p",
+      "experiment": "HC_BEST_VS_S0P",
+      "cell": "slstm",
+      "width": 256,
+      "batch": 1024,
+      "concurrency": 1024,
+      "steps": 128,
+      "lane": 3,
+      "baseline": {
+        "label": "s0p_default",
+        "strategy": "s0p",
+        "group": 1024,
+        "config": {
+          "family": "mma_rtiled",
+          "batch_tile": 16,
+          "warps": 8,
+          "weight_operand": "b",
+          "slice_width": 64,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "candidate": {
+        "label": "tri_s64_w4",
+        "strategy": "s0p",
+        "group": 1024,
+        "config": {
+          "family": "mma_rtiled",
+          "batch_tile": 16,
+          "warps": 4,
+          "weight_operand": "b",
+          "slice_width": 64,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "baseline_label": "s0p_default",
+      "candidate_label": "tri_s64_w4"
+    },
+    {
+      "name": "hc3-slstm-d256-c1024-t128-best-vs-r1",
+      "experiment": "HC_BEST_VS_R1",
+      "cell": "slstm",
+      "width": 256,
+      "batch": 1024,
+      "concurrency": 1024,
+      "steps": 128,
+      "lane": 3,
+      "baseline": {
+        "label": "r1_best",
+        "strategy": "s0p",
+        "group": 1024,
+        "config": {
+          "family": "mma_rtiled",
+          "batch_tile": 16,
+          "warps": 4,
+          "weight_operand": "b",
+          "slice_width": 64,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "candidate": {
+        "label": "tri_s64_w4",
+        "strategy": "s0p",
+        "group": 1024,
+        "config": {
+          "family": "mma_rtiled",
+          "batch_tile": 16,
+          "warps": 4,
+          "weight_operand": "b",
+          "slice_width": 64,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "baseline_label": "r1_best",
+      "candidate_label": "tri_s64_w4"
+    },
+    {
+      "name": "hc3-slstm-d256-c1024-t128-best-vs-s0",
+      "experiment": "HC_BEST_VS_S0",
+      "cell": "slstm",
+      "width": 256,
+      "batch": 1024,
+      "concurrency": 1024,
+      "steps": 128,
+      "lane": 3,
+      "baseline": {
+        "label": "s0",
+        "strategy": "s0",
+        "group": 32,
+        "config": {
+          "family": "tilelang",
+          "batch_tile": 16,
+          "warps": 4,
+          "weight_operand": "b",
+          "slice_width": 16,
+          "sync": "cluster",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "candidate": {
+        "label": "tri_s64_w4",
+        "strategy": "s0p",
+        "group": 1024,
+        "config": {
+          "family": "mma_rtiled",
+          "batch_tile": 16,
+          "warps": 4,
+          "weight_operand": "b",
+          "slice_width": 64,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "baseline_label": "s0",
+      "candidate_label": "tri_s64_w4"
+    },
+    {
+      "name": "hc3-lstm-d768-c256-t128-best-vs-s0p",
+      "experiment": "HC_BEST_VS_S0P",
+      "cell": "lstm",
+      "width": 768,
+      "batch": 256,
+      "concurrency": 256,
+      "steps": 128,
+      "lane": 0,
+      "baseline": {
+        "label": "s0p_default",
+        "strategy": "s0p",
+        "group": 256,
+        "config": {
+          "family": "mma_rtiled",
+          "batch_tile": 16,
+          "warps": 8,
+          "weight_operand": "b",
+          "slice_width": 32,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "candidate": {
+        "label": "tl_grid_s16_bm64_w8",
+        "strategy": "s0p",
+        "group": 256,
+        "config": {
+          "family": "tilelang",
+          "batch_tile": 64,
+          "warps": 8,
+          "weight_operand": "b",
+          "slice_width": 16,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        },
+        "wide": true
+      },
+      "baseline_label": "s0p_default",
+      "candidate_label": "tl_grid_s16_bm64_w8"
+    },
+    {
+      "name": "hc3-lstm-d768-c256-t128-best-vs-r1",
+      "experiment": "HC_BEST_VS_R1",
+      "cell": "lstm",
+      "width": 768,
+      "batch": 256,
+      "concurrency": 256,
+      "steps": 128,
+      "lane": 0,
+      "baseline": {
+        "label": "r1_best",
+        "strategy": "s0p",
+        "group": 256,
+        "config": {
+          "family": "tilelang",
+          "batch_tile": 32,
+          "warps": 4,
+          "weight_operand": "b",
+          "slice_width": 16,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "candidate": {
+        "label": "tl_grid_s16_bm64_w8",
+        "strategy": "s0p",
+        "group": 256,
+        "config": {
+          "family": "tilelang",
+          "batch_tile": 64,
+          "warps": 8,
+          "weight_operand": "b",
+          "slice_width": 16,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        },
+        "wide": true
+      },
+      "baseline_label": "r1_best",
+      "candidate_label": "tl_grid_s16_bm64_w8"
+    },
+    {
+      "name": "hc3-lstm-d768-c1024-t128-best-vs-s0p",
+      "experiment": "HC_BEST_VS_S0P",
+      "cell": "lstm",
+      "width": 768,
+      "batch": 1024,
+      "concurrency": 1024,
+      "steps": 128,
+      "lane": 1,
+      "baseline": {
+        "label": "s0p_default",
+        "strategy": "s0p",
+        "group": 1024,
+        "config": {
+          "family": "mma_rtiled",
+          "batch_tile": 16,
+          "warps": 8,
+          "weight_operand": "b",
+          "slice_width": 32,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "candidate": {
+        "label": "tl_grid_s16_bm64_w8",
+        "strategy": "s0p",
+        "group": 1024,
+        "config": {
+          "family": "tilelang",
+          "batch_tile": 64,
+          "warps": 8,
+          "weight_operand": "b",
+          "slice_width": 16,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        },
+        "wide": true
+      },
+      "baseline_label": "s0p_default",
+      "candidate_label": "tl_grid_s16_bm64_w8"
+    },
+    {
+      "name": "hc3-lstm-d768-c1024-t128-best-vs-r1",
+      "experiment": "HC_BEST_VS_R1",
+      "cell": "lstm",
+      "width": 768,
+      "batch": 1024,
+      "concurrency": 1024,
+      "steps": 128,
+      "lane": 1,
+      "baseline": {
+        "label": "r1_best",
+        "strategy": "s0p",
+        "group": 1024,
+        "config": {
+          "family": "mma_rtiled",
+          "batch_tile": 16,
+          "warps": 4,
+          "weight_operand": "b",
+          "slice_width": 32,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "candidate": {
+        "label": "tl_grid_s16_bm64_w8",
+        "strategy": "s0p",
+        "group": 1024,
+        "config": {
+          "family": "tilelang",
+          "batch_tile": 64,
+          "warps": 8,
+          "weight_operand": "b",
+          "slice_width": 16,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        },
+        "wide": true
+      },
+      "baseline_label": "r1_best",
+      "candidate_label": "tl_grid_s16_bm64_w8"
+    },
+    {
+      "name": "hc3-lstm-d768-c1024-t128-best-vs-s0",
+      "experiment": "HC_BEST_VS_S0",
+      "cell": "lstm",
+      "width": 768,
+      "batch": 1024,
+      "concurrency": 1024,
+      "steps": 128,
+      "lane": 1,
+      "baseline": {
+        "label": "s0",
+        "strategy": "s0",
+        "group": 32,
+        "config": {
+          "family": "tilelang",
+          "batch_tile": 16,
+          "warps": 4,
+          "weight_operand": "b",
+          "slice_width": 16,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "candidate": {
+        "label": "tl_grid_s16_bm64_w8",
+        "strategy": "s0p",
+        "group": 1024,
+        "config": {
+          "family": "tilelang",
+          "batch_tile": 64,
+          "warps": 8,
+          "weight_operand": "b",
+          "slice_width": 16,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        },
+        "wide": true
+      },
+      "baseline_label": "s0",
+      "candidate_label": "tl_grid_s16_bm64_w8"
+    },
+    {
+      "name": "hc3-slstm-d768-c256-t128-best-vs-s0p",
+      "experiment": "HC_BEST_VS_S0P",
+      "cell": "slstm",
+      "width": 768,
+      "batch": 256,
+      "concurrency": 256,
+      "steps": 128,
+      "lane": 2,
+      "baseline": {
+        "label": "s0p_default",
+        "strategy": "s0p",
+        "group": 256,
+        "config": {
+          "family": "mma_rtiled",
+          "batch_tile": 16,
+          "warps": 8,
+          "weight_operand": "b",
+          "slice_width": 32,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "candidate": {
+        "label": "tl_grid_s16_bm64_w8",
+        "strategy": "s0p",
+        "group": 256,
+        "config": {
+          "family": "tilelang",
+          "batch_tile": 64,
+          "warps": 8,
+          "weight_operand": "b",
+          "slice_width": 16,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        },
+        "wide": true
+      },
+      "baseline_label": "s0p_default",
+      "candidate_label": "tl_grid_s16_bm64_w8"
+    },
+    {
+      "name": "hc3-slstm-d768-c256-t128-best-vs-r1",
+      "experiment": "HC_BEST_VS_R1",
+      "cell": "slstm",
+      "width": 768,
+      "batch": 256,
+      "concurrency": 256,
+      "steps": 128,
+      "lane": 2,
+      "baseline": {
+        "label": "r1_best",
+        "strategy": "s0p",
+        "group": 256,
+        "config": {
+          "family": "tilelang",
+          "batch_tile": 64,
+          "warps": 4,
+          "weight_operand": "b",
+          "slice_width": 16,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "candidate": {
+        "label": "tl_grid_s16_bm64_w8",
+        "strategy": "s0p",
+        "group": 256,
+        "config": {
+          "family": "tilelang",
+          "batch_tile": 64,
+          "warps": 8,
+          "weight_operand": "b",
+          "slice_width": 16,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        },
+        "wide": true
+      },
+      "baseline_label": "r1_best",
+      "candidate_label": "tl_grid_s16_bm64_w8"
+    },
+    {
+      "name": "hc3-slstm-d768-c1024-t128-best-vs-s0p",
+      "experiment": "HC_BEST_VS_S0P",
+      "cell": "slstm",
+      "width": 768,
+      "batch": 1024,
+      "concurrency": 1024,
+      "steps": 128,
+      "lane": 3,
+      "baseline": {
+        "label": "s0p_default",
+        "strategy": "s0p",
+        "group": 1024,
+        "config": {
+          "family": "mma_rtiled",
+          "batch_tile": 16,
+          "warps": 8,
+          "weight_operand": "b",
+          "slice_width": 32,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "candidate": {
+        "label": "tl_grid_s16_bm64_w8",
+        "strategy": "s0p",
+        "group": 1024,
+        "config": {
+          "family": "tilelang",
+          "batch_tile": 64,
+          "warps": 8,
+          "weight_operand": "b",
+          "slice_width": 16,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        },
+        "wide": true
+      },
+      "baseline_label": "s0p_default",
+      "candidate_label": "tl_grid_s16_bm64_w8"
+    },
+    {
+      "name": "hc3-slstm-d768-c1024-t128-best-vs-r1",
+      "experiment": "HC_BEST_VS_R1",
+      "cell": "slstm",
+      "width": 768,
+      "batch": 1024,
+      "concurrency": 1024,
+      "steps": 128,
+      "lane": 3,
+      "baseline": {
+        "label": "r1_best",
+        "strategy": "s0p",
+        "group": 1024,
+        "config": {
+          "family": "mma_rtiled",
+          "batch_tile": 16,
+          "warps": 4,
+          "weight_operand": "b",
+          "slice_width": 32,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "candidate": {
+        "label": "tl_grid_s16_bm64_w8",
+        "strategy": "s0p",
+        "group": 1024,
+        "config": {
+          "family": "tilelang",
+          "batch_tile": 64,
+          "warps": 8,
+          "weight_operand": "b",
+          "slice_width": 16,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        },
+        "wide": true
+      },
+      "baseline_label": "r1_best",
+      "candidate_label": "tl_grid_s16_bm64_w8"
+    },
+    {
+      "name": "hc3-slstm-d768-c1024-t128-best-vs-s0",
+      "experiment": "HC_BEST_VS_S0",
+      "cell": "slstm",
+      "width": 768,
+      "batch": 1024,
+      "concurrency": 1024,
+      "steps": 128,
+      "lane": 3,
+      "baseline": {
+        "label": "s0",
+        "strategy": "s0",
+        "group": 32,
+        "config": {
+          "family": "tilelang",
+          "batch_tile": 16,
+          "warps": 4,
+          "weight_operand": "b",
+          "slice_width": 16,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        }
+      },
+      "candidate": {
+        "label": "tl_grid_s16_bm64_w8",
+        "strategy": "s0p",
+        "group": 1024,
+        "config": {
+          "family": "tilelang",
+          "batch_tile": 64,
+          "warps": 8,
+          "weight_operand": "b",
+          "slice_width": 16,
+          "sync": "grid",
+          "pad_k": false,
+          "prefetch": false
+        },
+        "wide": true
+      },
+      "baseline_label": "s0",
+      "candidate_label": "tl_grid_s16_bm64_w8"
+    }
+  ],
+  "unavailable": [],
+  "frozen": 1792025866.6426828,
+  "selection_split": 0,
+  "timing_split": 1
+}

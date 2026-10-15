@@ -1,0 +1,304 @@
+{
+  "cell": "lstm",
+  "dtype": "float16",
+  "width": 256,
+  "slice_width": 16,
+  "sync": "cluster",
+  "bm": 32,
+  "warps": 4,
+  "prefetch": true,
+  "identity": {
+    "gpu": "NVIDIA H100",
+    "capability": [
+      9,
+      0
+    ],
+    "triton": "3.6.0",
+    "tilelang": "0.1.15"
+  },
+  "source": {
+    "flashrnn/flashrnn2/tilelang_cluster.py": "c01b1272eff15933fa8eb3783ac8f977c772244dc10c8fdf596c28be0ea73f17",
+    "flashrnn/flashrnn2/prepared.py": "04abdf6b8dd1a27162de111c2ae207f28ca89f924e8ea55b847372eb8d250df3",
+    "flashrnn/flashrnn2/execution_policy.py": "4e4383f5f7377373443e0344fbec78f027a78f8f6922100f9a6446ab8a9098f2",
+    "flashrnn/flashrnn2/triton_rtiled.py": "5e822255adcd00c00c19c5aa217dfff268634e3b4e3c8ccb4ba5cc76b97eed12",
+    "tools/rtiled_m6_tilelang.py": "4840c2385b3716fee057418fc76ef1e6a72425f51e115e6bf86429e1c2d6ab74",
+    "fixture_math.py": "c5f11bd98a4091f9a7e910a6e9ecc6fc5cfea6845ca3089238a1169fac892c81"
+  },
+  "uuid": "GPU-8b8a58ec-06a9-da37-2758-8c23fad98484",
+  "started": 1792025120.528265,
+  "gates": {
+    "e1": "PASS",
+    "protocol": "PASS",
+    "stress": "PASS",
+    "vs_ref": "PASS"
+  },
+  "e1": [
+    {
+      "case": "m6-lstm-float16-b3-t17-d256-h2-warm",
+      "checks": {
+        "history": {
+          "pass_": true,
+          "max_abs": 3.869384739008108e-07,
+          "failed_elements": 0,
+          "worst_normalized": 0.00015576656381959282,
+          "bitwise": false
+        },
+        "carry": {
+          "pass_": true,
+          "max_abs": 3.5825199590916457e-07,
+          "failed_elements": 0,
+          "worst_normalized": 0.0001361936360212765,
+          "bitwise": false
+        },
+        "hidden": {
+          "pass_": true,
+          "max_abs": 2.3123647099887457e-07,
+          "failed_elements": 0,
+          "worst_normalized": 9.264402247978412e-05,
+          "bitwise": false
+        },
+        "last": {
+          "pass_": true,
+          "max_abs": 1.8487671079410115e-07,
+          "failed_elements": 0,
+          "worst_normalized": 9.007970470279626e-05,
+          "bitwise": false
+        }
+      },
+      "status": "PASS"
+    },
+    {
+      "case": "m6-lstm-float16-b16-t128-d256-h1-warm",
+      "checks": {
+        "history": {
+          "pass_": true,
+          "max_abs": 7.856144058140946e-07,
+          "failed_elements": 0,
+          "worst_normalized": 0.00035976168154594896,
+          "bitwise": false
+        },
+        "carry": {
+          "pass_": true,
+          "max_abs": 3.6065927003225973e-07,
+          "failed_elements": 0,
+          "worst_normalized": 0.00012955778131721522,
+          "bitwise": false
+        },
+        "hidden": {
+          "pass_": true,
+          "max_abs": 4.147087591804821e-07,
+          "failed_elements": 0,
+          "worst_normalized": 0.00017531771859905174,
+          "bitwise": false
+        },
+        "last": {
+          "pass_": true,
+          "max_abs": 1.8627547456601112e-07,
+          "failed_elements": 0,
+          "worst_normalized": 7.290963577015992e-05,
+          "bitwise": false
+        }
+      },
+      "status": "PASS"
+    }
+  ],
+  "protocol": [
+    {
+      "batch": 1,
+      "steps": 33,
+      "heads": 1,
+      "normalizer": "nonzero",
+      "chunks": [
+        1,
+        3,
+        13,
+        16
+      ],
+      "checks": {
+        "per_step_launches_bitwise": true,
+        "prepared_ragged_chunks_bitwise": true,
+        "public_chunked_calls_bitwise": true,
+        "hidden_last_equal_full_bitwise": true,
+        "repeat_20_bitwise": true,
+        "side_stream_bitwise": true,
+        "graph_replay_bitwise": true,
+        "graph_tracks_bound_initial": true
+      },
+      "vs_triton": {
+        "slice_width": 64,
+        "warps": 8,
+        "history_max_abs": 4.380941390991211e-05,
+        "carry_max_abs": 2.800673246383667e-05,
+        "bitwise": false
+      },
+      "status": "PASS"
+    },
+    {
+      "batch": 3,
+      "steps": 17,
+      "heads": 2,
+      "normalizer": "nonzero",
+      "chunks": [
+        1,
+        3,
+        13
+      ],
+      "checks": {
+        "per_step_launches_bitwise": true,
+        "prepared_ragged_chunks_bitwise": true,
+        "public_chunked_calls_bitwise": true,
+        "hidden_last_equal_full_bitwise": true,
+        "repeat_20_bitwise": true,
+        "side_stream_bitwise": true,
+        "graph_replay_bitwise": true,
+        "graph_tracks_bound_initial": true
+      },
+      "vs_triton": {
+        "slice_width": 64,
+        "warps": 8,
+        "history_max_abs": 3.7670135498046875e-05,
+        "carry_max_abs": 2.968311309814453e-05,
+        "bitwise": false
+      },
+      "status": "PASS"
+    },
+    {
+      "batch": 33,
+      "steps": 40,
+      "heads": 2,
+      "normalizer": "nonzero",
+      "chunks": [
+        1,
+        3,
+        13,
+        23
+      ],
+      "checks": {
+        "per_step_launches_bitwise": true,
+        "prepared_ragged_chunks_bitwise": true,
+        "public_chunked_calls_bitwise": true,
+        "hidden_last_equal_full_bitwise": true,
+        "repeat_20_bitwise": true,
+        "side_stream_bitwise": true,
+        "graph_replay_bitwise": true,
+        "graph_tracks_bound_initial": true
+      },
+      "vs_triton": {
+        "slice_width": 64,
+        "warps": 8,
+        "history_max_abs": 6.779283285140991e-05,
+        "carry_max_abs": 4.5843422412872314e-05,
+        "bitwise": false
+      },
+      "status": "PASS"
+    }
+  ],
+  "stress": [
+    {
+      "batch": 64,
+      "steps": 128,
+      "heads": 4,
+      "ctas": 128,
+      "repeats": 50,
+      "bitwise": true,
+      "status": "PASS"
+    },
+    {
+      "batch": 128,
+      "steps": 64,
+      "heads": 8,
+      "ctas": 512,
+      "repeats": 50,
+      "bitwise": true,
+      "status": "PASS"
+    }
+  ],
+  "vs_ref": [
+    {
+      "batch": 3,
+      "steps": 17,
+      "heads": 2,
+      "checks": {
+        "full_fp32": {
+          "bitwise": true,
+          "output_max_abs": 0.0,
+          "carry_max_abs": 0.0
+        },
+        "full_input": {
+          "bitwise": true,
+          "output_max_abs": 0.0,
+          "carry_max_abs": 0.0
+        },
+        "hidden_input": {
+          "bitwise": true,
+          "output_max_abs": 0.0,
+          "carry_max_abs": 0.0
+        },
+        "last_input": {
+          "bitwise": true,
+          "output_max_abs": 0.0,
+          "carry_max_abs": 0.0
+        }
+      },
+      "status": "PASS"
+    },
+    {
+      "batch": 33,
+      "steps": 40,
+      "heads": 2,
+      "checks": {
+        "full_fp32": {
+          "bitwise": true,
+          "output_max_abs": 0.0,
+          "carry_max_abs": 0.0
+        },
+        "full_input": {
+          "bitwise": true,
+          "output_max_abs": 0.0,
+          "carry_max_abs": 0.0
+        },
+        "hidden_input": {
+          "bitwise": true,
+          "output_max_abs": 0.0,
+          "carry_max_abs": 0.0
+        },
+        "last_input": {
+          "bitwise": true,
+          "output_max_abs": 0.0,
+          "carry_max_abs": 0.0
+        }
+      },
+      "status": "PASS"
+    },
+    {
+      "batch": 200,
+      "steps": 64,
+      "heads": 2,
+      "checks": {
+        "full_fp32": {
+          "bitwise": true,
+          "output_max_abs": 0.0,
+          "carry_max_abs": 0.0
+        },
+        "full_input": {
+          "bitwise": true,
+          "output_max_abs": 0.0,
+          "carry_max_abs": 0.0
+        },
+        "hidden_input": {
+          "bitwise": true,
+          "output_max_abs": 0.0,
+          "carry_max_abs": 0.0
+        },
+        "last_input": {
+          "bitwise": true,
+          "output_max_abs": 0.0,
+          "carry_max_abs": 0.0
+        }
+      },
+      "status": "PASS"
+    }
+  ],
+  "status": "PASS",
+  "finished": 1792025261.9089582
+}

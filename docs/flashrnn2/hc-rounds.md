@@ -139,14 +139,76 @@ Graph logits are bitwise equal to eager in all 8 cases. The launch plane is
 null at C = 1024; the idle time seen at D = 256 in round 0 is not launch
 overhead.
 
-## Round 3: latency plane (input-projection prefetch) and two-warpgroup grid CTAs (job 47308340, name 100)
+## Round 3: latency plane (input-projection prefetch) and two-warpgroup grid CTAs
 
 `prefetch=True` loads the next step's projections into registers right after
-each epilogue, so the load overlaps the exchange wait and the GEMM. The sums are
-the same, so results must be bitwise equal to the reference kernel.
+each epilogue. The intent is to overlap that load with the exchange wait and the
+GEMM; the sums are the same.
 
-The qualifications cover the four cluster-prefetch variants at D = 256 and the
-256-thread grid S16 BM32/BM64 variants (with and without prefetch) at D = 768.
-The new `vs_ref` stage requires bitwise equality with the reference kernel
-(BM 16, 128 threads, no prefetch). Then come split-0 selection and split-1
-paired timing against s0p, the round-1 best, and s0 at C = 1024.
+* **v1, job 47308340 (name 100):** stopped 19 s after start by a driver bug.
+  `Path / f"…" + "-pf"` binds as `(Path / f"…") + "-pf"`. No GPU work ran; the
+  failure is archived.
+* **v2, job 47308517 (name 106):** one node, 20 min 27 s, 100/100 starts;
+  archive verified (553 files). Evidence:
+  `evidence/flashrnn2-hc3-20261015/job47308517-v2/`.
+
+Qualification: 32/32 configurations PASS. They are the four cluster prefetch
+variants at D = 256 and the 256-thread grid S16 BM32/BM64 variants at D = 768,
+with and without prefetch, each for LSTM/sLSTM × FP16/BF16. The checks were E1,
+protocol, stress, and `vs_ref`: bitwise equality with the reference kernel (BM 16,
+128 threads, no prefetch). memcheck/synccheck were clean on cluster D256 S16
+BM16 + prefetch and on grid D768 S16 BM64 256 threads + prefetch.
+
+**Prefetch is slower everywhere** (split-0 screen):
+
+| Case | Without | With prefetch |
+|---|---|---|
+| LSTM D256 C256, cluster S16 BM16 | 2.10 ms | 2.56 ms |
+| sLSTM D256 C256 | 2.07 ms | 2.47 ms |
+| LSTM D768 C1024, grid S16 BM64, 256 threads | 34.4 ms | 43.1 ms |
+| sLSTM D768 C1024 | 34.0 ms | 42.7 ms |
+
+The prefetched loads are issued before the step's synchronization (the grid
+barrier's memory fence, the async-proxy fence before the cluster copies). They
+are not hidden behind it, and they add registers to kernels that are already at
+121–255. Not verified by a profile of the prefetch kernels. Recorded as a
+negative result; the option stays off.
+
+**Paired timing** (split 1, 5 starts × 20 ABBA/BAAB blocks):
+
+| Case | Best | vs s0p | vs round-1 best | vs s0 | P90 best / s0 |
+|---|---|---|---|---|---|
+| LSTM D256 C256 | TL cluster S16 BM16 | 1.386 [1.382, 1.395] | 1.000 | – | 2.11 ms |
+| sLSTM D256 C256 | TL cluster S16 BM16 | 1.454 [1.450, 1.457] | 1.000 | – | 2.08 ms |
+| LSTM D256 C1024 | round-1 best (Triton S64 w8) | 0.999 [0.998, 1.000] | 1.003 | 7.03 | 6.20 / 39.5 ms |
+| sLSTM D256 C1024 | Triton S64 w4 | 1.011 [1.010, 1.012] | 1.000 | 6.63 | 6.31 / 37.9 ms |
+| LSTM D768 C256 | TL grid S16 BM64, 256 threads | 1.737 [1.731, 1.744] | 1.466 | – | 8.76 ms |
+| sLSTM D768 C256 | same | 1.750 [1.744, 1.754] | 1.307 | – | 8.68 ms |
+| LSTM D768 C1024 | same | **1.455** [1.454, 1.456] | 1.266 | 1.975 | 34.4 / 61.5 ms |
+| sLSTM D768 C1024 | same | **1.482** [1.481, 1.483] | 1.288 | 1.970 | 34.0 / 60.6 ms |
+
+## Where the goal stands after round 3
+
+The stop criterion is not met. At C = 1024 the best is 1.46–1.48× over s0p for
+D = 768 and 1.00–1.01× for D = 256. Against s0 alone, D = 768 reaches
+1.97–1.98× and D = 256 reaches 6.6–7.0×.
+
+| Plane | Lever | Result at C = 1024 |
+|---|---|---|
+| SM cost | batch tile BM > 16 | null (best at BM 16) |
+| Occupancy | two warpgroups per CTA (grid path) | **+1.27–1.29×** on D = 768; cluster path wrong, so disallowed |
+| Launch | CUDA Graph of the whole forward | null (0.99–1.00×) |
+| Latency | input-projection prefetch | negative (0.8×) |
+| Congestion | L2 / memory bandwidth | ncu: L2 ≤ 18%, DRAM ≤ 17%, so not the limiter |
+| NUMA | host placement | not run; one GPU is 0.98 busy at D = 768 |
+
+What remains is structural. Every measured kernel is latency-bound at one CTA per
+SM (6–25% occupancy) with the per-step chain on the critical path. A large gain at
+D = 256 would need one of two things:
+
+* a kernel that keeps the gate epilogue in registers (no FP32 stage round trip)
+  and runs more warps per SM;
+* a weight-stationary layout that streams hᵀ in K-chunks and amortizes each
+  resident R slice over many more rows.
+
+Either is multi-day kernel work.
