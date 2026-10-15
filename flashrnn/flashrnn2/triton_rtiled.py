@@ -48,9 +48,9 @@ def _group_barrier(SYNC, slot, target, ERR, SPIN: tl.constexpr):
 
 @triton.jit
 def _verify_delay(seed, a, b, c, POINT: tl.constexpr):
-    # Race-verification only: a pseudo-random sleep of 0-4 us per (CTA, step, point), from the runtime seed.
+    # Race-verification only: a pseudo-random sleep of 0-65 us per (CTA, step, point), from the runtime seed.
     x = (a * 7919) ^ (b * 104729) ^ (c * 1299709) ^ (seed * 40503 + POINT * 977)
-    ns = ((x ^ (x >> 13)) * 48271) & 4095
+    ns = ((x ^ (x >> 13)) * 48271) & 65535
     tl.inline_asm_elementwise("nanosleep.u32 $1; mov.u32 $0, 0;", "=r,r", [tl.full((1,), 0, tl.int32) + ns],
                               dtype=tl.int32, is_pure=False, pack=1)
 

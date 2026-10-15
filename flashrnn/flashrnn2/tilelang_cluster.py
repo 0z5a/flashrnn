@@ -34,9 +34,9 @@ def _verify_opts(verify):
 
 
 def _delay_ns(T, seed, a, b, c, point):
-    # Race verification: 0-4 us pseudo-random sleep from the runtime seed (ZERO[3]).
+    # Race verification: 0-65 us pseudo-random sleep from the runtime seed (ZERO[3]).
     x = (a * 7919) ^ (b * 104729) ^ (c * 1299709) ^ (seed * 40503 + point * 977)
-    return T.cast(((x ^ (x >> 13)) * 48271) & 4095, "uint32")
+    return T.cast(((x ^ (x >> 13)) * 48271) & 65535, "uint32")
 
 
 def cluster_smem(width, slice_width, bm=16):
@@ -153,8 +153,6 @@ def build(batch, total_steps, heads, width, slice_width, *, cell="lstm", dtype="
             T.cluster_sync()
 
             for t in T.serial(NSTEPS):
-                if delay:
-                    T.call_extern("handle", "__nanosleep", _delay_ns(T, ZERO[3], s, g, t, 1))
                 if "exchange" not in ab:
                     if t > 0:
                         if v and v["broken"] == "no_wait":
@@ -164,6 +162,9 @@ def build(batch, total_steps, heads, width, slice_width, *, cell="lstm", dtype="
                                 T.mbarrier_wait_parity(ready[t % 2], ((t - 1) // 2) % 2)
                         else:
                             T.mbarrier_wait_parity(ready[t % 2], ((t - 1) // 2) % 2)
+                if delay:
+                    # Consumer side, after the wait: the received buffer stays in use longer (single-buffer window).
+                    T.call_extern("handle", "__nanosleep", _delay_ns(T, ZERO[3], s, g, t, 1))
                 if check:
                     if t > 0:
                         for kk, b in T.Parallel(D, BM):

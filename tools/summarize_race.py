@@ -28,7 +28,8 @@ def main():
             max_viol = max((r.get("violations", 0) for r in rec["runs"][variant] if "error" not in r), default=0)
             rows.append(dict(task=label, variant=variant, runs=s["runs"], flagged=s["flagged"],
                              outputs_differ=s["outputs_differ"], silent=s["silent_corruption"], errors=s["errors"],
-                             max_violations=max_viol, verdict="PASS" if s["pass_"] else "FAIL"))
+                             max_violations=max_viol,
+                             verdict={True: "PASS", False: "FAIL", None: "REPORTED"}[s["pass_"]]))
     if a.out:
         a.out.write_text(json.dumps(rows, indent=1))
     for r in rows:
