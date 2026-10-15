@@ -304,3 +304,33 @@ bound node for local, and 78–79% on the other socket for remote.
 * The ablation gives the ceilings that work would chase: up to about 4× on the
   D = 256 recurrence and well beyond 2× at D = 768, and only if the chain
   actually overlaps.
+
+## Round 5: SM-cost / occupancy plane on the grid path at D = 256 (job 47325511, name 177)
+
+Round 3 moved D = 768 with two-warpgroup grid CTAs; D = 256 never got them, because the two-warpgroup kernel had only
+been built for the cluster path, where it was wrong (the race verification shows why: what it consumes differs from
+what its peers stored, 21/21 runs). Round 5 screens the grid path at D = 256: batch tiles 32/64 with one warpgroup
+(S = 16) and two warpgroups (S = 16/32).
+
+One node, 13 min 45 s, `ALL_STARTS_COMPLETED` (50/50 starts); archive verified (321 files).
+Evidence: `evidence/flashrnn2-hc5-20261015/job47325511/`.
+
+* Qualification: 24/24 new configurations PASS at the M0 + M6 standard plus bitwise equality with the reference
+  kernel (LSTM/sLSTM, FP16/BF16); compute-sanitizer memcheck and synccheck 0 errors on two of them.
+* Selection (split 0, C = 1024, makespan): grid S32 BM64 two warpgroups 5.45 / 5.16 ms (LSTM / sLSTM); the next
+  best are 6.33-6.51 ms (Triton default, round-1 best, cluster BM16/BM32, grid S32 BM32 two warpgroups). At C = 256
+  the cluster S16 BM16 kernel stays best.
+
+Split-1 paired timing (5 starts x 20 ABBA/BAAB blocks, hierarchical bootstrap):
+
+| Case (D = 256, T = 128) | Selected | vs s0' (all requests, default) | vs round-1 best | vs s0 |
+|---|---|---|---|---|
+| LSTM, C = 256 | TL cluster S16 BM16 | 1.378 [1.365, 1.384] | 1.000 [0.998, 1.001] | -- |
+| LSTM, C = 1024 | TL grid S32 BM64, 2 warpgroups | 1.163 [1.160, 1.166] | 1.158 [1.147, 1.170] | 8.271 [8.242, 8.293] |
+| sLSTM, C = 256 | TL cluster S16 BM16 | 1.452 [1.450, 1.454] | 1.000 [0.999, 1.002] | -- |
+| sLSTM, C = 1024 | TL grid S32 BM64, 2 warpgroups | 1.245 [1.243, 1.246] | 1.234 [1.232, 1.235] | 8.222 [8.210, 8.235] |
+
+* D = 256 at C = 1024 moves from 1.00x to 1.16x (LSTM) and 1.25x (sLSTM) over the stronger single-call baseline.
+  s0 is much weaker at D = 256 (43.9 / 41.4 ms) than s0' (6.3-6.4 ms).
+* The stop criterion (2x over the stronger baseline at C = 1024, both D) is still not met: D = 768 stands at
+  1.455x / 1.482x (round 3), D = 256 at 1.163x / 1.245x.

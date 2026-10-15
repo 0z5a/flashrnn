@@ -1,0 +1,1176 @@
+{
+  "batch": "flashrnn2-race-20261015-v2",
+  "purpose": "Race verification of every cross-CTA exchange (Triton L2 counter barrier forward and backward, TileLang cluster DSMEM bulk copies with mbarriers, TileLang cooperative-grid exchange) with compile-time content checks, seeded producer/consumer delays and broken-variant negative controls; plus the two-warpgroup cluster kernel as a positive control",
+  "rule": "correct: zero violations and bitwise equal to the uninstrumented reference in all 21 runs; broken variant (own process): violations in >= 80% of its completed runs (>= 1) and no completed run with a differing output but zero violations; runs after a CUDA-context corruption count as crashed; no_sync reported only; delays 0-65 us",
+  "minutes": 150,
+  "tasks": [
+    {
+      "name": "race-triton_fwd-lstm-d256-s32-w8-correct",
+      "lane": 0,
+      "tilelang": false,
+      "variants": "correct",
+      "task": {
+        "path": "triton_fwd",
+        "cell": "lstm",
+        "config": {
+          "width": 256,
+          "slice_width": 32,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_fwd-lstm-d256-s32-w8-broken_single",
+      "lane": 1,
+      "tilelang": false,
+      "variants": "broken_single",
+      "task": {
+        "path": "triton_fwd",
+        "cell": "lstm",
+        "config": {
+          "width": 256,
+          "slice_width": 32,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_fwd-lstm-d256-s32-w8-broken_no_barrier",
+      "lane": 2,
+      "tilelang": false,
+      "variants": "broken_no_barrier",
+      "task": {
+        "path": "triton_fwd",
+        "cell": "lstm",
+        "config": {
+          "width": 256,
+          "slice_width": 32,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_fwd-lstm-d256-s32-w8-broken_arrive_first",
+      "lane": 3,
+      "tilelang": false,
+      "variants": "broken_arrive_first",
+      "task": {
+        "path": "triton_fwd",
+        "cell": "lstm",
+        "config": {
+          "width": 256,
+          "slice_width": 32,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_fwd-slstm-d256-s32-w8-correct",
+      "lane": 0,
+      "tilelang": false,
+      "variants": "correct",
+      "task": {
+        "path": "triton_fwd",
+        "cell": "slstm",
+        "config": {
+          "width": 256,
+          "slice_width": 32,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_fwd-slstm-d256-s32-w8-broken_single",
+      "lane": 1,
+      "tilelang": false,
+      "variants": "broken_single",
+      "task": {
+        "path": "triton_fwd",
+        "cell": "slstm",
+        "config": {
+          "width": 256,
+          "slice_width": 32,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_fwd-slstm-d256-s32-w8-broken_no_barrier",
+      "lane": 2,
+      "tilelang": false,
+      "variants": "broken_no_barrier",
+      "task": {
+        "path": "triton_fwd",
+        "cell": "slstm",
+        "config": {
+          "width": 256,
+          "slice_width": 32,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_fwd-slstm-d256-s32-w8-broken_arrive_first",
+      "lane": 3,
+      "tilelang": false,
+      "variants": "broken_arrive_first",
+      "task": {
+        "path": "triton_fwd",
+        "cell": "slstm",
+        "config": {
+          "width": 256,
+          "slice_width": 32,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_fwd-lstm-d768-s32-w8-correct",
+      "lane": 0,
+      "tilelang": false,
+      "variants": "correct",
+      "task": {
+        "path": "triton_fwd",
+        "cell": "lstm",
+        "config": {
+          "width": 768,
+          "slice_width": 32,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_fwd-lstm-d768-s32-w8-broken_single",
+      "lane": 1,
+      "tilelang": false,
+      "variants": "broken_single",
+      "task": {
+        "path": "triton_fwd",
+        "cell": "lstm",
+        "config": {
+          "width": 768,
+          "slice_width": 32,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_fwd-lstm-d768-s32-w8-broken_no_barrier",
+      "lane": 2,
+      "tilelang": false,
+      "variants": "broken_no_barrier",
+      "task": {
+        "path": "triton_fwd",
+        "cell": "lstm",
+        "config": {
+          "width": 768,
+          "slice_width": 32,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_fwd-lstm-d768-s32-w8-broken_arrive_first",
+      "lane": 3,
+      "tilelang": false,
+      "variants": "broken_arrive_first",
+      "task": {
+        "path": "triton_fwd",
+        "cell": "lstm",
+        "config": {
+          "width": 768,
+          "slice_width": 32,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_fwd-slstm-d768-s32-w8-correct",
+      "lane": 0,
+      "tilelang": false,
+      "variants": "correct",
+      "task": {
+        "path": "triton_fwd",
+        "cell": "slstm",
+        "config": {
+          "width": 768,
+          "slice_width": 32,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_fwd-slstm-d768-s32-w8-broken_single",
+      "lane": 1,
+      "tilelang": false,
+      "variants": "broken_single",
+      "task": {
+        "path": "triton_fwd",
+        "cell": "slstm",
+        "config": {
+          "width": 768,
+          "slice_width": 32,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_fwd-slstm-d768-s32-w8-broken_no_barrier",
+      "lane": 2,
+      "tilelang": false,
+      "variants": "broken_no_barrier",
+      "task": {
+        "path": "triton_fwd",
+        "cell": "slstm",
+        "config": {
+          "width": 768,
+          "slice_width": 32,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_fwd-slstm-d768-s32-w8-broken_arrive_first",
+      "lane": 3,
+      "tilelang": false,
+      "variants": "broken_arrive_first",
+      "task": {
+        "path": "triton_fwd",
+        "cell": "slstm",
+        "config": {
+          "width": 768,
+          "slice_width": 32,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_bw-lstm-d256-s32-w8-correct",
+      "lane": 0,
+      "tilelang": false,
+      "variants": "correct",
+      "task": {
+        "path": "triton_bw",
+        "cell": "lstm",
+        "config": {
+          "width": 256,
+          "slice_width": 32,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_bw-lstm-d256-s32-w8-broken_single",
+      "lane": 1,
+      "tilelang": false,
+      "variants": "broken_single",
+      "task": {
+        "path": "triton_bw",
+        "cell": "lstm",
+        "config": {
+          "width": 256,
+          "slice_width": 32,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_bw-lstm-d256-s32-w8-broken_no_barrier",
+      "lane": 2,
+      "tilelang": false,
+      "variants": "broken_no_barrier",
+      "task": {
+        "path": "triton_bw",
+        "cell": "lstm",
+        "config": {
+          "width": 256,
+          "slice_width": 32,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_bw-lstm-d256-s32-w8-broken_arrive_first",
+      "lane": 3,
+      "tilelang": false,
+      "variants": "broken_arrive_first",
+      "task": {
+        "path": "triton_bw",
+        "cell": "lstm",
+        "config": {
+          "width": 256,
+          "slice_width": 32,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_bw-slstm-d256-s32-w8-correct",
+      "lane": 0,
+      "tilelang": false,
+      "variants": "correct",
+      "task": {
+        "path": "triton_bw",
+        "cell": "slstm",
+        "config": {
+          "width": 256,
+          "slice_width": 32,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_bw-slstm-d256-s32-w8-broken_single",
+      "lane": 1,
+      "tilelang": false,
+      "variants": "broken_single",
+      "task": {
+        "path": "triton_bw",
+        "cell": "slstm",
+        "config": {
+          "width": 256,
+          "slice_width": 32,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_bw-slstm-d256-s32-w8-broken_no_barrier",
+      "lane": 2,
+      "tilelang": false,
+      "variants": "broken_no_barrier",
+      "task": {
+        "path": "triton_bw",
+        "cell": "slstm",
+        "config": {
+          "width": 256,
+          "slice_width": 32,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_bw-slstm-d256-s32-w8-broken_arrive_first",
+      "lane": 3,
+      "tilelang": false,
+      "variants": "broken_arrive_first",
+      "task": {
+        "path": "triton_bw",
+        "cell": "slstm",
+        "config": {
+          "width": 256,
+          "slice_width": 32,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_bw-lstm-d768-s16-w8-correct",
+      "lane": 0,
+      "tilelang": false,
+      "variants": "correct",
+      "task": {
+        "path": "triton_bw",
+        "cell": "lstm",
+        "config": {
+          "width": 768,
+          "slice_width": 16,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_bw-lstm-d768-s16-w8-broken_single",
+      "lane": 1,
+      "tilelang": false,
+      "variants": "broken_single",
+      "task": {
+        "path": "triton_bw",
+        "cell": "lstm",
+        "config": {
+          "width": 768,
+          "slice_width": 16,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_bw-lstm-d768-s16-w8-broken_no_barrier",
+      "lane": 2,
+      "tilelang": false,
+      "variants": "broken_no_barrier",
+      "task": {
+        "path": "triton_bw",
+        "cell": "lstm",
+        "config": {
+          "width": 768,
+          "slice_width": 16,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_bw-lstm-d768-s16-w8-broken_arrive_first",
+      "lane": 3,
+      "tilelang": false,
+      "variants": "broken_arrive_first",
+      "task": {
+        "path": "triton_bw",
+        "cell": "lstm",
+        "config": {
+          "width": 768,
+          "slice_width": 16,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_bw-slstm-d768-s16-w8-correct",
+      "lane": 0,
+      "tilelang": false,
+      "variants": "correct",
+      "task": {
+        "path": "triton_bw",
+        "cell": "slstm",
+        "config": {
+          "width": 768,
+          "slice_width": 16,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_bw-slstm-d768-s16-w8-broken_single",
+      "lane": 1,
+      "tilelang": false,
+      "variants": "broken_single",
+      "task": {
+        "path": "triton_bw",
+        "cell": "slstm",
+        "config": {
+          "width": 768,
+          "slice_width": 16,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_bw-slstm-d768-s16-w8-broken_no_barrier",
+      "lane": 2,
+      "tilelang": false,
+      "variants": "broken_no_barrier",
+      "task": {
+        "path": "triton_bw",
+        "cell": "slstm",
+        "config": {
+          "width": 768,
+          "slice_width": 16,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-triton_bw-slstm-d768-s16-w8-broken_arrive_first",
+      "lane": 3,
+      "tilelang": false,
+      "variants": "broken_arrive_first",
+      "task": {
+        "path": "triton_bw",
+        "cell": "slstm",
+        "config": {
+          "width": 768,
+          "slice_width": 16,
+          "warps": 8,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_cluster-lstm-d256-s32-bm16-t128-correct",
+      "lane": 0,
+      "tilelang": true,
+      "variants": "correct",
+      "task": {
+        "path": "tl_cluster",
+        "cell": "lstm",
+        "config": {
+          "width": 256,
+          "slice_width": 32,
+          "bm": 16,
+          "threads": 128,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_cluster-lstm-d256-s32-bm16-t128-broken_single",
+      "lane": 1,
+      "tilelang": true,
+      "variants": "broken_single",
+      "task": {
+        "path": "tl_cluster",
+        "cell": "lstm",
+        "config": {
+          "width": 256,
+          "slice_width": 32,
+          "bm": 16,
+          "threads": 128,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_cluster-lstm-d256-s32-bm16-t128-broken_no_wait",
+      "lane": 2,
+      "tilelang": true,
+      "variants": "broken_no_wait",
+      "task": {
+        "path": "tl_cluster",
+        "cell": "lstm",
+        "config": {
+          "width": 256,
+          "slice_width": 32,
+          "bm": 16,
+          "threads": 128,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_cluster-lstm-d256-s32-bm16-t128-broken_no_sync",
+      "lane": 3,
+      "tilelang": true,
+      "variants": "broken_no_sync",
+      "task": {
+        "path": "tl_cluster",
+        "cell": "lstm",
+        "config": {
+          "width": 256,
+          "slice_width": 32,
+          "bm": 16,
+          "threads": 128,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_cluster-slstm-d256-s32-bm16-t128-correct",
+      "lane": 0,
+      "tilelang": true,
+      "variants": "correct",
+      "task": {
+        "path": "tl_cluster",
+        "cell": "slstm",
+        "config": {
+          "width": 256,
+          "slice_width": 32,
+          "bm": 16,
+          "threads": 128,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_cluster-slstm-d256-s32-bm16-t128-broken_single",
+      "lane": 1,
+      "tilelang": true,
+      "variants": "broken_single",
+      "task": {
+        "path": "tl_cluster",
+        "cell": "slstm",
+        "config": {
+          "width": 256,
+          "slice_width": 32,
+          "bm": 16,
+          "threads": 128,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_cluster-slstm-d256-s32-bm16-t128-broken_no_wait",
+      "lane": 2,
+      "tilelang": true,
+      "variants": "broken_no_wait",
+      "task": {
+        "path": "tl_cluster",
+        "cell": "slstm",
+        "config": {
+          "width": 256,
+          "slice_width": 32,
+          "bm": 16,
+          "threads": 128,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_cluster-slstm-d256-s32-bm16-t128-broken_no_sync",
+      "lane": 3,
+      "tilelang": true,
+      "variants": "broken_no_sync",
+      "task": {
+        "path": "tl_cluster",
+        "cell": "slstm",
+        "config": {
+          "width": 256,
+          "slice_width": 32,
+          "bm": 16,
+          "threads": 128,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_cluster-lstm-d256-s16-bm32-t128-correct",
+      "lane": 0,
+      "tilelang": true,
+      "variants": "correct",
+      "task": {
+        "path": "tl_cluster",
+        "cell": "lstm",
+        "config": {
+          "width": 256,
+          "slice_width": 16,
+          "bm": 32,
+          "threads": 128,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_cluster-lstm-d256-s16-bm32-t128-broken_single",
+      "lane": 1,
+      "tilelang": true,
+      "variants": "broken_single",
+      "task": {
+        "path": "tl_cluster",
+        "cell": "lstm",
+        "config": {
+          "width": 256,
+          "slice_width": 16,
+          "bm": 32,
+          "threads": 128,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_cluster-lstm-d256-s16-bm32-t128-broken_no_wait",
+      "lane": 2,
+      "tilelang": true,
+      "variants": "broken_no_wait",
+      "task": {
+        "path": "tl_cluster",
+        "cell": "lstm",
+        "config": {
+          "width": 256,
+          "slice_width": 16,
+          "bm": 32,
+          "threads": 128,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_cluster-lstm-d256-s16-bm32-t128-broken_no_sync",
+      "lane": 3,
+      "tilelang": true,
+      "variants": "broken_no_sync",
+      "task": {
+        "path": "tl_cluster",
+        "cell": "lstm",
+        "config": {
+          "width": 256,
+          "slice_width": 16,
+          "bm": 32,
+          "threads": 128,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_cluster-slstm-d256-s16-bm32-t128-correct",
+      "lane": 0,
+      "tilelang": true,
+      "variants": "correct",
+      "task": {
+        "path": "tl_cluster",
+        "cell": "slstm",
+        "config": {
+          "width": 256,
+          "slice_width": 16,
+          "bm": 32,
+          "threads": 128,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_cluster-slstm-d256-s16-bm32-t128-broken_single",
+      "lane": 1,
+      "tilelang": true,
+      "variants": "broken_single",
+      "task": {
+        "path": "tl_cluster",
+        "cell": "slstm",
+        "config": {
+          "width": 256,
+          "slice_width": 16,
+          "bm": 32,
+          "threads": 128,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_cluster-slstm-d256-s16-bm32-t128-broken_no_wait",
+      "lane": 2,
+      "tilelang": true,
+      "variants": "broken_no_wait",
+      "task": {
+        "path": "tl_cluster",
+        "cell": "slstm",
+        "config": {
+          "width": 256,
+          "slice_width": 16,
+          "bm": 32,
+          "threads": 128,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_cluster-slstm-d256-s16-bm32-t128-broken_no_sync",
+      "lane": 3,
+      "tilelang": true,
+      "variants": "broken_no_sync",
+      "task": {
+        "path": "tl_cluster",
+        "cell": "slstm",
+        "config": {
+          "width": 256,
+          "slice_width": 16,
+          "bm": 32,
+          "threads": 128,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_grid-lstm-d768-s16-bm16-t128-correct",
+      "lane": 0,
+      "tilelang": true,
+      "variants": "correct",
+      "task": {
+        "path": "tl_grid",
+        "cell": "lstm",
+        "config": {
+          "width": 768,
+          "slice_width": 16,
+          "bm": 16,
+          "threads": 128,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_grid-lstm-d768-s16-bm16-t128-broken_single",
+      "lane": 1,
+      "tilelang": true,
+      "variants": "broken_single",
+      "task": {
+        "path": "tl_grid",
+        "cell": "lstm",
+        "config": {
+          "width": 768,
+          "slice_width": 16,
+          "bm": 16,
+          "threads": 128,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_grid-lstm-d768-s16-bm16-t128-broken_no_barrier",
+      "lane": 2,
+      "tilelang": true,
+      "variants": "broken_no_barrier",
+      "task": {
+        "path": "tl_grid",
+        "cell": "lstm",
+        "config": {
+          "width": 768,
+          "slice_width": 16,
+          "bm": 16,
+          "threads": 128,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_grid-lstm-d768-s16-bm16-t128-broken_arrive_first",
+      "lane": 3,
+      "tilelang": true,
+      "variants": "broken_arrive_first",
+      "task": {
+        "path": "tl_grid",
+        "cell": "lstm",
+        "config": {
+          "width": 768,
+          "slice_width": 16,
+          "bm": 16,
+          "threads": 128,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_grid-slstm-d768-s16-bm16-t128-correct",
+      "lane": 0,
+      "tilelang": true,
+      "variants": "correct",
+      "task": {
+        "path": "tl_grid",
+        "cell": "slstm",
+        "config": {
+          "width": 768,
+          "slice_width": 16,
+          "bm": 16,
+          "threads": 128,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_grid-slstm-d768-s16-bm16-t128-broken_single",
+      "lane": 1,
+      "tilelang": true,
+      "variants": "broken_single",
+      "task": {
+        "path": "tl_grid",
+        "cell": "slstm",
+        "config": {
+          "width": 768,
+          "slice_width": 16,
+          "bm": 16,
+          "threads": 128,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_grid-slstm-d768-s16-bm16-t128-broken_no_barrier",
+      "lane": 2,
+      "tilelang": true,
+      "variants": "broken_no_barrier",
+      "task": {
+        "path": "tl_grid",
+        "cell": "slstm",
+        "config": {
+          "width": 768,
+          "slice_width": 16,
+          "bm": 16,
+          "threads": 128,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_grid-slstm-d768-s16-bm16-t128-broken_arrive_first",
+      "lane": 3,
+      "tilelang": true,
+      "variants": "broken_arrive_first",
+      "task": {
+        "path": "tl_grid",
+        "cell": "slstm",
+        "config": {
+          "width": 768,
+          "slice_width": 16,
+          "bm": 16,
+          "threads": 128,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_grid-lstm-d768-s16-bm64-t256-correct",
+      "lane": 0,
+      "tilelang": true,
+      "variants": "correct",
+      "task": {
+        "path": "tl_grid",
+        "cell": "lstm",
+        "config": {
+          "width": 768,
+          "slice_width": 16,
+          "bm": 64,
+          "threads": 256,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_grid-lstm-d768-s16-bm64-t256-broken_single",
+      "lane": 1,
+      "tilelang": true,
+      "variants": "broken_single",
+      "task": {
+        "path": "tl_grid",
+        "cell": "lstm",
+        "config": {
+          "width": 768,
+          "slice_width": 16,
+          "bm": 64,
+          "threads": 256,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_grid-lstm-d768-s16-bm64-t256-broken_no_barrier",
+      "lane": 2,
+      "tilelang": true,
+      "variants": "broken_no_barrier",
+      "task": {
+        "path": "tl_grid",
+        "cell": "lstm",
+        "config": {
+          "width": 768,
+          "slice_width": 16,
+          "bm": 64,
+          "threads": 256,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_grid-lstm-d768-s16-bm64-t256-broken_arrive_first",
+      "lane": 3,
+      "tilelang": true,
+      "variants": "broken_arrive_first",
+      "task": {
+        "path": "tl_grid",
+        "cell": "lstm",
+        "config": {
+          "width": 768,
+          "slice_width": 16,
+          "bm": 64,
+          "threads": 256,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_grid-slstm-d768-s16-bm64-t256-correct",
+      "lane": 0,
+      "tilelang": true,
+      "variants": "correct",
+      "task": {
+        "path": "tl_grid",
+        "cell": "slstm",
+        "config": {
+          "width": 768,
+          "slice_width": 16,
+          "bm": 64,
+          "threads": 256,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_grid-slstm-d768-s16-bm64-t256-broken_single",
+      "lane": 1,
+      "tilelang": true,
+      "variants": "broken_single",
+      "task": {
+        "path": "tl_grid",
+        "cell": "slstm",
+        "config": {
+          "width": 768,
+          "slice_width": 16,
+          "bm": 64,
+          "threads": 256,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_grid-slstm-d768-s16-bm64-t256-broken_no_barrier",
+      "lane": 2,
+      "tilelang": true,
+      "variants": "broken_no_barrier",
+      "task": {
+        "path": "tl_grid",
+        "cell": "slstm",
+        "config": {
+          "width": 768,
+          "slice_width": 16,
+          "bm": 64,
+          "threads": 256,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_grid-slstm-d768-s16-bm64-t256-broken_arrive_first",
+      "lane": 3,
+      "tilelang": true,
+      "variants": "broken_arrive_first",
+      "task": {
+        "path": "tl_grid",
+        "cell": "slstm",
+        "config": {
+          "width": 768,
+          "slice_width": 16,
+          "bm": 64,
+          "threads": 256,
+          "batch": 40,
+          "steps": 48
+        }
+      }
+    },
+    {
+      "name": "race-tl_cluster-positive256-lstm",
+      "lane": 0,
+      "tilelang": true,
+      "variants": "positive_threads256",
+      "task": {
+        "path": "tl_cluster",
+        "cell": "lstm",
+        "config": {
+          "width": 256,
+          "slice_width": 32,
+          "bm": 32,
+          "threads": 256,
+          "batch": 40,
+          "steps": 48
+        },
+        "positive_control": true
+      }
+    },
+    {
+      "name": "race-tl_cluster-positive256-slstm",
+      "lane": 1,
+      "tilelang": true,
+      "variants": "positive_threads256",
+      "task": {
+        "path": "tl_cluster",
+        "cell": "slstm",
+        "config": {
+          "width": 256,
+          "slice_width": 32,
+          "bm": 32,
+          "threads": 256,
+          "batch": 40,
+          "steps": 48
+        },
+        "positive_control": true
+      }
+    }
+  ],
+  "v1_build_root": "/scratch/tmp/tueb043681-race2-{job}-unused",
+  "expected_minutes": {
+    "total": 40,
+    "basis": "about six TileLang compiles (30-60 s) or four Triton compiles per task, 85 short runs per task; 18 tasks on four lanes"
+  },
+  "node_reason": "One H100 node (4 H100): independent single-GPU lanes",
+  "not_claimed": [
+    "compute-sanitizer racecheck coverage",
+    "timing"
+  ]
+}
