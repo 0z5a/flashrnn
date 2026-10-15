@@ -144,7 +144,7 @@ def stage_grads(case, rec):
     leaves, cot_h, cot_f = inputs(case, 1000 + case["width"] + case["batch"])
     out = {}
     v1m = None
-    if os.environ.get("FRNN_V1_BASE") and case["init"] in ("zero", "warm"):
+    if os.environ.get("FRNN_V1_BASE") and case["init"] in ("zero", "warm") and not case.get("no_v1"):
         try:
             v1 = run_v1(leaves, cot_h, case)
             v1m = metrics(v1, run_oracle(leaves, cot_h, cot_f, case, "hist"), case["cell"])
