@@ -77,7 +77,7 @@ Results (job 47323663, 30.9 min, `ALL_CASES_PASS`, archive verified, 555 files):
 * Worst relative Frobenius error per tensor: FP16 2.1e-4 - 3.2e-4, BF16 1.7e-3 - 2.8e-3 (budgets 1e-2 / 5e-2), flat
   across D = 64 ... 768.
 * Against FlashRNN1 cuda_fused on the same inputs and loss: our error is 0.20x - 0.40x of FlashRNN1's (the FP32
-  state history and FP32 dG keep the rounding to the MMA operands). FlashRNN1 could not be loaded in 2 of 112
+  state history and FP32 dG keep the rounding to the MMA operands). FlashRNN1 could not be loaded in 2 of 168
   calibration cases (two lanes building the same module at once; serialized since then with a node-wide lock).
 
 Training-step timing against FlashRNN1 (forward + backward): job 47334053, pending.
