@@ -1,7 +1,6 @@
 # FlashRNN2 training path: R-tiled backward
 
-Status: implemented, oracle-checked on CPU; GPU qualification batch submitted (job pending), timing against
-FlashRNN1 prepared. Results are added below as they arrive.
+Status: implemented and qualified on H100 (168/168 cases); training-step timing against FlashRNN1 pending.
 
 ## Contract
 
@@ -71,4 +70,14 @@ widths; B = 3 / T = 17 and B = 32 / T = 64), plus compute-sanitizer memcheck and
 * persistent == launch-per-step, bitwise, every gradient; barrier counts and error flag;
 * 20 complete training steps bitwise identical.
 
-Results: pending.
+Results (job 47323663, 30.9 min, `ALL_CASES_PASS`, archive verified, 555 files):
+
+* 168/168 cases PASS every gate: gradients against the FP64 oracle, persistent == launch-per-step bitwise, 20
+  repeated training steps bitwise identical; compute-sanitizer memcheck and synccheck 0 errors (8/8).
+* Worst relative Frobenius error per tensor: FP16 2.1e-4 - 3.2e-4, BF16 1.7e-3 - 2.8e-3 (budgets 1e-2 / 5e-2), flat
+  across D = 64 ... 768.
+* Against FlashRNN1 cuda_fused on the same inputs and loss: our error is 0.20x - 0.40x of FlashRNN1's (the FP32
+  state history and FP32 dG keep the rounding to the MMA operands). FlashRNN1 could not be loaded in 2 of 112
+  calibration cases (two lanes building the same module at once; serialized since then with a node-wide lock).
+
+Training-step timing against FlashRNN1 (forward + backward): job 47334053, pending.

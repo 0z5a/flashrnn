@@ -1,6 +1,7 @@
 """Policy contract checks; numerical and performance gates run on real CUDA."""
 import importlib.util
 import sys
+import json
 import unittest
 from pathlib import Path
 
@@ -144,6 +145,31 @@ class PackagedTableContract(unittest.TestCase):
             other.write_text(json.dumps(dict(data, identity=dict(data["identity"], tilelang="0.1.16"))))
             with self.assertRaises(ValueError):
                 ExecutionPolicy.from_json(self.path, other)
+
+    def test_grid_fill_merges_with_m6_and_m7(self):
+        """The FP16/BF16 grid fill (D 192-768 x B 1/8/32/128 x T 64/512): 150 entries, one identity, no overlap."""
+        grid = module.TABLES / "h100-rtiled-grid-20261015.json"
+        m7 = module.TABLES / "h100-rtiled-m7-20261014.json"
+        own = ExecutionPolicy.from_json(grid)
+        self.assertEqual(len(own.table), 150)
+        self.assertEqual({k.split("/")[1] for k in own.table}, {"float16", "bfloat16"})
+        for key, config in own.table.items():
+            width = int(key.split("/")[5][1:])
+            self.assertEqual(width % config.slice_width, 0)
+        policy = ExecutionPolicy.from_json(self.path, m7, grid)
+        self.assertEqual(len(policy.table), 200)
+        identity = dict(policy.identity)
+        cfg = policy.select("lstm", "bfloat16", 128, 512, 1, 768, identity=identity)
+        self.assertEqual((cfg.family, cfg.sync, cfg.batch_tile, cfg.warps), ("tilelang", "grid", 64, 8))
+        cfg = policy.select("lstm", "bfloat16", 1, 512, 1, 192, identity=identity)
+        self.assertEqual((cfg.family, cfg.sync, cfg.slice_width), ("tilelang", "cluster", 16))
+        # Excluded by the inclusion rule (not faster than default on split 1): served by default_config.
+        self.assertEqual(policy.select("slstm", "float16", 128, 64, 1, 512, identity=identity),
+                         module.default_config(512))
+        data = json.loads(grid.read_text())
+        self.assertIn("slstm/float16/b128/t64/h1/d512", data["excluded"])
+        from flashrnn.flashrnn2 import dispatch
+        self.assertIn(grid.name, dispatch.TABLE_FILES)
 
     def test_unknown_format_is_rejected(self):
         import json
