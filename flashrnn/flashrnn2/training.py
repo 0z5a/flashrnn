@@ -58,6 +58,9 @@ class _Recurrence(torch.autograd.Function):
         if d_carry is not None:
             d_final += d_carry.float()
         options = dict(ctx.backward_options)
+        if options.get("fast") and "history_grad_components" not in options:
+            full = ctx.output_mode == "full" and d_output is not None
+            options["history_grad_components"] = (True, full, full)
         if options.get("slice_width") is None:
             options["slice_width"] = backward_slice_width(wx.shape[-1])
         dg, d_recurrent, d_bias, d_initial = triton_rtiled_bw.backward(

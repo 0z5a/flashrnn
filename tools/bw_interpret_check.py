@@ -24,7 +24,7 @@ for _name in ("V_CHECK", "V_DELAY", "V_BROKEN_SINGLE", "V_BROKEN_NO_BARRIER", "V
     setattr(triton_rtiled_bw, _name, int(getattr(triton_rtiled_bw, _name)))
 
 
-def run_kernel(wx, r, b, init, hist, d_hist, d_final, cell, slice_width):
+def run_kernel(wx, r, b, init, hist, d_hist, d_final, cell, slice_width, fast=None):
     batch, steps, _, heads, width = wx.shape
     states = init.shape[0]
     pre, h_prev = triton_rtiled_bw.preactivations(wx, r, b, init, hist)
@@ -44,7 +44,8 @@ def run_kernel(wx, r, b, init, hist, d_hist, d_final, cell, slice_width):
         triton_rtiled_bw._rtiled_bw[(splits, slots)](
             pre, hist, init, d_hist, d_final, r, dg, d_init, carry, xbuf, sync, err,
             batch, steps, t_start, nsteps, from_final, tail, groups, slots, 0,
-            heads, width, cell == "slstm", 16, slice_width, k1, k2, SPIN_LIMIT)
+            heads, width, cell == "slstm", 16, slice_width, k1, k2, SPIN_LIMIT,
+            **(dict(FAST=1, DS_C=int(fast[0]), DS_N=int(fast[1])) if fast else {}))
     d_r, d_b = triton_rtiled_bw.weight_gradients(dg, h_prev)
     return [dg, d_r, d_b, d_init]
 
@@ -72,6 +73,16 @@ def case(cell, init_mode, batch, steps, heads, width, slice_width, seed):
     ((hist64 * d_hist.double()).sum() + (last64 * d_final.double()).sum()).backward()
     ref = [x.grad for x in leaves]
     ours = run_kernel(wx, r, b, init, hist64.detach().float().contiguous(), d_hist, d_final, cell, slice_width)
+    # The FAST variant (same values and arithmetic) must be bitwise identical, with all history components
+    # and with only h carrying gradient.
+    out_fast = {}
+    for flags, dh_only in (((1, 1), False), ((0, 0), True)):
+        dh = d_hist.clone()
+        if dh_only:
+            dh[1:] = 0
+        base = run_kernel(wx, r, b, init, hist64.detach().float().contiguous(), dh, d_final, cell, slice_width)
+        fast = run_kernel(wx, r, b, init, hist64.detach().float().contiguous(), dh, d_final, cell, slice_width, flags)
+        out_fast[f"fast_bitwise_ds{flags[0]}{flags[1]}"] = all(torch.equal(x, y) for x, y in zip(base, fast))
     names = ["d_wx", "d_r", "d_bias", "d_init"]
     out = {}
     for name, a, e in zip(names, ours, ref):
@@ -80,6 +91,7 @@ def case(cell, init_mode, batch, steps, heads, width, slice_width, seed):
             a, e = a[:3], e[:3]
         out[name] = dict(rel_fro=((a - e).norm() / e.norm().clamp_min(1e-300)).item(),
                          max_abs_scaled=((a - e).abs().max() / e.abs().max().clamp_min(1e-300)).item())
+    out.update(out_fast)
     return out
 
 
@@ -92,11 +104,13 @@ def main():
         for batch, steps, heads, width, s in ((3, 5, 1, 32, 32), (3, 5, 1, 32, 16), (19, 4, 2, 48, 16),
                                               (5, 3, 1, 64, 32)):
             m = case(cell, init, batch, steps, heads, width, s, 7 + width + batch)
-            ok = all(v["rel_fro"] < 1e-2 and v["max_abs_scaled"] < 5e-2 for v in m.values())
+            ok = all(v is True if isinstance(v, bool) else (v["rel_fro"] < 1e-2 and v["max_abs_scaled"] < 5e-2)
+                     for v in m.values())
             rows.append(dict(cell=cell, init=init, batch=batch, steps=steps, heads=heads, width=width, slice_width=s,
                              metrics=m, pass_=ok))
             print(json.dumps(dict(cell=cell, init=init, shape=[batch, steps, heads, width, s], pass_=ok,
-                                  worst=max(v["rel_fro"] for v in m.values()))), flush=True)
+                                  worst=max(v["rel_fro"] for v in m.values() if isinstance(v, dict)),
+                                  fast={k: v for k, v in m.items() if k.startswith("fast")})), flush=True)
     status = "PASS" if all(r["pass_"] for r in rows) else "FAIL"
     Path(a.out).mkdir(parents=True, exist_ok=True)
     (Path(a.out) / "bw-interpret.json").write_text(json.dumps(dict(rows=rows, status=status), indent=1))
