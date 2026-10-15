@@ -96,12 +96,57 @@ Rows per CTA per step (WGMMA N) went from 16 to 32/64/128 (commit 8b29f22).
 
 ## Round 2: profiling, occupancy plane, launch plane (job 47308040, name 98)
 
-Running. It contains:
+One node, 4 min 55 s, `ALL_STARTS_COMPLETED` (40/40); archive verified (210 files).
+Evidence: `evidence/flashrnn2-hc2-20261015/job47308040/`.
 
-* ncu on five recurrence configurations at B = 1024, or nsys timelines if ncu
-  cannot read counters;
-* a screen of TileLang CTAs with two warpgroups (256 threads; registers drop to
-  88–192 for the cluster variants), with bitwise twin checks against
-  128 threads;
-* paired timing of the round-1 best configuration served through a CUDA Graph
-  of the whole forward vs eager.
+**ncu** (counters permitted; one steady-state launch, B = 1024, T = 128, LSTM):
+
+| Config | Duration | SM % | Memory % | No eligible | Warps/scheduler | Regs | Occupancy | Long-scoreboard share of stalls |
+|---|---|---|---|---|---|---|---|---|
+| D256 Triton S64 w8 (default) | 1.23 ms | 15.3 | 22.9 | 83.7% | 2.0 | 175 | 12.5% | – |
+| D256 TL cluster S16 BM16 | 1.28 ms | 21.4 | 42.0 | 71.8% | 3.4 | 121 | 22.7% | 51.6% |
+| D256 TL cluster S32 BM64 | 2.63 ms | 6.6 | 14.9 | 86.4% | 1.0 | 211 | 6.3% | – |
+| D768 Triton S32 w4 | 9.46 ms | 10.0 | 25.7 | 89.7% | 1.0 | 198 | 6.2% | 40.3% |
+| D768 TL grid S16 BM64 | 13.15 ms | 4.9 | 17.9 | 93.2% | 1.0 | 255 | 6.3% | 54.6% |
+
+Every kernel is latency-bound: neither the SM nor memory is near peak, and most
+cycles have no eligible warp. The largest stall is the long scoreboard. In
+every step's epilogue, each thread loads its input projections (`WX`) from
+global memory, and that load sits on the step's critical path.
+
+**Occupancy screen** (two warpgroups, 256 threads, split-0 makespans; screened,
+not qualified):
+* On the grid path the 256-thread twins are bitwise equal to the 128-thread
+  kernels (8/8).
+* Grid S16/BM64 with 256 threads gives 34.5 / 33.9 ms (LSTM / sLSTM) at
+  D768 C1024, against 43.6 / 43.5 ms for the round-1 best. At C256 it gives
+  8.75 / 8.70 ms against 12.9 / 11.3 ms.
+* On the cluster path the 256-thread kernels were wrong: 0/12 bitwise twins and
+  3 qualification failures. They were also not faster. Two warpgroups are now
+  allowed only on the grid path with BM ≥ 32 (commit 64d870c).
+
+**Launch plane** (whole 4-layer forward in a CUDA Graph vs eager, the round-1
+best configuration, paired):
+
+| Case | Speedup [95% CI] |
+|---|---|
+| LSTM D256 C256 / C1024 | 1.033 [1.031, 1.036] / 0.994 [0.988, 1.002] |
+| sLSTM D256 C256 / C1024 | 1.044 [1.043, 1.046] / 1.004 [1.003, 1.005] |
+| LSTM D768 C256 / C1024 | 1.007 [1.004, 1.009] / 1.002 [1.001, 1.003] |
+| sLSTM D768 C256 / C1024 | 0.997 [0.996, 0.998] / 0.998 [0.998, 0.999] |
+
+Graph logits are bitwise equal to eager in all 8 cases. The launch plane is
+null at C = 1024; the idle time seen at D = 256 in round 0 is not launch
+overhead.
+
+## Round 3: latency plane (input-projection prefetch) and two-warpgroup grid CTAs (job 47308340, name 100)
+
+`prefetch=True` loads the next step's projections into registers right after
+each epilogue, so the load overlaps the exchange wait and the GEMM. The sums are
+the same, so results must be bitwise equal to the reference kernel.
+
+The qualifications cover the four cluster-prefetch variants at D = 256 and the
+256-thread grid S16 BM32/BM64 variants (with and without prefetch) at D = 768.
+The new `vs_ref` stage requires bitwise equality with the reference kernel
+(BM 16, 128 threads, no prefetch). Then come split-0 selection and split-1
+paired timing against s0p, the round-1 best, and s0 at C = 1024.
