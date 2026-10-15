@@ -8,10 +8,11 @@ continuation through a ``SequenceContext``, and the sLSTM normalizer rule applie
 Table keys use the logical call's total steps, so every chunk of a chunked call must run the configuration selected
 for the whole call: pass it as ``config``. A continuation chunk without one is rejected rather than re-selected.
 
-The default policy is the packaged H100 table set (M6 + M7), served only when this runtime's identity (GPU name,
+The default policy is the packaged H100 table set (M6 + M7 + the FP16/BF16 grid fill), served only when this runtime's identity (GPU name,
 capability, Triton and TileLang versions) equals the identity the tables were measured under; otherwise every shape
 gets ``default_config``. A table entry that names TileLang on a runtime without TileLang raises; nothing falls back
-to another backend silently. Backward is not implemented.
+to another backend silently. Calls that require gradients go to ``training.recurrence`` (whole logical
+calls; LSTM/sLSTM; R-tiled Triton backward).
 """
 import functools
 
@@ -20,7 +21,7 @@ import torch
 from .execution_policy import TABLES, ExecutionPolicy, KernelConfig, runtime_identity, shape_key
 from .state_contract import begin_sequence
 
-TABLE_FILES = ("h100-rtiled-m6-20261014.json", "h100-rtiled-m7-20261014.json")
+TABLE_FILES = ("h100-rtiled-m6-20261014.json", "h100-rtiled-m7-20261014.json", "h100-rtiled-grid-20261015.json")
 DTYPES = {torch.float16: "float16", torch.bfloat16: "bfloat16"}
 
 
@@ -61,6 +62,12 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context=No
     if wx.dtype not in DTYPES:
         raise ValueError("the dispatched recurrence takes FP16/BF16 inputs")
     batch, steps, _, heads, width = wx.shape
+    if torch.is_grad_enabled() and any(x.requires_grad for x in (wx, recurrent, bias, initial)):
+        # Training: whole logical calls through the differentiable path (forward on the selected backend).
+        from . import training
+
+        return training.recurrence(wx, recurrent, bias, initial, cell, output_mode=output_mode,
+                                   snapshot_dtype=snapshot_dtype, config=config, sequence_context=sequence_context)
     if sequence_context is None:
         sequence_context = begin_sequence(initial, cell, wx.dtype)
     if config is None:

@@ -46,6 +46,43 @@ def _group_barrier(SYNC, slot, target, ERR, SPIN: tl.constexpr):
     tl.debug_barrier()
 
 
+@triton.jit
+def _verify_delay(seed, a, b, c, POINT: tl.constexpr):
+    # Race-verification only: a pseudo-random sleep of 0-65 us per (CTA, step, point), from the runtime seed.
+    x = (a * 7919) ^ (b * 104729) ^ (c * 1299709) ^ (seed * 40503 + POINT * 977)
+    ns = ((x ^ (x >> 13)) * 48271) & 65535
+    tl.inline_asm_elementwise("nanosleep.u32 $1; mov.u32 $0, 0;", "=r,r", [tl.full((1,), 0, tl.int32) + ns],
+                              dtype=tl.int32, is_pure=False, pack=1)
+
+
+@triton.jit
+def _verify_operand(h1, h2, OUTPUT, COUNTER, rows, row_valid, head, prev, TOTAL_T, H: tl.constexpr, D: tl.constexpr,
+                    K1: tl.constexpr, K2: tl.constexpr, OUTPUT_MODE: tl.constexpr):
+    # Received hidden operand vs the sender's stored hidden state of step `prev` (hidden or full output mode with an
+    # FP32 snapshot, so rounding it reproduces the operand exactly); mismatches are counted in COUNTER.
+    k1 = tl.arange(0, K1)
+    base = ((rows[:, None] * TOTAL_T + prev) * H + head) * D
+    m1 = row_valid[:, None] & (k1[None, :] < D)
+    want1 = tl.load(OUTPUT + base + k1[None, :], m1, 0, cache_modifier=".cg").to(h1.dtype)
+    bad = tl.sum(tl.sum(((h1 != want1) & m1).to(tl.int32), 1), 0)
+    if K2 > 0:
+        k2 = K1 + tl.arange(0, K2)
+        m2 = row_valid[:, None] & (k2[None, :] < D)
+        want2 = tl.load(OUTPUT + base + k2[None, :], m2, 0, cache_modifier=".cg").to(h2.dtype)
+        bad += tl.sum(tl.sum(((h2 != want2) & m2).to(tl.int32), 1), 0)
+    tl.atomic_add(COUNTER, bad)
+
+
+# Race-verification bits (VERIFY, compile-time; 0 compiles to the unmodified kernel). CHECK compares every received
+# hidden operand with the sender's stored output, after the barrier and again after the MMAs; DELAY injects seeded
+# sleeps before the producer's store and after the consumer's barrier; the BROKEN_* bits are negative controls.
+V_CHECK = tl.constexpr(1)
+V_DELAY = tl.constexpr(2)
+V_BROKEN_SINGLE = tl.constexpr(4)
+V_BROKEN_NO_BARRIER = tl.constexpr(8)
+V_BROKEN_ARRIVE_FIRST = tl.constexpr(16)
+
+
 # Runtime integers are not value-specialized: one compiled kernel per
 # (dtype, H, D, S, K parts, output mode, snapshot dtype) serves every B/T/chunk.
 # H stays a compile-time constant: as a runtime value it raised spills.
@@ -79,10 +116,13 @@ def _rtiled(
     K2: tl.constexpr,
     OUTPUT_MODE: tl.constexpr,
     SPIN: tl.constexpr,
+    VERIFY: tl.constexpr = 0,
 ):
     split = tl.program_id(0)
     slot = tl.program_id(1)
     splits = tl.num_programs(0)
+    if VERIFY & V_DELAY:
+        seed = tl.load(ERR + 3)
     local = tl.arange(0, BM)
     o = split * S + tl.arange(0, S)
     k1 = tl.arange(0, K1)
@@ -132,10 +172,22 @@ def _rtiled(
         hidden = tl.zeros((BM, S), tl.float32)
         for step in range(T):
             if step > 0:
-                read = XBUF + ((slot * 2 + bars % 2) * BM + local[:, None]) * D
+                parity = bars % 2
+                if VERIFY & V_BROKEN_SINGLE:
+                    parity = 0
+                if VERIFY & V_DELAY:
+                    _verify_delay(seed, split + splits * slot, group, step, 1)
+                read = XBUF + ((slot * 2 + parity) * BM + local[:, None]) * D
                 h1 = tl.load(read + k1[None, :], k1[None, :] < D, 0, cache_modifier=".cg")
                 if K2 > 0:
                     h2 = tl.load(read + k2[None, :], k2[None, :] < D, 0, cache_modifier=".cg")
+                if VERIFY & V_CHECK:
+                    if K2 > 0:
+                        _verify_operand(h1, h2, OUTPUT, ERR + 1, rows, row_valid, head, STEP_BASE + step - 1,
+                                        TOTAL_T, H, D, K1, K2, OUTPUT_MODE)
+                    else:
+                        _verify_operand(h1, h1, OUTPUT, ERR + 1, rows, row_valid, head, STEP_BASE + step - 1,
+                                        TOTAL_T, H, D, K1, K2, OUTPUT_MODE)
             ai = tl.dot(h1, ri1)
             af = tl.dot(h1, rf1)
             az = tl.dot(h1, rz1)
@@ -145,6 +197,19 @@ def _rtiled(
                 af = tl.dot(h2, rf2, af)
                 az = tl.dot(h2, rz2, az)
                 ao = tl.dot(h2, ro2, ao)
+            if VERIFY & V_CHECK:
+                if step > 0:
+                    # The buffer must still hold step - 1's operand after the MMAs (no early overwrite).
+                    parity = bars % 2
+                    if VERIFY & V_BROKEN_SINGLE:
+                        parity = 0
+                    read = XBUF + ((slot * 2 + parity) * BM + local[:, None]) * D
+                    g1 = tl.load(read + k1[None, :], k1[None, :] < D, 0, cache_modifier=".cg")
+                    g2 = g1
+                    if K2 > 0:
+                        g2 = tl.load(read + k2[None, :], k2[None, :] < D, 0, cache_modifier=".cg")
+                    _verify_operand(g1, g2, OUTPUT, ERR + 2, rows, row_valid, head, STEP_BASE + step - 1, TOTAL_T,
+                                    H, D, K1, K2, OUTPUT_MODE)
             x_offset = (((rows[:, None] * TOTAL_T + STEP_BASE + step) * 4) * H + head) * D + o[None, :]
             i = ai + tl.load(WX + x_offset, valid, 0).to(tl.float32) + bi[None, :]
             f = af + tl.load(WX + x_offset + H * D, valid, 0).to(tl.float32) + bf[None, :]
@@ -180,15 +245,39 @@ def _rtiled(
                         tl.store(OUTPUT + 3 * output_stride + output_offset, m, valid)
             if PERSISTENT != 0:
                 if (step < T - 1) | (group + SLOTS < GROUPS):
-                    write = XBUF + ((slot * 2 + (bars + 1) % 2) * BM + local[:, None]) * D + o[None, :]
-                    tl.store(write, hidden.to(dtype), o_valid[None, :])
-                    bars += 1
-                    _group_barrier(SYNC, slot, bars * splits, ERR, SPIN)
+                    parity = (bars + 1) % 2
+                    if VERIFY & V_BROKEN_SINGLE:
+                        parity = 0
+                    write = XBUF + ((slot * 2 + parity) * BM + local[:, None]) * D + o[None, :]
+                    if VERIFY & V_DELAY:
+                        _verify_delay(seed, split + splits * slot, group, step, 0)
+                    if VERIFY & V_BROKEN_ARRIVE_FIRST:
+                        bars += 1
+                        _group_barrier(SYNC, slot, bars * splits, ERR, SPIN)
+                        tl.store(write, hidden.to(dtype), o_valid[None, :])
+                    elif VERIFY & V_BROKEN_NO_BARRIER:
+                        tl.store(write, hidden.to(dtype), o_valid[None, :])
+                        bars += 1
+                    else:
+                        tl.store(write, hidden.to(dtype), o_valid[None, :])
+                        bars += 1
+                        _group_barrier(SYNC, slot, bars * splits, ERR, SPIN)
         tl.store(FINAL + state_offset, hidden, valid)
         tl.store(FINAL + stride + state_offset, c, valid)
         if SLSTM:
             tl.store(FINAL + 2 * stride + state_offset, n, valid)
             tl.store(FINAL + 3 * stride + state_offset, m, valid)
+
+
+def verify_bits(options):
+    """VERIFY bitmask and seed of a race-verification request (0, 0 when off)."""
+    if not options:
+        return 0, 0
+    broken = {None: 0, "single": int(V_BROKEN_SINGLE), "no_barrier": int(V_BROKEN_NO_BARRIER),
+              "arrive_first": int(V_BROKEN_ARRIVE_FIRST)}[options.get("broken")]
+    seed = options.get("delay_seed")
+    bits = (int(V_CHECK) if options.get("check", True) else 0) | (int(V_DELAY) if seed is not None else 0) | broken
+    return bits, int(seed or 0)
 
 
 def k_parts(width, pad=False):
@@ -227,8 +316,13 @@ def recurrence(
     pad_k: bool = False,
     max_ctas: int | None = None,
     diagnostics: dict[str, object] | None = None,
+    _verify: dict[str, object] | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Forward recurrence with R split along gate outputs across CTAs.
+
+    ``_verify`` (race verification only, never served): {"check": bool, "delay_seed": int | None, "broken": None |
+    "single" | "no_barrier" | "arrive_first"}; the violation counters are written back into the dict. The content
+    check needs output_mode "full" or "hidden" with an FP32 snapshot.
 
     Always returns (output, FP32 compute carry) under the PR #79 contract.
     ``full`` returns [S,B,T,H,D] states, ``hidden`` [B,T,H,D], ``last`` [B,1,H,D].
@@ -285,7 +379,12 @@ def recurrence(
     xbuf = torch.empty((slots, 2, 16, width), device=device, dtype=wx.dtype)
     launches = 1 if sync == "grid" else steps
     sync_counts = torch.zeros((launches, slots), device=device, dtype=torch.int32)
-    err = torch.zeros((1,), device=device, dtype=torch.int32)
+    verify, seed = verify_bits(_verify)
+    if verify & 1 and (output_mode == "last" or snapshot_dtype != torch.float32):
+        raise ValueError("the race check reads the FP32 hidden output")
+    err = torch.zeros((4 if verify else 1,), device=device, dtype=torch.int32)
+    if verify:
+        err[3] = seed
     mode = {"full": 0, "hidden": 1, "last": 2}[output_mode]
     start = sequence_context.step_offset == 0
     previous = initial
@@ -304,8 +403,12 @@ def recurrence(
             # The driver rejects a non-co-resident grid instead of deadlocking.
             # Both sync modes share the compiled kernel, so both launch cooperatively.
             launch_cooperative_grid=True,
+            **(dict(VERIFY=verify) if verify else {}),
         )
         previous = carry
+    if verify:
+        counts = err.tolist()
+        _verify.update(barrier_error=counts[0], after_barrier=counts[1], after_mma=counts[2])
     if diagnostics is not None:
         per_slot = [len(range(s, groups, slots)) * (steps if sync == "grid" else 1) for s in range(slots)]
         diagnostics.update(
