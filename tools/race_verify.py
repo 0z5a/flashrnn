@@ -77,7 +77,7 @@ def runner(task):
 
         def run(verify):
             out = triton_rtiled_bw.backward(*values, hist, d_hist, d_final, cell, slice_width=c["slice_width"],
-                                            num_warps=c["warps"], _verify=verify)
+                                            num_warps=c["warps"], _verify=verify, fast=c.get("fast", False))
             torch.cuda.synchronize()
             return list(out)
         return run

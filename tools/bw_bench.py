@@ -56,7 +56,8 @@ def step_fn(spec, case):
     cell = case["cell"]
     if spec["kind"] == "frnn2":
         forward = KernelConfig(**spec["forward"]) if spec.get("forward") else None
-        opts = dict(slice_width=spec["slice_width"], num_warps=spec["warps"])
+        opts = dict(slice_width=spec["slice_width"], num_warps=spec["warps"], fast=spec.get("fast", False),
+                    tf32=spec.get("tf32", False))
 
         def run(leaves, cot_h):
             xs = [x.detach().requires_grad_(True) for x in leaves]
