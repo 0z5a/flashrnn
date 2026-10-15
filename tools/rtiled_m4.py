@@ -357,8 +357,8 @@ def mode_v1check(args):
     return 0
 
 
-def cell_inputs(cell, batch, steps, heads, width, mode, seed):
-    """fixture_math distributions, rounded to FP16; sLSTM zero/mixed/warm normalizer modes."""
+def cell_inputs(cell, batch, steps, heads, width, mode, seed, dtype=torch.float16):
+    """fixture_math distributions, rounded to the input dtype; sLSTM zero/mixed/warm normalizer modes."""
     g = torch.Generator().manual_seed(seed)
     states = 4 if cell == "slstm" else 2
     wx = torch.randn(batch, steps, 4, heads, width, generator=g) * 0.1
@@ -372,7 +372,7 @@ def cell_inputs(cell, batch, steps, heads, width, mode, seed):
         if mode == "mixed":
             init[:, 0, :, 0] = 0
             init[3, 0, :, 0] = 0.75
-    return tuple(x.half().cuda() for x in (wx, r, b, init))
+    return tuple(x.to(dtype).cuda() for x in (wx, r, b, init))
 
 
 def mode_cellcheck(args):
@@ -432,7 +432,9 @@ def kernel_fn(spec, cell):
         def run_full(v):
             ctx = begin_sequence(v[3], cell, v[0].dtype)
             return tilelang_cluster.recurrence(*v, cell, sequence_context=ctx, slice_width=spec["slice_width"],
-                                               output_mode="hidden", sync=spec.get("sync", "cluster"))[0]
+                                               output_mode="hidden", sync=spec.get("sync", "cluster"),
+                                               batch_tile=spec.get("batch_tile", 16),
+                                               threads=32 * spec.get("warps", 4))[0]
         return run_full
     if kind == "tk":
         from flashrnn.flashrnn2 import tk_rtiled
@@ -450,14 +452,23 @@ def kernel_fn(spec, cell):
     raise ValueError(kind)
 
 
-def kernel_values(cell, batch, width, steps, split):
-    return cell_inputs(cell, batch, steps, 1, width, "warm", 20261100 + 1000 * split + width + batch)
+DTYPES = {"float16": torch.float16, "bfloat16": torch.bfloat16}
 
 
-def kernel_qualify(values, cell, fns):
-    import fixture_math as fm
+def kernel_values(cell, batch, width, steps, split, dtype="float16"):
+    return cell_inputs(cell, batch, steps, 1, width, "warm", 20261100 + 1000 * split + width + batch, DTYPES[dtype])
+
+
+def kernel_reference(values, cell):
     with torch.inference_mode():
-        ref, _ = reference.recurrence(*(v.double() for v in values), cell, torch.float16)
+        return reference.recurrence(*(v.double() for v in values), cell, values[0].dtype)[0]
+
+
+def kernel_qualify(values, cell, fns, ref=None):
+    import fixture_math as fm
+    if ref is None:
+        ref = kernel_reference(values, cell)
+    with torch.inference_mode():
         outs = {name: fn(values) for name, fn in fns.items()}
     torch.cuda.synchronize()
     checks = {name: fm.compare(y.float().cpu().numpy(), ref[0].cpu().numpy(), fm.CELL_BUDGET) for name, y in
@@ -479,14 +490,15 @@ def mode_kselect(args):
     case = json.loads(args.case)
     cell, width, batch, steps = case["cell"], case["width"], case["batch"], case["steps"]
     rec = dict(mode="kselect", case=case, identity=identity(), split=0, candidates={})
-    values = kernel_values(cell, batch, width, steps, 0)
+    values = kernel_values(cell, batch, width, steps, 0, case.get("dtype", "float16"))
+    ref = kernel_reference(values, cell)
     for role, specs in case["roles"].items():
         fns, qual = {}, {}
         for spec in specs:
             name = json.dumps(spec, sort_keys=True)
             try:
                 fn = kernel_fn(spec, cell)
-                checks, _ = kernel_qualify(values, cell, {"x": fn})
+                checks, _ = kernel_qualify(values, cell, {"x": fn}, ref)
                 qual[name] = "PASS" if checks["x"]["pass_"] else "NUMERICAL_FAIL"
                 if checks["x"]["pass_"]:
                     fns[name] = fn
@@ -526,7 +538,7 @@ def mode_kstart(args):
                 arm_unit="CUDA-event time per call over a fixed number of back-to-back calls on preallocated inputs",
                 budget="fixture_math.CELL_BUDGET")
     write(out / "meta.json", meta)
-    values = kernel_values(cell, batch, width, steps, 1)
+    values = kernel_values(cell, batch, width, steps, 1, comp.get("dtype", "float16"))
     fns = {"baseline": kernel_fn(comp["baseline"], cell), "candidate": kernel_fn(comp["candidate"], cell)}
     import fixture_math as fm
     checks, outs = kernel_qualify(values, cell, fns)
@@ -616,7 +628,7 @@ def check_policy(table, comp):
         return None
     from flashrnn.flashrnn2.execution_policy import runtime_identity
     policy = ExecutionPolicy(table["policy_table"], identity=table["policy_identity"])
-    cfg = policy.select(comp["cell"], "float16", comp["batch"], comp["steps"], 1, comp["width"],
+    cfg = policy.select(comp["cell"], comp.get("dtype", "float16"), comp["batch"], comp["steps"], 1, comp["width"],
                         identity=runtime_identity())
     cand = comp["candidate"]
     expect = (("tilelang", cand["slice_width"], cand.get("sync", "cluster")) if cand["kind"] == "tilelang_full" else
@@ -624,6 +636,8 @@ def check_policy(table, comp):
     assert (cfg.family, cfg.slice_width, cfg.sync) == expect, (cfg, cand)
     if cand["kind"] == "rtiled":
         assert (cfg.warps, cfg.pad_k) == (cand["warps"], cand.get("pad_k", False)), (cfg, cand)
+    else:
+        assert (cfg.batch_tile, cfg.warps) == (cand.get("batch_tile", 16), cand.get("warps", 4)), (cfg, cand)
     return cfg.as_dict()
 
 
