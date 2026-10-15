@@ -157,7 +157,12 @@ def build(batch, total_steps, heads, width, slice_width, *, cell="lstm", dtype="
                     T.call_extern("handle", "__nanosleep", _delay_ns(T, ZERO[3], s, g, t, 1))
                 if "exchange" not in ab:
                     if t > 0:
-                        if not (v and v["broken"] == "no_wait"):
+                        if v and v["broken"] == "no_wait":
+                            # Negative control: skip the wait, except at the last step so that no copy is still in
+                            # flight into this CTA's shared memory when it exits.
+                            if t == NSTEPS - 1:
+                                T.mbarrier_wait_parity(ready[t % 2], ((t - 1) // 2) % 2)
+                        else:
                             T.mbarrier_wait_parity(ready[t % 2], ((t - 1) // 2) % 2)
                 if check:
                     if t > 0:
