@@ -24,7 +24,8 @@ import torch
 import triton
 import triton.language as tl
 
-from .triton_rtiled import SPIN_LIMIT, _group_barrier, k_parts, plan
+from .triton_rtiled import (SPIN_LIMIT, V_BROKEN_ARRIVE_FIRST, V_BROKEN_NO_BARRIER, V_BROKEN_SINGLE, V_CHECK, V_DELAY,
+                            _group_barrier, _verify_delay, k_parts, plan, verify_bits)
 
 
 @triton.jit
@@ -59,6 +60,26 @@ def _dh_from_dg(SRC, src_row, row_mask, w_i1, w_f1, w_z1, w_o1, w_i2, w_f2, w_z2
     return acc
 
 
+@triton.jit
+def _verify_dg(XBUF, src_row, DG, dg_row, row_valid, COUNTER, gate_stride, K1: tl.constexpr, K2: tl.constexpr,
+               D: tl.constexpr):
+    # Race verification: the exchanged operand must equal the rounded dG the senders stored (FP32) before publishing.
+    k1 = tl.arange(0, K1)
+    m1 = row_valid[:, None] & (k1[None, :] < D)
+    bad = tl.sum(row_valid.to(tl.int32), 0) * 0
+    for g in tl.static_range(4):
+        x = tl.load(XBUF + src_row[:, None] + g * D + k1[None, :], m1, 0, cache_modifier=".cg")
+        w = tl.load(DG + dg_row[:, None] + g * gate_stride + k1[None, :], m1, 0, cache_modifier=".cg").to(x.dtype)
+        bad += tl.sum(tl.sum(((x != w) & m1).to(tl.int32), 1), 0)
+        if K2 > 0:
+            k2 = K1 + tl.arange(0, K2)
+            m2 = row_valid[:, None] & (k2[None, :] < D)
+            x = tl.load(XBUF + src_row[:, None] + g * D + k2[None, :], m2, 0, cache_modifier=".cg")
+            w = tl.load(DG + dg_row[:, None] + g * gate_stride + k2[None, :], m2, 0, cache_modifier=".cg").to(x.dtype)
+            bad += tl.sum(tl.sum(((x != w) & m2).to(tl.int32), 1), 0)
+    tl.atomic_add(COUNTER, bad)
+
+
 @triton.jit(do_not_specialize=["B", "T", "T_START", "NSTEPS", "FROM_FINAL", "TAIL", "GROUPS", "SLOTS",
                                "PERSISTENT"])
 def _rtiled_bw(
@@ -91,6 +112,8 @@ def _rtiled_bw(
     K1: tl.constexpr,
     K2: tl.constexpr,
     SPIN: tl.constexpr,
+    VERIFY: tl.constexpr = 0,
+    SEED: tl.constexpr = 0,
 ):
     split = tl.program_id(0)
     slot = tl.program_id(1)
@@ -143,9 +166,19 @@ def _rtiled_bw(
             if (index > 0) | (FROM_FINAL == 0):
                 # dh_t from the exchanged, rounded dG_{t+1} of every CTA of the group.
                 if PERSISTENT != 0:
-                    src_row = ((slot * 2 + (bars + 1) % 2) * BM + local) * (4 * D)
+                    parity = (bars + 1) % 2
+                    if VERIFY & V_BROKEN_SINGLE:
+                        parity = 0
+                    if VERIFY & V_DELAY:
+                        _verify_delay(SEED, split + splits * slot, group, t, 1)
+                    src_row = ((slot * 2 + parity) * BM + local) * (4 * D)
+                    dg_row = ((rows * T + t + 1) * 4 * H + head) * D
+                    if VERIFY & V_CHECK:
+                        _verify_dg(XBUF, src_row, DG, dg_row, row_valid, ERR + 1, hd, K1, K2, D)
                     dh_in = _dh_from_dg(XBUF, src_row, local < BM, w_i1, w_f1, w_z1, w_o1, w_i2, w_f2, w_z2, w_o2,
                                         D, K1, K2, D, False, BM, S)
+                    if VERIFY & V_CHECK:
+                        _verify_dg(XBUF, src_row, DG, dg_row, row_valid, ERR + 2, hd, K1, K2, D)
                 else:
                     src_row = ((rows * T + t + 1) * 4 * H + head) * D
                     dh_in = _dh_from_dg(DG, src_row, row_valid, w_i1, w_f1, w_z1, w_o1, w_i2, w_f2, w_z2, w_o2,
@@ -201,18 +234,41 @@ def _rtiled_bw(
             tl.store(DG + pre + 2 * hd, d_z, valid)
             tl.store(DG + pre + 3 * hd, d_o, valid)
             if PERSISTENT != 0:
-                write = XBUF + ((slot * 2 + bars % 2) * BM + local[:, None]) * (4 * D) + p[None, :]
+                parity = bars % 2
+                if VERIFY & V_BROKEN_SINGLE:
+                    parity = 0
+                write = XBUF + ((slot * 2 + parity) * BM + local[:, None]) * (4 * D) + p[None, :]
+                if VERIFY & V_DELAY:
+                    _verify_delay(SEED, split + splits * slot, group, t, 0)
+                if VERIFY & V_BROKEN_ARRIVE_FIRST:
+                    bars += 1
+                    _group_barrier(SYNC, slot, bars * splits, ERR, SPIN)
                 tl.store(write, d_i.to(dtype), p_valid[None, :])
                 tl.store(write + D, d_f.to(dtype), p_valid[None, :])
                 tl.store(write + 2 * D, d_z.to(dtype), p_valid[None, :])
                 tl.store(write + 3 * D, d_o.to(dtype), p_valid[None, :])
-                bars += 1
-                _group_barrier(SYNC, slot, bars * splits, ERR, SPIN)
+                if VERIFY & V_BROKEN_ARRIVE_FIRST:
+                    pass
+                elif VERIFY & V_BROKEN_NO_BARRIER:
+                    bars += 1
+                else:
+                    bars += 1
+                    _group_barrier(SYNC, slot, bars * splits, ERR, SPIN)
         if TAIL != 0:
             if PERSISTENT != 0:
-                src_row = ((slot * 2 + (bars + 1) % 2) * BM + local) * (4 * D)
+                parity = (bars + 1) % 2
+                if VERIFY & V_BROKEN_SINGLE:
+                    parity = 0
+                if VERIFY & V_DELAY:
+                    _verify_delay(SEED, split + splits * slot, group, -1, 1)
+                src_row = ((slot * 2 + parity) * BM + local) * (4 * D)
+                dg_row = ((rows * T) * 4 * H + head) * D
+                if VERIFY & V_CHECK:
+                    _verify_dg(XBUF, src_row, DG, dg_row, row_valid, ERR + 1, hd, K1, K2, D)
                 dh_in = _dh_from_dg(XBUF, src_row, local < BM, w_i1, w_f1, w_z1, w_o1, w_i2, w_f2, w_z2, w_o2,
                                     D, K1, K2, D, False, BM, S)
+                if VERIFY & V_CHECK:
+                    _verify_dg(XBUF, src_row, DG, dg_row, row_valid, ERR + 2, hd, K1, K2, D)
             else:
                 src_row = ((rows * T) * 4 * H + head) * D
                 dh_in = _dh_from_dg(DG, src_row, row_valid, w_i1, w_f1, w_z1, w_o1, w_i2, w_f2, w_z2, w_o2,
@@ -272,6 +328,7 @@ def backward(
     pad_k: bool = False,
     max_ctas: int | None = None,
     diagnostics: dict[str, object] | None = None,
+    _verify: dict[str, object] | None = None,
 ):
     """Gradients (dWx FP32 [B,T,4,H,D], dR FP32, dbias FP32, d initial FP32 [S,B,1,H,D]) of one whole logical call.
 
@@ -317,7 +374,8 @@ def backward(
     xbuf = torch.empty((slots, 2, 16, 4 * width), device=device, dtype=wx.dtype)
     launches = 1 if sync == "grid" else steps + 1
     sync_counts = torch.zeros((launches, slots), device=device, dtype=torch.int32)
-    err = torch.zeros((1,), device=device, dtype=torch.int32)
+    verify, seed = verify_bits(_verify)
+    err = torch.zeros((3 if verify else 1,), device=device, dtype=torch.int32)
     kernel = None
     for index in range(launches):
         if sync == "grid":
@@ -333,7 +391,11 @@ def backward(
             num_warps=num_warps,
             enable_fp_fusion=False,
             launch_cooperative_grid=True,
+            **(dict(VERIFY=verify, SEED=seed) if verify else {}),
         )
+    if verify:
+        counts = err.tolist()
+        _verify.update(barrier_error=counts[0], after_barrier=counts[1], after_mma=counts[2])
     d_recurrent, d_bias = weight_gradients(dg, h_prev)
     if diagnostics is not None:
         per_slot = [len(range(s, groups, slots)) * steps for s in range(slots)]
