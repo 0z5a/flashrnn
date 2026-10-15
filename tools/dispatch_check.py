@@ -12,6 +12,8 @@ Stages
             chunked  public chunked calls through dispatch with the logical call's config == one call (bitwise)
             e1       fixture_math CELL_BUDGET vs the FP64 oracle: history, carry, hidden, last
                      (LSTM warm; sLSTM zero, mixed and warm normalizer)
+            With --table (a frozen-table.json from a table-fill batch), every call is served by that table as an
+            explicit policy instead of the packaged tables, and --cases table checks each of its entries.
 Writes dispatch.json with every check; status PASS only if every check passes.
 """
 import argparse
@@ -20,10 +22,13 @@ import time
 import traceback
 from pathlib import Path
 
+import hashlib
+
 import torch
 
 from flashrnn.flashrnn2 import dispatch
-from flashrnn.flashrnn2.execution_policy import KernelConfig, default_config, runtime_identity, shape_key
+from flashrnn.flashrnn2.execution_policy import (ExecutionPolicy, KernelConfig, default_config, runtime_identity,
+                                                 shape_key)
 from flashrnn.flashrnn2.prepared import PreparedSequence
 from flashrnn.flashrnn2.state_contract import begin_sequence
 
@@ -118,13 +123,13 @@ def direct(values, cell, cfg, ctx, **kw):
                                         sequence_context=ctx, num_warps=cfg.warps, **kw)
 
 
-def stage_contract(case, rec):
+def stage_contract(case, rec, policy=None):
     import fixture_math as fm
     cell, dtype, batch, steps, heads, width = (case[k] for k in ("cell", "dtype", "batch", "steps", "heads", "width"))
     dt = DT[dtype]
     out = dict(case=case)
-    cfg, source = dispatch.select_config(cell, dt, batch, steps, heads, width)
-    tables = dispatch._packaged()
+    cfg, source = dispatch.select_config(cell, dt, batch, steps, heads, width, policy=policy)
+    tables = dispatch._packaged() if policy is None else policy
     key = shape_key(cell, dtype, batch, steps, heads, width)
     expected = tables.table.get(key, default_config(width)) if runtime_identity() == tables.identity else default_config(width)
     out["served"] = dict(config=cfg.as_dict(), source=source, expected=expected.as_dict(), pass_=cfg == expected)
@@ -132,20 +137,20 @@ def stage_contract(case, rec):
     modes = (("full", torch.float32), ("full", None), ("hidden", None), ("last", None))
     backend = {}
     for mode, snap in modes:
-        y, c = dispatch.recurrence(*values, cell, output_mode=mode, snapshot_dtype=snap)
+        y, c = dispatch.recurrence(*values, cell, output_mode=mode, snapshot_dtype=snap, policy=policy)
         yd, cd = direct(values, cell, cfg, begin_sequence(values[3], cell, dt), output_mode=mode, snapshot_dtype=snap)
         torch.cuda.synchronize()
         backend[f"{mode}_{'fp32' if snap else 'input'}"] = same(y, yd) and same(c, cd)
     out["backend"] = backend
     prepared = {}
     for mode, snap in (("full", torch.float32), ("hidden", None), ("last", None)):
-        y, c = dispatch.recurrence(*values, cell, output_mode=mode, snapshot_dtype=snap)
+        y, c = dispatch.recurrence(*values, cell, output_mode=mode, snapshot_dtype=snap, policy=policy)
         pr = PreparedSequence(*values, cell, output_mode=mode, snapshot_dtype=snap, config=cfg)
         yp, cp = pr.run()
         torch.cuda.synchronize()
         prepared[mode] = same(y, yp) and same(c, cp)
     out["prepared"] = prepared
-    full, carry = dispatch.recurrence(*values, cell, snapshot_dtype=torch.float32)
+    full, carry = dispatch.recurrence(*values, cell, snapshot_dtype=torch.float32, policy=policy)
     chunks, left = [], steps
     for n in (1, 3, 13):
         if n < left:
@@ -166,7 +171,7 @@ def stage_contract(case, rec):
                   heads=heads, mode=mode)
         fx = fm.make_fixture(fc)
         v = [torch.tensor(fx[k], device="cuda", dtype=dt) for k in ("wx", "r", "bias", "initial")]
-        c_cfg, _ = dispatch.select_config(cell, dt, fc["batch"], fc["steps"], heads, width)
+        c_cfg, _ = dispatch.select_config(cell, dt, fc["batch"], fc["steps"], heads, width, policy=policy)
         y, c = dispatch.recurrence(*v, cell, snapshot_dtype=torch.float32, config=cfg)
         yh, _ = dispatch.recurrence(*v, cell, output_mode="hidden", snapshot_dtype=torch.float32, config=cfg)
         yl, _ = dispatch.recurrence(*v, cell, output_mode="last", snapshot_dtype=torch.float32, config=cfg)
@@ -188,7 +193,9 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--out", required=True)
     p.add_argument("--stages", default="unit,contract")
-    p.add_argument("--cases", default="[]", help="JSON list of {cell, dtype, batch, steps, heads, width}")
+    p.add_argument("--cases", default="[]", help="JSON list of {cell, dtype, batch, steps, heads, width}, or 'table'")
+    p.add_argument("--table", help="frozen-table.json whose policy_table serves every call (explicit policy)")
+    p.add_argument("--table-sha256")
     a = p.parse_args()
     torch.backends.cuda.matmul.allow_tf32 = False
     rec = dict(started=time.time(), gates={})
@@ -200,12 +207,23 @@ def main():
             rec["gates"]["unit"] = "ERROR"
             rec["unit_error"] = traceback.format_exc()[-3000:]
         write(Path(a.out) / "dispatch.json", rec)
+    policy, cases = None, [] if a.cases == "table" else json.loads(a.cases)
+    if a.table:
+        assert hashlib.sha256(Path(a.table).read_bytes()).hexdigest() == a.table_sha256, "frozen table changed"
+        frozen = json.loads(Path(a.table).read_text())
+        policy = ExecutionPolicy(frozen["policy_table"], identity=frozen["policy_identity"])
+        rec["table"] = dict(sha256=a.table_sha256, entries=len(policy.table))
+        if a.cases == "table":
+            for key in sorted(policy.table):
+                cell, dtype, b, t, h, d = key.split("/")
+                cases.append(dict(cell=cell, dtype=dtype, batch=int(b[1:]), steps=int(t[1:]), heads=int(h[1:]),
+                                  width=int(d[1:])))
     if "contract" in stages:
         rec["identity"] = runtime_identity()
-        for i, case in enumerate(json.loads(a.cases)):
+        for i, case in enumerate(cases):
             name = f"contract{i}"
             try:
-                rec["gates"][name] = "PASS" if stage_contract(case, rec) else "FAIL"
+                rec["gates"][name] = "PASS" if stage_contract(case, rec, policy) else "FAIL"
             except Exception:  # noqa: BLE001
                 rec["gates"][name] = "ERROR"
                 rec[f"{name}_error"] = dict(case=case, trace=traceback.format_exc()[-3000:])
