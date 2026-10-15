@@ -1,0 +1,530 @@
+{
+ "started": 1792067532.800137,
+ "plan": {
+  "purpose": "Race verification of every cross-CTA exchange (Triton L2 counter barrier forward and backward, TileLang cluster DSMEM bulk copies with mbarriers, TileLang cooperative-grid exchange) with compile-time content checks, seeded producer/consumer delays and broken-variant negative controls; plus the two-warpgroup cluster kernel as a positive control",
+  "rule": "correct: zero violations and bitwise equal to the uninstrumented reference in all 21 runs; broken variant: violations counted in >= 80% of its 21 runs and no run with a differing output but zero violations",
+  "minutes": 150,
+  "tasks": [
+   {
+    "name": "race-triton_fwd-lstm-d256-s32-w8",
+    "lane": 0,
+    "tilelang": false,
+    "task": {
+     "path": "triton_fwd",
+     "cell": "lstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_fwd-slstm-d256-s32-w8",
+    "lane": 1,
+    "tilelang": false,
+    "task": {
+     "path": "triton_fwd",
+     "cell": "slstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_fwd-lstm-d768-s32-w8",
+    "lane": 2,
+    "tilelang": false,
+    "task": {
+     "path": "triton_fwd",
+     "cell": "lstm",
+     "config": {
+      "width": 768,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_fwd-slstm-d768-s32-w8",
+    "lane": 3,
+    "tilelang": false,
+    "task": {
+     "path": "triton_fwd",
+     "cell": "slstm",
+     "config": {
+      "width": 768,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_bw-lstm-d256-s32-w8",
+    "lane": 0,
+    "tilelang": false,
+    "task": {
+     "path": "triton_bw",
+     "cell": "lstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_bw-slstm-d256-s32-w8",
+    "lane": 1,
+    "tilelang": false,
+    "task": {
+     "path": "triton_bw",
+     "cell": "slstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_bw-lstm-d768-s16-w8",
+    "lane": 2,
+    "tilelang": false,
+    "task": {
+     "path": "triton_bw",
+     "cell": "lstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_bw-slstm-d768-s16-w8",
+    "lane": 3,
+    "tilelang": false,
+    "task": {
+     "path": "triton_bw",
+     "cell": "slstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_cluster-lstm-d256-s32-bm16-t128",
+    "lane": 0,
+    "tilelang": true,
+    "task": {
+     "path": "tl_cluster",
+     "cell": "lstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "bm": 16,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_cluster-slstm-d256-s32-bm16-t128",
+    "lane": 1,
+    "tilelang": true,
+    "task": {
+     "path": "tl_cluster",
+     "cell": "slstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "bm": 16,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_cluster-lstm-d256-s16-bm32-t128",
+    "lane": 2,
+    "tilelang": true,
+    "task": {
+     "path": "tl_cluster",
+     "cell": "lstm",
+     "config": {
+      "width": 256,
+      "slice_width": 16,
+      "bm": 32,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_cluster-slstm-d256-s16-bm32-t128",
+    "lane": 3,
+    "tilelang": true,
+    "task": {
+     "path": "tl_cluster",
+     "cell": "slstm",
+     "config": {
+      "width": 256,
+      "slice_width": 16,
+      "bm": 32,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_grid-lstm-d768-s16-bm16-t128",
+    "lane": 0,
+    "tilelang": true,
+    "task": {
+     "path": "tl_grid",
+     "cell": "lstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "bm": 16,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_grid-slstm-d768-s16-bm16-t128",
+    "lane": 1,
+    "tilelang": true,
+    "task": {
+     "path": "tl_grid",
+     "cell": "slstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "bm": 16,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_grid-lstm-d768-s16-bm64-t256",
+    "lane": 2,
+    "tilelang": true,
+    "task": {
+     "path": "tl_grid",
+     "cell": "lstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "bm": 64,
+      "threads": 256,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_grid-slstm-d768-s16-bm64-t256",
+    "lane": 3,
+    "tilelang": true,
+    "task": {
+     "path": "tl_grid",
+     "cell": "slstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "bm": 64,
+      "threads": 256,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_cluster-positive256-lstm",
+    "lane": 0,
+    "tilelang": true,
+    "task": {
+     "path": "tl_cluster",
+     "cell": "lstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "bm": 32,
+      "threads": 256,
+      "batch": 40,
+      "steps": 48
+     },
+     "positive_control": true
+    }
+   },
+   {
+    "name": "race-tl_cluster-positive256-slstm",
+    "lane": 1,
+    "tilelang": true,
+    "task": {
+     "path": "tl_cluster",
+     "cell": "slstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "bm": 32,
+      "threads": 256,
+      "batch": 40,
+      "steps": 48
+     },
+     "positive_control": true
+    }
+   }
+  ],
+  "v1_build_root": "<node-local scratch>",
+  "expected_minutes": {
+   "total": 40,
+   "basis": "about six TileLang compiles (30-60 s) or four Triton compiles per task, 85 short runs per task; 18 tasks on four lanes"
+  },
+  "node_reason": "One H100 node (4 H100): independent single-GPU lanes",
+  "not_claimed": [
+   "compute-sanitizer racecheck coverage",
+   "timing"
+  ]
+ },
+ "phases": {
+  "canary": {
+   "out": "<cluster storage>",
+   "gpu": "0",
+   "started": 1792067586.5176947,
+   "exit": 0,
+   "finished": 1792067601.5577087,
+   "joined": true,
+   "done": true,
+   "name": "race-triton_fwd-lstm-d256-s32-w8",
+   "status": "FAIL"
+  },
+  "tasks": {
+   "records": [
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792067601.561503,
+     "exit": 0,
+     "finished": 1792067612.944716,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_fwd-slstm-d256-s32-w8",
+     "status": "FAIL"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792067601.5621622,
+     "exit": 0,
+     "finished": 1792067615.7493157,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_fwd-lstm-d768-s32-w8",
+     "status": "FAIL"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792067601.5623913,
+     "exit": 0,
+     "finished": 1792067616.7520237,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_fwd-slstm-d768-s32-w8",
+     "status": "FAIL"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792067601.5608156,
+     "exit": 0,
+     "finished": 1792067626.3154147,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_bw-lstm-d256-s32-w8",
+     "status": "FAIL"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792067612.947552,
+     "exit": 0,
+     "finished": 1792067636.5000446,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_bw-slstm-d256-s32-w8",
+     "status": "FAIL"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792067636.502523,
+     "exit": 0,
+     "finished": 1792067670.3203695,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_cluster-slstm-d256-s32-bm16-t128",
+     "status": "FAIL"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792067626.3179429,
+     "exit": 0,
+     "finished": 1792067670.5543113,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_cluster-lstm-d256-s32-bm16-t128",
+     "status": "FAIL"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792067615.7517295,
+     "exit": 0,
+     "finished": 1792067685.7250807,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_bw-lstm-d768-s16-w8",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792067616.7546294,
+     "exit": 0,
+     "finished": 1792067690.4330993,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_bw-slstm-d768-s16-w8",
+     "status": "FAIL"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792067670.556005,
+     "exit": 0,
+     "finished": 1792067729.1106017,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_grid-lstm-d768-s16-bm16-t128",
+     "status": "FAIL"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792067690.4399867,
+     "exit": 0,
+     "finished": 1792067729.562058,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_cluster-slstm-d256-s16-bm32-t128",
+     "status": "FAIL"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792067670.3285344,
+     "exit": 0,
+     "finished": 1792067730.338181,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_grid-slstm-d768-s16-bm16-t128",
+     "status": "FAIL"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792067685.7272332,
+     "exit": 0,
+     "finished": 1792067734.1696093,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_cluster-lstm-d256-s16-bm32-t128",
+     "status": "FAIL"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792067729.1129708,
+     "exit": 0,
+     "finished": 1792067748.3584852,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_cluster-positive256-lstm",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792067730.3401191,
+     "exit": 0,
+     "finished": 1792067748.884928,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_cluster-positive256-slstm",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792067729.564362,
+     "exit": 0,
+     "finished": 1792067803.6957848,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_grid-slstm-d768-s16-bm64-t256",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792067734.1716626,
+     "exit": 0,
+     "finished": 1792067804.7476187,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_grid-lstm-d768-s16-bm64-t256",
+     "status": "PASS"
+    }
+   ],
+   "finished": 1792067804.7487473
+  }
+ },
+ "scientific_pass": false,
+ "finished": 1792067805.1430018,
+ "tasks_pass": 5,
+ "tasks_planned": 18,
+ "status": "COMPLETED"
+}

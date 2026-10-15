@@ -1,0 +1,27 @@
+{
+ "policy_identity": {
+  "gpu": "NVIDIA H100",
+  "capability": [
+   9,
+   0
+  ],
+  "triton": "3.6.0",
+  "tilelang": "0.1.15"
+ },
+ "policy_table": {
+  "lstm/float16/b8/t64/h1/d256": {
+   "family": "tilelang",
+   "slice_width": 16,
+   "sync": "cluster",
+   "batch_tile": 16,
+   "warps": 4
+  },
+  "slstm/float16/b128/t512/h1/d768": {
+   "family": "mma_rtiled",
+   "slice_width": 32,
+   "sync": "grid",
+   "warps": 4,
+   "pad_k": false
+  }
+ }
+}
