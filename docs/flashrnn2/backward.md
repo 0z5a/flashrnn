@@ -127,3 +127,85 @@ FlashRNN1 extension the module's CUDA 11.8, and both arms share one process.
   is a latency chain; FlashRNN2's step carries the FP32 history write in the forward, the separate preactivation and
   dR GEMMs and a per-step exchange of 4D values (the backward GEMM reduces over all four gates). These are the
   targets for the next round (profile at B = 16 first).
+
+## B = 16 fix (breakdown run training-step breakdown; confirmation run fix confirmation)
+
+**Where the time went** (breakdown, timing only, LSTM/sLSTM x D 192/768 x B 16/64 x T 64/256; the T slope gives the
+per-step cost): the sequential chains were not the problem -- the backward kernel costs about 8.8 us per step against
+about 8.4 us for FlashRNN1's whole backward, and a TileLang forward about 3.4 us per step against FlashRNN1's 4.8. At
+B = 16 the gap came from work proportional to T outside the kernels: the preactivation GEMM (0.25-0.7 ms), the dR GEMM
+(0.15-0.5 ms) and about 0.7 ms of copies and allocation. The pinned FlashRNN1 extension also could not be imported in
+the TileLang environment (its loader saw nvcc 12.8, changed its build key and tried to rebuild against torch's CUDA
+11.8), so a TileLang forward could not be timed against it.
+
+**Changes**
+* fast backward variant (`fast=True`): the step's c/n/m are the next step's c_{t-1}/n_{t-1}/m_{t-1} (no reload), the
+  next step's pointwise inputs are loaded before the barrier, history-gradient components that are zero are not read;
+  bitwise identical to the qualified kernel (`FAST=0` compiles to the qualified PTX);
+* single-head preactivation and dR GEMMs as plain `addmm`/`mm` straight into the [B, T, 4, 1, D] layout (no einsum
+  transposes); optional TF32 for both (`tf32=True`; FP16/BF16 operands of the preactivation GEMM are exact in TF32);
+* FlashRNN1 loads its module-built artifact in the TileLang environment (`FRNN_MODULE_CUDA_HOME`).
+
+**Requalification** (64/64 PASS): fast variant bitwise equal to the base kernel, persistent == launch, 20 repeats, and
+the gradient gate (FP16 worst 3.1e-4, BF16 2.7e-3); fast + TF32 gradient gate with FlashRNN1 calibration (FP16
+3.2e-4, BF16 2.4e-3; at most 0.35x FlashRNN1's error). Race verification of the fast backward: correct kernels clean
+in all runs (D 256/768, LSTM and sLSTM), single-buffer and skipped-barrier controls caught; the arrive-before-store
+control was caught on LSTM but only in 9/21 and 1/21 sLSTM runs (no output ever changed, no silent corruption).
+
+**Pre-registered criterion** (written into the plan before submission): B = 16 counts as fixed if, in at least one
+environment, the selected training step's lower 95% bound against FlashRNN1 is >= 1.0 for every D >= 192 and both
+cells; B = 64 must not regress. **Result: B = 16 is not fixed by that criterion; B = 64 does not regress.**
+
+* B = 16, best environment (TileLang forward + fast backward + TF32): LSTM 0.875-1.058 for D >= 192 (D 256 faster,
+  D 192/768 within 2-3%, D 384/512 9-13% behind); sLSTM 0.882-0.980; D = 128 is now faster in both cells (1.07x /
+  1.06x). Before: LSTM 0.68-0.96, sLSTM 0.65-0.75.
+* B = 64: FlashRNN2 faster everywhere, LSTM 1.24-1.91x, sLSTM 1.19-1.90x (before 0.98-1.37x).
+* The remaining B = 16 gap sits at D = 384/512, where the step is still dominated by the T-proportional GEMMs and the
+  saved FP32 history; fusing the preactivation recompute into the backward kernel would remove the largest part.
+
+Defaults now: `fast=True`, `tf32=True`, eight warps, backward slice 32 (D <= 128), 16 (D <= 512), 32 (D = 768). The
+timing selected four warps in most cases; four-warp configurations are gradient-qualified at the timed shapes but
+were not in the 168-case qualification, so they are not the default.
+
+| env | cell | D | B | before (run training-step timing) | after: FlashRNN1 / FlashRNN2 [95% CI] | FlashRNN2 ms | forward | backward S / warps |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| module | lstm | 64 | 16 | 0.956 | 1.091 [1.069, 1.120] | 1.620 | Triton default | 32 / 8 |
+| module | lstm | 128 | 16 | 0.861 | 0.978 [0.958, 1.003] | 2.173 | Triton default | 32 / 8 |
+| module | lstm | 192 | 16 | 0.759 | 0.821 [0.801, 0.846] | 2.536 | Triton R-tiled S32/4w | 16 / 4 |
+| module | lstm | 256 | 16 | 0.815 | 0.913 [0.892, 0.940] | 2.498 | Triton R-tiled S32/4w | 16 / 4 |
+| module | lstm | 384 | 16 | 0.712 | 0.844 [0.825, 0.869] | 2.997 | Triton R-tiled S32/4w | 16 / 4 |
+| module | lstm | 512 | 16 | 0.711 | 0.801 [0.786, 0.815] | 3.366 | Triton R-tiled S32/4w | 16 / 4 |
+| module | lstm | 768 | 16 | 0.682 | 0.822 [0.803, 0.838] | 4.225 | Triton R-tiled S32/4w | 16 / 4 |
+| module | slstm | 64 | 16 | 0.750 | 0.939 [0.919, 0.964] | 2.010 | Triton default | 64 / 8 |
+| module | slstm | 128 | 16 | 0.716 | 0.905 [0.886, 0.930] | 2.513 | Triton default | 32 / 8 |
+| module | slstm | 192 | 16 | 0.673 | 0.812 [0.811, 0.813] | 2.669 | Triton R-tiled S32/4w | 32 / 8 |
+| module | slstm | 256 | 16 | 0.680 | 0.808 [0.807, 0.810] | 2.809 | Triton R-tiled S32/4w | 16 / 4 |
+| module | slstm | 384 | 16 | 0.652 | 0.779 [0.778, 0.780] | 3.445 | Triton R-tiled S32/4w | 16 / 4 |
+| module | slstm | 512 | 16 | 0.647 | 0.783 [0.782, 0.784] | 3.758 | Triton R-tiled S32/4w | 32 / 4 |
+| module | slstm | 768 | 16 | 0.665 | 0.834 [0.834, 0.835] | 4.537 | Triton R-tiled S32/4w | 32 / 4 |
+| module | lstm | 64 | 64 | 1.190 | 1.385 [1.357, 1.420] | 1.895 | Triton default | 32 / 8 |
+| module | lstm | 128 | 64 | 1.022 | 1.238 [1.215, 1.268] | 2.537 | Triton default | 32 / 8 |
+| module | lstm | 192 | 64 | 1.180 | 1.370 [1.333, 1.400] | 3.156 | Triton R-tiled S32/4w | 16 / 4 |
+| module | lstm | 256 | 64 | 1.243 | 1.540 [1.510, 1.579] | 3.222 | Triton R-tiled S32/4w | 16 / 4 |
+| module | lstm | 384 | 64 | 1.307 | 1.639 [1.637, 1.640] | 4.058 | Triton R-tiled S32/4w | 16 / 4 |
+| module | lstm | 512 | 64 | 1.182 | 1.526 [1.525, 1.527] | 4.734 | Triton R-tiled S32/4w | 16 / 4 |
+| module | lstm | 768 | 64 | 1.371 | 1.912 [1.910, 1.913] | 6.429 | Triton R-tiled S32/4w | 32 / 4 |
+| module | slstm | 64 | 64 | 1.007 | 1.275 [1.249, 1.308] | 2.206 | Triton default | 32 / 8 |
+| module | slstm | 128 | 64 | 0.980 | 1.185 [1.161, 1.214] | 2.891 | Triton default | 32 / 8 |
+| module | slstm | 192 | 64 | 1.144 | 1.423 [1.422, 1.424] | 3.321 | Triton R-tiled S32/4w | 32 / 8 |
+| module | slstm | 256 | 64 | 1.253 | 1.556 [1.554, 1.558] | 3.529 | Triton R-tiled S32/4w | 16 / 4 |
+| module | slstm | 384 | 64 | 1.150 | 1.488 [1.487, 1.490] | 4.458 | Triton R-tiled S32/4w | 32 / 4 |
+| module | slstm | 512 | 64 | 1.097 | 1.501 [1.498, 1.503] | 5.078 | Triton R-tiled S32/4w | 32 / 4 |
+| module | slstm | 768 | 64 | 1.310 | 1.897 [1.895, 1.898] | 6.740 | Triton R-tiled S32/4w | 32 / 4 |
+| TileLang | lstm | 128 | 16 | 0.861 | 1.072 [1.071, 1.074] | 1.930 | TileLang cluster S32 | 32 / 8 |
+| TileLang | lstm | 192 | 16 | 0.759 | 0.981 [0.980, 0.982] | 2.094 | TileLang cluster S16 | 16 / 4 |
+| TileLang | lstm | 256 | 16 | 0.815 | 1.058 [1.055, 1.062] | 2.094 | TileLang cluster S16 | 16 / 4 |
+| TileLang | lstm | 384 | 16 | 0.712 | 0.900 [0.899, 0.901] | 2.833 | TileLang cluster S32 | 16 / 4 |
+| TileLang | lstm | 512 | 16 | 0.711 | 0.875 [0.874, 0.876] | 3.149 | TileLang cluster S32 | 16 / 4 |
+| TileLang | lstm | 768 | 16 | 0.682 | 0.968 [0.967, 0.969] | 3.760 | TileLang grid S16 | 32 / 4 |
+| TileLang | slstm | 128 | 16 | 0.716 | 1.056 [1.055, 1.058] | 2.015 | TileLang cluster S32 | 32 / 4 |
+| TileLang | slstm | 192 | 16 | 0.673 | 0.969 [0.967, 0.970] | 2.186 | TileLang cluster S16 | 32 / 8 |
+| TileLang | slstm | 256 | 16 | 0.680 | 0.980 [0.979, 0.981] | 2.249 | TileLang cluster S16 | 32 / 4 |
+| TileLang | slstm | 384 | 16 | 0.652 | 0.882 [0.881, 0.883] | 2.933 | TileLang cluster S32 | 16 / 4 |
+| TileLang | slstm | 512 | 16 | 0.647 | 0.892 [0.891, 0.892] | 3.231 | TileLang cluster S32 | 32 / 4 |
+| TileLang | slstm | 768 | 16 | 0.665 | 0.975 [0.974, 0.976] | 3.806 | TileLang grid S16 | 32 / 4 |

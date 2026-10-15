@@ -87,3 +87,13 @@ that variant); the cluster no-barrier variant reported only. 66 tasks, 65 PASS u
 Conclusion: the content checks see every reordering of the exchange that changed a result, in every path, including
 TMA/DSMEM copies and global exchanges that compute-sanitizer's racecheck does not model; the shipped kernels show no
 exchange violation under 0-65 us perturbations.
+
+## Fast backward (run fix confirmation)
+
+The bitwise-identical fast backward variant, same rule as round 2 (0-65 us delays, one process per variant), D 256 S32
+and D 768 S16, eight warps, LSTM and sLSTM:
+
+* correct: 0/21 flagged, outputs bitwise equal to the uninstrumented kernel, all four configurations;
+* single buffer and skipped barrier: caught under the rule in all four;
+* arrive before store: LSTM caught; sLSTM 9/21 (D 256) and 1/21 (D 768) -- under the 80% rule a weak control -- with no
+  changed output in any run (the late store landed before the readers' load) and no silent corruption.

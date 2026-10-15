@@ -1,0 +1,564 @@
+{
+ "started": 1792084061.4222002,
+ "plan": {
+  "purpose": "Time breakdown of the training step at B = 16 and B = 64 (forward full/hidden per backend, preactivation GEMM, backward kernel, dR GEMM, end-to-end, FlashRNN1 forward and step; T = 64 and 256 give the per-step slope) and timing of the bitwise-identical fast backward, TF32 GEMMs and TileLang forwards; whether the prebuilt FlashRNN1 extension imports in the TileLang environment",
+  "minutes": 100,
+  "cases": [
+   {
+    "name": "prof-lstm-d192-b16-t64",
+    "lane": 0,
+    "case": {
+     "cell": "lstm",
+     "dtype": "float16",
+     "width": 192,
+     "batch": 16,
+     "steps": 64
+    }
+   },
+   {
+    "name": "prof-lstm-d192-b16-t256",
+    "lane": 1,
+    "case": {
+     "cell": "lstm",
+     "dtype": "float16",
+     "width": 192,
+     "batch": 16,
+     "steps": 256
+    }
+   },
+   {
+    "name": "prof-lstm-d192-b64-t64",
+    "lane": 2,
+    "case": {
+     "cell": "lstm",
+     "dtype": "float16",
+     "width": 192,
+     "batch": 64,
+     "steps": 64
+    }
+   },
+   {
+    "name": "prof-lstm-d192-b64-t256",
+    "lane": 3,
+    "case": {
+     "cell": "lstm",
+     "dtype": "float16",
+     "width": 192,
+     "batch": 64,
+     "steps": 256
+    }
+   },
+   {
+    "name": "prof-lstm-d768-b16-t64",
+    "lane": 0,
+    "case": {
+     "cell": "lstm",
+     "dtype": "float16",
+     "width": 768,
+     "batch": 16,
+     "steps": 64
+    }
+   },
+   {
+    "name": "prof-lstm-d768-b16-t256",
+    "lane": 1,
+    "case": {
+     "cell": "lstm",
+     "dtype": "float16",
+     "width": 768,
+     "batch": 16,
+     "steps": 256
+    }
+   },
+   {
+    "name": "prof-lstm-d768-b64-t64",
+    "lane": 2,
+    "case": {
+     "cell": "lstm",
+     "dtype": "float16",
+     "width": 768,
+     "batch": 64,
+     "steps": 64
+    }
+   },
+   {
+    "name": "prof-lstm-d768-b64-t256",
+    "lane": 3,
+    "case": {
+     "cell": "lstm",
+     "dtype": "float16",
+     "width": 768,
+     "batch": 64,
+     "steps": 256
+    }
+   },
+   {
+    "name": "prof-slstm-d192-b16-t64",
+    "lane": 0,
+    "case": {
+     "cell": "slstm",
+     "dtype": "float16",
+     "width": 192,
+     "batch": 16,
+     "steps": 64
+    }
+   },
+   {
+    "name": "prof-slstm-d192-b16-t256",
+    "lane": 1,
+    "case": {
+     "cell": "slstm",
+     "dtype": "float16",
+     "width": 192,
+     "batch": 16,
+     "steps": 256
+    }
+   },
+   {
+    "name": "prof-slstm-d192-b64-t64",
+    "lane": 2,
+    "case": {
+     "cell": "slstm",
+     "dtype": "float16",
+     "width": 192,
+     "batch": 64,
+     "steps": 64
+    }
+   },
+   {
+    "name": "prof-slstm-d192-b64-t256",
+    "lane": 3,
+    "case": {
+     "cell": "slstm",
+     "dtype": "float16",
+     "width": 192,
+     "batch": 64,
+     "steps": 256
+    }
+   },
+   {
+    "name": "prof-slstm-d768-b16-t64",
+    "lane": 0,
+    "case": {
+     "cell": "slstm",
+     "dtype": "float16",
+     "width": 768,
+     "batch": 16,
+     "steps": 64
+    }
+   },
+   {
+    "name": "prof-slstm-d768-b16-t256",
+    "lane": 1,
+    "case": {
+     "cell": "slstm",
+     "dtype": "float16",
+     "width": 768,
+     "batch": 16,
+     "steps": 256
+    }
+   },
+   {
+    "name": "prof-slstm-d768-b64-t64",
+    "lane": 2,
+    "case": {
+     "cell": "slstm",
+     "dtype": "float16",
+     "width": 768,
+     "batch": 64,
+     "steps": 64
+    }
+   },
+   {
+    "name": "prof-slstm-d768-b64-t256",
+    "lane": 3,
+    "case": {
+     "cell": "slstm",
+     "dtype": "float16",
+     "width": 768,
+     "batch": 64,
+     "steps": 256
+    }
+   }
+  ],
+  "v1_build_root": "<node-local scratch>",
+  "expected_minutes": {
+   "total": 30,
+   "basis": "16 cases x 2 environments, about 2-4 min each on four lanes"
+  },
+  "node_reason": "One H100 node (4 H100): independent single-GPU lanes",
+  "not_claimed": [
+   "paired timing (this batch only localizes time)",
+   "qualification of new variants"
+  ]
+ },
+ "phases": {
+  "module": {
+   "records": [
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792084061.8374422,
+     "exit": 0,
+     "finished": 1792084216.0551364,
+     "joined": true,
+     "done": true,
+     "name": "prof-lstm-d192-b16-t256",
+     "phase": "module"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792084061.8365757,
+     "exit": 0,
+     "finished": 1792084216.1046615,
+     "joined": true,
+     "done": true,
+     "name": "prof-lstm-d192-b16-t64",
+     "phase": "module"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792084061.837685,
+     "exit": 0,
+     "finished": 1792084218.0586286,
+     "joined": true,
+     "done": true,
+     "name": "prof-lstm-d192-b64-t256",
+     "phase": "module"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792084061.837058,
+     "exit": 0,
+     "finished": 1792084221.5634449,
+     "joined": true,
+     "done": true,
+     "name": "prof-lstm-d192-b64-t64",
+     "phase": "module"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792084216.1057405,
+     "exit": 0,
+     "finished": 1792084332.2561595,
+     "joined": true,
+     "done": true,
+     "name": "prof-lstm-d768-b16-t64",
+     "phase": "module"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792084216.0576456,
+     "exit": 0,
+     "finished": 1792084335.8151534,
+     "joined": true,
+     "done": true,
+     "name": "prof-lstm-d768-b16-t256",
+     "phase": "module"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792084221.56523,
+     "exit": 0,
+     "finished": 1792084337.0677257,
+     "joined": true,
+     "done": true,
+     "name": "prof-lstm-d768-b64-t64",
+     "phase": "module"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792084218.060371,
+     "exit": 0,
+     "finished": 1792084340.076183,
+     "joined": true,
+     "done": true,
+     "name": "prof-lstm-d768-b64-t256",
+     "phase": "module"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792084332.2581205,
+     "exit": 0,
+     "finished": 1792084422.3715482,
+     "joined": true,
+     "done": true,
+     "name": "prof-slstm-d192-b16-t64",
+     "phase": "module"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792084335.8169167,
+     "exit": 0,
+     "finished": 1792084422.421666,
+     "joined": true,
+     "done": true,
+     "name": "prof-slstm-d192-b16-t256",
+     "phase": "module"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792084337.069876,
+     "exit": 0,
+     "finished": 1792084431.6395302,
+     "joined": true,
+     "done": true,
+     "name": "prof-slstm-d192-b64-t64",
+     "phase": "module"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792084340.0775907,
+     "exit": 0,
+     "finished": 1792084440.8031435,
+     "joined": true,
+     "done": true,
+     "name": "prof-slstm-d192-b64-t256",
+     "phase": "module"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792084422.423463,
+     "exit": 0,
+     "finished": 1792084510.7357352,
+     "joined": true,
+     "done": true,
+     "name": "prof-slstm-d768-b16-t256",
+     "phase": "module"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792084422.3735774,
+     "exit": 0,
+     "finished": 1792084544.891784,
+     "joined": true,
+     "done": true,
+     "name": "prof-slstm-d768-b16-t64",
+     "phase": "module"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792084431.6410172,
+     "exit": 0,
+     "finished": 1792084545.3927758,
+     "joined": true,
+     "done": true,
+     "name": "prof-slstm-d768-b64-t64",
+     "phase": "module"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792084440.8047245,
+     "exit": 0,
+     "finished": 1792084546.2438724,
+     "joined": true,
+     "done": true,
+     "name": "prof-slstm-d768-b64-t256",
+     "phase": "module"
+    }
+   ],
+   "finished": 1792084546.2449574
+  },
+  "tilelang": {
+   "records": [
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792084546.2474847,
+     "exit": 0,
+     "finished": 1792084574.709748,
+     "joined": true,
+     "done": true,
+     "name": "prof-lstm-d192-b16-t64",
+     "phase": "tilelang"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792084546.2481117,
+     "exit": 0,
+     "finished": 1792084578.1152973,
+     "joined": true,
+     "done": true,
+     "name": "prof-lstm-d192-b64-t64",
+     "phase": "tilelang"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792084546.248258,
+     "exit": 0,
+     "finished": 1792084580.7193851,
+     "joined": true,
+     "done": true,
+     "name": "prof-lstm-d192-b64-t256",
+     "phase": "tilelang"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792084546.2477047,
+     "exit": 0,
+     "finished": 1792084581.3205047,
+     "joined": true,
+     "done": true,
+     "name": "prof-lstm-d192-b16-t256",
+     "phase": "tilelang"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792084574.7120185,
+     "exit": 0,
+     "finished": 1792084592.9066722,
+     "joined": true,
+     "done": true,
+     "name": "prof-lstm-d768-b16-t64",
+     "phase": "tilelang"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792084578.1179395,
+     "exit": 0,
+     "finished": 1792084598.8162,
+     "joined": true,
+     "done": true,
+     "name": "prof-lstm-d768-b64-t64",
+     "phase": "tilelang"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792084581.322343,
+     "exit": 0,
+     "finished": 1792084601.2202415,
+     "joined": true,
+     "done": true,
+     "name": "prof-lstm-d768-b16-t256",
+     "phase": "tilelang"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792084580.7218137,
+     "exit": 0,
+     "finished": 1792084603.8244743,
+     "joined": true,
+     "done": true,
+     "name": "prof-lstm-d768-b64-t256",
+     "phase": "tilelang"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792084598.81888,
+     "exit": 0,
+     "finished": 1792084610.5035756,
+     "joined": true,
+     "done": true,
+     "name": "prof-slstm-d192-b64-t64",
+     "phase": "tilelang"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792084592.9089403,
+     "exit": 0,
+     "finished": 1792084611.604785,
+     "joined": true,
+     "done": true,
+     "name": "prof-slstm-d192-b16-t64",
+     "phase": "tilelang"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792084601.2230046,
+     "exit": 0,
+     "finished": 1792084614.8608377,
+     "joined": true,
+     "done": true,
+     "name": "prof-slstm-d192-b16-t256",
+     "phase": "tilelang"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792084603.8266556,
+     "exit": 0,
+     "finished": 1792084622.9734514,
+     "joined": true,
+     "done": true,
+     "name": "prof-slstm-d192-b64-t256",
+     "phase": "tilelang"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792084611.6063535,
+     "exit": 0,
+     "finished": 1792084626.896211,
+     "joined": true,
+     "done": true,
+     "name": "prof-slstm-d768-b16-t64",
+     "phase": "tilelang"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792084610.5051868,
+     "exit": 0,
+     "finished": 1792084633.9585142,
+     "joined": true,
+     "done": true,
+     "name": "prof-slstm-d768-b64-t64",
+     "phase": "tilelang"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792084614.8643568,
+     "exit": 0,
+     "finished": 1792084636.3124983,
+     "joined": true,
+     "done": true,
+     "name": "prof-slstm-d768-b16-t256",
+     "phase": "tilelang"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792084622.9755604,
+     "exit": 0,
+     "finished": 1792084640.067791,
+     "joined": true,
+     "done": true,
+     "name": "prof-slstm-d768-b64-t256",
+     "phase": "tilelang"
+    }
+   ],
+   "finished": 1792084640.0691261
+  }
+ },
+ "scientific_pass": false,
+ "finished": 1792084640.4488857,
+ "profiles": 32,
+ "planned": 32,
+ "status": "COMPLETED"
+}

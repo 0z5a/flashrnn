@@ -1,0 +1,152 @@
+{
+ "case": {
+  "cell": "lstm",
+  "dtype": "float16",
+  "width": 768,
+  "batch": 16,
+  "steps": 64,
+  "init": "warm"
+ },
+ "tilelang_env": true,
+ "started": 1792084577.2804008,
+ "fwd": {
+  "triton_default": {
+   "full": 0.45657598972320557,
+   "hidden": 0.4310399889945984
+  },
+  "triton_s32w4": {
+   "full": 0.3404799997806549,
+   "hidden": 0.3381440043449402
+  },
+  "tilelang": {
+   "full": 0.2706559896469116,
+   "hidden": 0.2560960054397583
+  }
+ },
+ "bw_phases": {
+  "s16w4_base": {
+   "ms": {
+    "preactivation": 0.25891199707984924,
+    "kernel": 0.6150720119476318,
+    "weight_gradients": 0.15167999267578125
+   },
+   "total": 1.0178240537643433,
+   "vs_base": 0.0
+  },
+  "s16w4_fast": {
+   "ms": {
+    "preactivation": 0.2604160010814667,
+    "kernel": 0.545087993144989,
+    "weight_gradients": 0.15216000378131866
+   },
+   "total": 0.9485759735107422,
+   "vs_base": true
+  },
+  "s16w4_fast_tf32": {
+   "ms": {
+    "preactivation": 0.15440000593662262,
+    "kernel": 0.5678719878196716,
+    "weight_gradients": 0.07209599763154984
+   },
+   "total": 0.7733439803123474,
+   "vs_base": 0.00015400860866066068
+  },
+  "s16w8_base": {
+   "ms": {
+    "preactivation": 0.255264014005661,
+    "kernel": 0.8256000280380249,
+    "weight_gradients": 0.15212799608707428
+   },
+   "total": 1.2294399738311768,
+   "vs_base": 0.0
+  },
+  "s16w8_fast": {
+   "ms": {
+    "preactivation": 0.25763198733329773,
+    "kernel": 0.7603200078010559,
+    "weight_gradients": 0.1520320028066635
+   },
+   "total": 1.1533119678497314,
+   "vs_base": true
+  },
+  "s16w8_fast_tf32": {
+   "ms": {
+    "preactivation": 0.1459839940071106,
+    "kernel": 0.7720639705657959,
+    "weight_gradients": 0.0716480016708374
+   },
+   "total": 0.9786880016326904,
+   "vs_base": 0.00015400860866066068
+  },
+  "s32w4_base": {
+   "ms": {
+    "preactivation": 0.2503040134906769,
+    "kernel": 0.5799040198326111,
+    "weight_gradients": 0.15132799744606018
+   },
+   "total": 0.9783999919891357,
+   "vs_base": 0.0
+  },
+  "s32w4_fast": {
+   "ms": {
+    "preactivation": 0.25699201226234436,
+    "kernel": 0.5376319885253906,
+    "weight_gradients": 0.15107199549674988
+   },
+   "total": 0.9396479725837708,
+   "vs_base": true
+  },
+  "s32w4_fast_tf32": {
+   "ms": {
+    "preactivation": 0.14697599411010742,
+    "kernel": 0.5549119710922241,
+    "weight_gradients": 0.07184000313282013
+   },
+   "total": 0.7608320116996765,
+   "vs_base": 0.00015400860866066068
+  },
+  "s32w8_base": {
+   "ms": {
+    "preactivation": 0.2550399899482727,
+    "kernel": 0.7071679830551147,
+    "weight_gradients": 0.15142400562763214
+   },
+   "total": 1.1064640283584595,
+   "vs_base": 0.0
+  },
+  "s32w8_fast": {
+   "ms": {
+    "preactivation": 0.258976012468338,
+    "kernel": 0.6390079855918884,
+    "weight_gradients": 0.150751993060112
+   },
+   "total": 1.0550719499588013,
+   "vs_base": true
+  },
+  "s32w8_fast_tf32": {
+   "ms": {
+    "preactivation": 0.14857600629329681,
+    "kernel": 0.6715520024299622,
+    "weight_gradients": 0.0732479989528656
+   },
+   "total": 0.871616005897522,
+   "vs_base": 0.00015400860866066068
+  }
+ },
+ "step": {
+  "triton_default+s16w4_fast": 1.592352032661438,
+  "triton_default+s32w4_fast": 1.5630079507827759,
+  "triton_default+s32w8_base": 1.7341439723968506,
+  "triton_s32w4+s16w4_fast": 1.4889600276947021,
+  "triton_s32w4+s32w4_fast": 1.4848639965057373,
+  "triton_s32w4+s32w8_base": 1.653439998626709,
+  "tilelang+s16w4_fast": 1.308351993560791,
+  "tilelang+s32w4_fast": 1.3011200428009033,
+  "tilelang+s32w8_base": 1.4714560508728027
+ },
+ "errors": {
+  "v1": "1/paper-baselines-20261013-v1/pinned/flashrnn/flashrnn/cuda_init.py\", line 168, in load\n    mod = _load(name + suffix, sources, **myargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<cluster storage>\", line 201, in load\n    return super().load(*positional, **keywords)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<cluster storage>\", line 110, in load\n    command.run()\n  File \"<cluster storage>\", line 84, in run\n    _build_ext.run(self)\n  File \"<cluster storage>\", line 346, in run\n    self.build_extensions()\n  File \"<cluster storage>\", line 522, in build_extensions\n    _check_cuda_version(compiler_name, compiler_version)\n  File \"<cluster storage>\", line 417, in _check_cuda_version\n    raise RuntimeError(CUDA_MISMATCH_MESSAGE.format(cuda_str_version, torch.version.cuda))\nRuntimeError: \nThe detected CUDA version (12.8) mismatches the version that was used to compile\nPyTorch (11.8). Please make sure to use the same CUDA versions.\n\n"
+ },
+ "v1_status": "UNAVAILABLE",
+ "finished": 1792084592.3711576
+}

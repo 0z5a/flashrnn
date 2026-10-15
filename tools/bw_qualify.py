@@ -12,6 +12,7 @@ Stages
             unavailable baseline is recorded, not a failure
   modes     persistent (sync=grid) == one launch per step (sync=launch), bitwise, all gradients; barrier counts
             and error flag
+  vs_base   (cases with "fast") the fast kernel variant's gradients bitwise equal to the base kernel's
   repeat    20 complete training steps (forward + backward) bitwise identical
 Writes bw.json (status PASS only if every gated stage passes) and DONE.json.
 """
@@ -69,7 +70,8 @@ def inputs(case, seed):
 def run_ours(leaves, cot_h, cot_f, case, loss, sync="grid", diagnostics=None):
     cell = case["cell"]
     forward = KernelConfig(**case["forward"]) if case.get("forward") else default_config(case["width"])
-    opts = dict(slice_width=case["slice_width"], num_warps=case["warps"], sync=sync)
+    opts = dict(slice_width=case["slice_width"], num_warps=case["warps"], sync=sync, fast=case.get("fast", False),
+                tf32=case.get("tf32", False))
     if diagnostics is not None:
         opts["diagnostics"] = diagnostics
     xs = [x.detach().clone().requires_grad_(True) for x in leaves]
@@ -142,7 +144,7 @@ def stage_grads(case, rec):
     leaves, cot_h, cot_f = inputs(case, 1000 + case["width"] + case["batch"])
     out = {}
     v1m = None
-    if os.environ.get("FRNN_V1_BASE") and case["init"] in ("zero", "warm"):
+    if os.environ.get("FRNN_V1_BASE") and case["init"] in ("zero", "warm") and not case.get("no_v1"):
         try:
             v1 = run_v1(leaves, cot_h, case)
             v1m = metrics(v1, run_oracle(leaves, cot_h, cot_f, case, "hist"), case["cell"])
@@ -172,6 +174,19 @@ def stage_modes(case, rec):
     return all(m["bitwise"]) and m["sync_counts"] == m["expected"] and m["error_flag"] == 0
 
 
+def stage_vs_base(case, rec):
+    """The fast kernel variant must reproduce the qualified base kernel bit for bit (both losses)."""
+    leaves, cot_h, cot_f = inputs(case, 13 + case["width"])
+    base_case = dict(case, fast=False, tf32=False)
+    out = {}
+    for loss in ("hist", "full"):
+        a = run_ours(leaves, cot_h, cot_f, case, loss)
+        b = run_ours(leaves, cot_h, cot_f, base_case, loss)
+        out[loss] = [same(x, y) for x, y in zip(a, b)]
+    rec["vs_base"] = out
+    return all(all(v) for v in out.values())
+
+
 def stage_repeat(case, rec):
     leaves, cot_h, cot_f = inputs(case, 11 + case["width"])
     first = run_ours(leaves, cot_h, cot_f, case, "full")
@@ -192,7 +207,8 @@ def main():
     torch.backends.cuda.matmul.allow_tf32 = False
     case = json.loads(a.case)
     rec = dict(case=case, started=time.time(), gates={}, budget=dict(rel_fro=BUDGET[case["dtype"]], v1_factor=V1_FACTOR))
-    for stage, fn in (("grads", stage_grads), ("modes", stage_modes), ("repeat", stage_repeat)):
+    for stage, fn in (("grads", stage_grads), ("vs_base", stage_vs_base), ("modes", stage_modes),
+                      ("repeat", stage_repeat)):
         if stage not in a.stages.split(","):
             continue
         try:

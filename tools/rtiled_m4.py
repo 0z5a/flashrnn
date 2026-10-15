@@ -184,6 +184,14 @@ def v1_module():
     from frnn1_pinned.flashrnn import cuda_init
     from frnn1_pinned.flashrnn.flashrnn import FlashRNNConfig, flashrnn
 
+    # In the TileLang environment (CUDA 12.8 on PATH) the pinned loader would see nvcc 12.8, add a 12.8-only flag,
+    # miss the artifact built in the module environment and try to rebuild against torch's CUDA 11.8. Point it at the
+    # module's toolkit so the build key, and thus the prebuilt artifact, are the same in both environments.
+    module_cuda = os.environ.get("FRNN_MODULE_CUDA_HOME")
+    if module_cuda and cuda_init.CUDA_HOME != module_cuda:
+        cuda_init.CUDA_HOME = module_cuda
+        cuda_init.get_cuda_version.cache_clear()
+
     class H100Builder(TaskBuilder):
         def load(self, *positional, **keywords):
             # Same transport as the external-baseline cohort: native sm_90 SASS instead of compute_80 PTX.

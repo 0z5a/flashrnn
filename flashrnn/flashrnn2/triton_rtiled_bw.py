@@ -80,6 +80,37 @@ def _verify_dg(XBUF, src_row, DG, dg_row, row_valid, COUNTER, gate_stride, K1: t
     tl.atomic_add(COUNTER, bad)
 
 
+@triton.jit
+def _step_inputs(PRE, STATES, INITIAL, DSTATES, here, pre, unit, valid, t, hd, state_stride, history_stride,
+                 SLSTM: tl.constexpr, DS_C: tl.constexpr, DS_N: tl.constexpr):
+    """Pointwise inputs of step t except the step's own c/n/m (FAST path; see _rtiled_bw)."""
+    gi = tl.load(PRE + pre, valid, 0)
+    gf = tl.load(PRE + pre + hd, valid, 0)
+    gz = tl.load(PRE + pre + 2 * hd, valid, 0)
+    go = tl.load(PRE + pre + 3 * hd, valid, 0)
+    dsh = tl.load(DSTATES + here, valid, 0)
+    dsc = gi * 0.0
+    if DS_C:
+        dsc = tl.load(DSTATES + history_stride + here, valid, 0)
+    dsn = gi * 0.0
+    n_prev = gi * 0.0 + 1.0
+    m_prev = gi * 0.0
+    if t > 0:
+        c_prev = tl.load(STATES + history_stride + here - hd, valid, 0)
+    else:
+        c_prev = tl.load(INITIAL + state_stride + unit, valid, 0).to(tl.float32)
+    if SLSTM:
+        if DS_N:
+            dsn = tl.load(DSTATES + 2 * history_stride + here, valid, 0)
+        if t > 0:
+            n_prev = tl.load(STATES + 2 * history_stride + here - hd, valid, 1.0)
+            m_prev = tl.load(STATES + 3 * history_stride + here - hd, valid, 0)
+        else:
+            n_prev = tl.load(INITIAL + 2 * state_stride + unit, valid, 1.0).to(tl.float32)
+            m_prev = tl.load(INITIAL + 3 * state_stride + unit, valid, 0).to(tl.float32)
+    return gi, gf, gz, go, dsh, dsc, dsn, c_prev, n_prev, m_prev
+
+
 @triton.jit(do_not_specialize=["B", "T", "T_START", "NSTEPS", "FROM_FINAL", "TAIL", "GROUPS", "SLOTS",
                                "PERSISTENT"])
 def _rtiled_bw(
@@ -113,7 +144,13 @@ def _rtiled_bw(
     K2: tl.constexpr,
     SPIN: tl.constexpr,
     VERIFY: tl.constexpr = 0,
+    FAST: tl.constexpr = 0,
+    DS_C: tl.constexpr = 1,
+    DS_N: tl.constexpr = 1,
 ):
+    # FAST (same values, same arithmetic): step t's c/n/m are step t+1's c_{t-1}/n_{t-1}/m_{t-1} (no reload), the
+    # next step's pointwise inputs are loaded before this step's barrier, and the c/n history-gradient loads are
+    # skipped when DS_C / DS_N say they are zero (an exact +0.0 is added instead).
     split = tl.program_id(0)
     slot = tl.program_id(1)
     splits = tl.num_programs(0)
@@ -162,6 +199,18 @@ def _rtiled_bw(
             dn = tl.zeros((BM, S), tl.float32)
             if SLSTM:
                 dn = tl.load(CARRY + state_stride + unit, valid, 0)
+        if FAST:
+            here0 = ((rows[:, None] * T + T_START) * H + head) * D + p[None, :]
+            pre0 = ((rows[:, None] * T + T_START) * 4 * H + head) * D + p[None, :]
+            q_gi, q_gf, q_gz, q_go, q_dh, q_dc, q_dn, q_cp, q_np, q_mp = _step_inputs(
+                PRE, STATES, INITIAL, DSTATES, here0, pre0, unit, valid, T_START, hd, state_stride, history_stride,
+                SLSTM, DS_C, DS_N)
+            q_ct = tl.load(STATES + history_stride + here0, valid, 0)
+            q_nt = q_ct * 0.0 + 1.0
+            q_mt = q_ct * 0.0
+            if SLSTM:
+                q_nt = tl.load(STATES + 2 * history_stride + here0, valid, 1.0)
+                q_mt = tl.load(STATES + 3 * history_stride + here0, valid, 0)
         for index in range(NSTEPS):
             t = T_START - index
             if (index > 0) | (FROM_FINAL == 0):
@@ -185,30 +234,40 @@ def _rtiled_bw(
                     dh_in = _dh_from_dg(DG, src_row, row_valid, w_i1, w_f1, w_z1, w_o1, w_i2, w_f2, w_z2, w_o2,
                                         hd, K1, K2, D, True, BM, S)
             here = ((rows[:, None] * T + t) * H + head) * D + p[None, :]
-            dh = dh_in + tl.load(DSTATES + here, valid, 0)
-            dc = dc + tl.load(DSTATES + history_stride + here, valid, 0)
-            pre = ((rows[:, None] * T + t) * 4 * H + head) * D + p[None, :]
-            gi = tl.load(PRE + pre, valid, 0)
-            gf = tl.load(PRE + pre + hd, valid, 0)
-            gz = tl.load(PRE + pre + 2 * hd, valid, 0)
-            go = tl.load(PRE + pre + 3 * hd, valid, 0)
-            c_t = tl.load(STATES + history_stride + here, valid, 0)
-            if t > 0:
-                c_prev = tl.load(STATES + history_stride + here - hd, valid, 0)
+            if FAST:
+                pre = ((rows[:, None] * T + t) * 4 * H + head) * D + p[None, :]
+                gi, gf, gz, go, c_t, c_prev = q_gi, q_gf, q_gz, q_go, q_ct, q_cp
+                dh = dh_in + q_dh
+                dc = dc + q_dc
             else:
-                c_prev = tl.load(INITIAL + state_stride + unit, valid, 0).to(tl.float32)
+                dh = dh_in + tl.load(DSTATES + here, valid, 0)
+                dc = dc + tl.load(DSTATES + history_stride + here, valid, 0)
+                pre = ((rows[:, None] * T + t) * 4 * H + head) * D + p[None, :]
+                gi = tl.load(PRE + pre, valid, 0)
+                gf = tl.load(PRE + pre + hd, valid, 0)
+                gz = tl.load(PRE + pre + 2 * hd, valid, 0)
+                go = tl.load(PRE + pre + 3 * hd, valid, 0)
+                c_t = tl.load(STATES + history_stride + here, valid, 0)
+                if t > 0:
+                    c_prev = tl.load(STATES + history_stride + here - hd, valid, 0)
+                else:
+                    c_prev = tl.load(INITIAL + state_stride + unit, valid, 0).to(tl.float32)
             z = 2.0 * tl.sigmoid(2.0 * gz) - 1.0
             o = tl.sigmoid(go)
             if SLSTM:
-                dn = dn + tl.load(DSTATES + 2 * history_stride + here, valid, 0)
-                n_t = tl.load(STATES + 2 * history_stride + here, valid, 1.0)
-                m_t = tl.load(STATES + 3 * history_stride + here, valid, 0)
-                if t > 0:
-                    n_prev = tl.load(STATES + 2 * history_stride + here - hd, valid, 0)
-                    m_prev = tl.load(STATES + 3 * history_stride + here - hd, valid, 0)
+                if FAST:
+                    dn = dn + q_dn
+                    n_t, m_t, n_prev, m_prev = q_nt, q_mt, q_np, q_mp
                 else:
-                    n_prev = tl.load(INITIAL + 2 * state_stride + unit, valid, 0).to(tl.float32)
-                    m_prev = tl.load(INITIAL + 3 * state_stride + unit, valid, 0).to(tl.float32)
+                    dn = dn + tl.load(DSTATES + 2 * history_stride + here, valid, 0)
+                    n_t = tl.load(STATES + 2 * history_stride + here, valid, 1.0)
+                    m_t = tl.load(STATES + 3 * history_stride + here, valid, 0)
+                    if t > 0:
+                        n_prev = tl.load(STATES + 2 * history_stride + here - hd, valid, 0)
+                        m_prev = tl.load(STATES + 3 * history_stride + here - hd, valid, 0)
+                    else:
+                        n_prev = tl.load(INITIAL + 2 * state_stride + unit, valid, 0).to(tl.float32)
+                        m_prev = tl.load(INITIAL + 3 * state_stride + unit, valid, 0).to(tl.float32)
                 logf = tl.minimum(gf, 0.0) - tl.log(1.0 + tl.exp(-tl.abs(gf))) + m_prev
                 fgate = tl.exp(logf - m_t)
                 igate = tl.exp(gi - m_t)
@@ -234,6 +293,13 @@ def _rtiled_bw(
             tl.store(DG + pre + hd, d_f, valid)
             tl.store(DG + pre + 2 * hd, d_z, valid)
             tl.store(DG + pre + 3 * hd, d_o, valid)
+            if FAST:
+                if index + 1 < NSTEPS:
+                    # Next step's inputs, issued before this step's exchange so their latency hides behind it.
+                    q_ct, q_nt, q_mt = c_prev, q_np, q_mp
+                    q_gi, q_gf, q_gz, q_go, q_dh, q_dc, q_dn, q_cp, q_np, q_mp = _step_inputs(
+                        PRE, STATES, INITIAL, DSTATES, here - hd, pre - 4 * hd, unit, valid, t - 1, hd, state_stride,
+                        history_stride, SLSTM, DS_C, DS_N)
             if PERSISTENT != 0:
                 parity = bars % 2
                 if VERIFY & V_BROKEN_SINGLE:
@@ -285,32 +351,50 @@ def _rtiled_bw(
                 tl.store(CARRY + state_stride + unit, dn, valid)
 
 
-def preactivations(wx, recurrent, bias, initial, history):
+def preactivations(wx, recurrent, bias, initial, history, tf32=False):
     """FP32 gate preactivations Wx_t + R round(h_{t-1}) + b from the forward's FP32 state history.
 
     The hidden operand is rounded to the input dtype as in the forward MMA; products of two input-dtype values are
-    exact in FP32, so only the summation order differs from the forward kernel.
+    exact in FP32 (and in TF32), so only the summation order differs from the forward kernel. One head is a single
+    [B*T, D] x [D, 4D] GEMM written straight into the [B, T, 4, 1, D] layout.
     """
     dtype = wx.dtype
-    h_prev = torch.cat((initial[0].to(torch.float32), history[0][:, :-1]), dim=1).to(dtype)  # [B, T, H, D]
+    batch, steps, gates, heads, width = wx.shape
+    h_prev = torch.empty((batch, steps, heads, width), device=wx.device, dtype=dtype)
+    h_prev[:, :1] = initial[0]  # rounded to the input dtype on assignment, as in the forward MMA operand
+    h_prev[:, 1:] = history[0][:, :-1]
     previous = torch.backends.cuda.matmul.allow_tf32
-    torch.backends.cuda.matmul.allow_tf32 = False
+    torch.backends.cuda.matmul.allow_tf32 = tf32
     try:
-        ry = torch.einsum("btnp,gnop->btgno", h_prev.float(), recurrent.float())
+        if heads == 1:
+            pre = torch.addmm(bias.float().reshape(1, gates * width), h_prev.reshape(batch * steps, width).float(),
+                              recurrent.reshape(gates * width, width).float().t())
+            pre = pre.view(batch, steps, gates, 1, width)
+            pre += wx
+        else:
+            ry = torch.einsum("btnp,gnop->btgno", h_prev.float(), recurrent.float())
+            pre = (wx.float() + ry + bias.float()).contiguous()
     finally:
         torch.backends.cuda.matmul.allow_tf32 = previous
-    return (wx.float() + ry + bias.float()).contiguous(), h_prev
+    return pre, h_prev
 
 
-def weight_gradients(dg, h_prev):
-    """dR[g,n,o,p] = sum_{b,t} dG[b,t,g,n,o] round(h_{t-1})[b,t,n,p] and dbias, FP32, no TF32, no atomics."""
+def weight_gradients(dg, h_prev, tf32=False):
+    """dR[g,n,o,p] = sum_{b,t} dG[b,t,g,n,o] round(h_{t-1})[b,t,n,p] and dbias, FP32, no atomics."""
+    batch, steps, gates, heads, width = dg.shape
     previous = torch.backends.cuda.matmul.allow_tf32
-    torch.backends.cuda.matmul.allow_tf32 = False
+    torch.backends.cuda.matmul.allow_tf32 = tf32  # TF32 rounds the FP32 dG operand
     try:
-        d_recurrent = torch.einsum("btgno,btnp->gnop", dg, h_prev.float())
+        if heads == 1:
+            flat = dg.view(batch * steps, gates * width)
+            d_recurrent = (flat.t() @ h_prev.reshape(batch * steps, width).float()).view(gates, 1, width, width)
+            d_bias = flat.sum(dim=0).view(gates, 1, width)
+        else:
+            d_recurrent = torch.einsum("btgno,btnp->gnop", dg, h_prev.float())
+            d_bias = dg.sum(dim=(0, 1))
     finally:
         torch.backends.cuda.matmul.allow_tf32 = previous
-    return d_recurrent, dg.sum(dim=(0, 1))
+    return d_recurrent, d_bias
 
 
 def backward(
@@ -330,11 +414,17 @@ def backward(
     max_ctas: int | None = None,
     diagnostics: dict[str, object] | None = None,
     _verify: dict[str, object] | None = None,
+    fast: bool = False,
+    history_grad_components: tuple[bool, ...] | None = None,
+    tf32: bool = False,
 ):
     """Gradients (dWx FP32 [B,T,4,H,D], dR FP32, dbias FP32, d initial FP32 [S,B,1,H,D]) of one whole logical call.
 
     ``history`` is the forward's FP32 state history [S,B,T,H,D]; ``d_history`` and ``d_final`` are the FP32
     gradients of the history and of the final carry (zeros where a component is unused).
+    ``fast`` selects the bitwise-identical kernel variant (no reload of the step's c/n/m, next-step inputs loaded
+    before the barrier); ``history_grad_components`` (h, c, n) lets it skip history-gradient components that are
+    zero. ``tf32`` runs the preactivation and dR GEMMs with TF32 (not bitwise identical).
     """
     if sync not in ("grid", "launch"):
         raise ValueError("sync must be grid or launch")
@@ -365,7 +455,12 @@ def backward(
     wx, recurrent, bias, initial, history, d_history, d_final = (
         x.contiguous() for x in (wx, recurrent, bias, initial, history, d_history, d_final))
     device = wx.device
-    pre, h_prev = preactivations(wx, recurrent, bias, initial, history)
+    events = [torch.cuda.Event(enable_timing=True) for _ in range(4)] if (diagnostics or {}).get("time") else None
+    if events:
+        events[0].record()
+    pre, h_prev = preactivations(wx, recurrent, bias, initial, history, tf32)
+    if events:
+        events[1].record()
     sms = torch.cuda.get_device_properties(device).multi_processor_count
     splits, groups, slots = plan(batch, heads, width, slice_width, sms=sms, max_ctas=max_ctas)
     k1, k2 = k_parts(width, pad_k)
@@ -376,6 +471,8 @@ def backward(
     launches = 1 if sync == "grid" else steps + 1
     sync_counts = torch.zeros((launches, slots), device=device, dtype=torch.int32)
     verify, seed = verify_bits(_verify)
+    # Which history components can carry gradient (h, c, n); with ``fast`` the others are not read.
+    ds = tuple(history_grad_components or (True, True, True)) + (True,) * 3
     err = torch.zeros((4 if verify else 1,), device=device, dtype=torch.int32)
     if verify:
         err[3] = seed
@@ -395,11 +492,20 @@ def backward(
             enable_fp_fusion=False,
             launch_cooperative_grid=True,
             **(dict(VERIFY=verify) if verify else {}),
+            **(dict(FAST=1, DS_C=int(ds[1]), DS_N=int(ds[2])) if fast else {}),
         )
     if verify:
         counts = err.tolist()
         _verify.update(barrier_error=counts[0], after_barrier=counts[1], after_mma=counts[2])
-    d_recurrent, d_bias = weight_gradients(dg, h_prev)
+    if events:
+        events[2].record()
+    d_recurrent, d_bias = weight_gradients(dg, h_prev, tf32)
+    if events:
+        events[3].record()
+        torch.cuda.synchronize()
+        diagnostics["ms"] = dict(preactivation=events[0].elapsed_time(events[1]),
+                                 kernel=events[1].elapsed_time(events[2]),
+                                 weight_gradients=events[2].elapsed_time(events[3]))
     if diagnostics is not None:
         per_slot = [len(range(s, groups, slots)) * steps for s in range(slots)]
         diagnostics.update(
