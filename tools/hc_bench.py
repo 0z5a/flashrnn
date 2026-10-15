@@ -24,6 +24,10 @@ Modes
              makespan repetitions on split-0 fixtures; writes select.json
   start      one process start of one frozen comparison on split-1 fixtures: qualification, 3 warm-up
              bursts per arm, then ABBA/BAAB blocks of whole-burst makespans (rtiled_m4_analyze format)
+  ablate     timing-only ceilings: one TileLang configuration's recurrence vs variants with one component
+             removed (tilelang_cluster _ablate; results wrong by design, never served), interleaved repetitions
+  numa_worker one GPU's serving loop for the whole-node NUMA experiment: warm up, write ready.json, wait for the
+             driver's go file, then serve C requests per burst for a fixed number of bursts
   profile    run one configuration's recurrence a few times (for ncu with --launch-skip/--launch-count)
   forward    run the s0p forward of one configuration a few times (for nsys)
 A strategy is {"strategy": "s0" | "s0p", "group": rows per call, "config": KernelConfig fields} and may set
@@ -420,6 +424,102 @@ def mode_profile(a):
     return 0
 
 
+def mode_ablate(a):
+    """Recurrence-only medians per variant at each batch; every variant runs in every repetition, rotated."""
+    from flashrnn.flashrnn2 import tilelang_cluster
+    cfg = KernelConfig(**json.loads(a.config))
+    if cfg.family != "tilelang":
+        raise ValueError("ablations exist only on the TileLang paths")
+    variants = ["none"] + a.variants.split(",")
+    model = m4.Model(a.cell, a.width)
+    w, r, b = model.weights[0]
+    rec = dict(mode="ablate", cell=a.cell, width=a.width, steps=a.steps, config=cfg.as_dict(), variants=variants,
+               identity=runtime_identity(), results={}, started=time.time())
+    with torch.inference_mode():
+        for batch in map(int, a.batches.split(",")):
+            g = torch.Generator().manual_seed(23 + batch)
+            wx = (torch.randn(batch, a.steps, 4, 1, a.width, generator=g) * 0.5).to("cuda", torch.float16)
+            init = model.initial(batch, torch.float16)
+            ctx = begin_sequence(init, a.cell, wx.dtype)
+            fns = {}
+            for v in variants:
+                ab = frozenset() if v == "none" else frozenset(v.split("+"))
+                fns[v] = (lambda ab=ab: tilelang_cluster.recurrence(
+                    wx, r, b, init, a.cell, sequence_context=ctx, slice_width=cfg.slice_width, output_mode="hidden",
+                    sync=cfg.sync, batch_tile=cfg.batch_tile, threads=32 * cfg.warps, _ablate=ab))
+                for _ in range(2):
+                    fns[v]()
+            torch.cuda.synchronize()
+            times = {v: [] for v in variants}
+            for rep_i in range(a.reps):
+                order = variants[rep_i % len(variants):] + variants[:rep_i % len(variants)]
+                for v in order:
+                    e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+                    e0.record()
+                    fns[v]()
+                    e1.record()
+                    torch.cuda.synchronize()
+                    times[v].append(e0.elapsed_time(e1))
+            med = {v: statistics.median(t) for v, t in times.items()}
+            rec["results"][str(batch)] = dict(
+                raw_ms=times, median_ms=med,
+                share_removed={v: 1.0 - med[v] / med["none"] for v in variants if v != "none"},
+                ceiling_speedup={v: med["none"] / med[v] for v in variants if v != "none"})
+            print(json.dumps(dict(batch=batch, median_ms={v: round(x, 3) for v, x in med.items()})), flush=True)
+            m4.write(Path(a.out) / "ablate.json", rec)
+    rec["finished"] = time.time()
+    m4.write(Path(a.out) / "ablate.json", rec)
+    (Path(a.out) / "DONE.json").write_text(json.dumps(dict(finished=time.time())))
+    return 0
+
+
+def mode_numa_worker(a):
+    """Serve bursts of C requests on this process's GPU after a node-wide start signal."""
+    spec = dict(strategy="s0p", group=a.concurrency, config=json.loads(a.config))
+    out = Path(a.out)
+    model = m4.Model(a.cell, a.width)
+    ids = ids_for(a.concurrency, a.steps, 1)
+    fn = strategy_arm(a.cell, spec)
+    rec = dict(mode="numa_worker", cell=a.cell, width=a.width, concurrency=a.concurrency, spec=spec,
+               condition=a.condition, gpu_uuid=os.environ.get("FRNN_GPU_UUID"), pid=os.getpid(),
+               cpu_affinity=sorted(os.sched_getaffinity(0)), host=os.uname().nodename)
+    numa_maps = Path(f"/proc/{os.getpid()}/numa_maps")
+    with torch.inference_mode():
+        for _ in range(a.warmup):
+            burst(model, ids, spec, fn)
+        torch.cuda.synchronize()
+        m4.write(out / "ready.json", dict(ready=time.time()))
+        go = Path(a.go)
+        deadline = time.time() + 600
+        while not go.exists():
+            if time.time() > deadline:
+                rec["status"] = "NO_GO_SIGNAL"
+                m4.write(out / "worker.json", rec)
+                return 5
+            time.sleep(0.005)
+        rec["go_seen"] = time.time()
+        bursts = []
+        t0 = time.perf_counter_ns()
+        for _ in range(a.bursts):
+            _, t = burst(model, ids, spec, fn)
+            bursts.append(t)
+        rec["wall_ms"] = (time.perf_counter_ns() - t0) / 1e6
+    rec.update(bursts=bursts, requests=a.bursts * a.concurrency, status="PASS", finished=time.time(),
+               requests_per_s=a.bursts * a.concurrency / rec["wall_ms"] * 1e3)
+    try:
+        nodes = {}
+        for line in numa_maps.read_text().splitlines():
+            for tok in line.split():
+                if tok.startswith("N") and "=" in tok:
+                    n, pages = tok[1:].split("=")
+                    nodes[n] = nodes.get(n, 0) + int(pages)
+        rec["resident_pages_by_node"] = nodes
+    except OSError:
+        pass
+    m4.write(out / "worker.json", rec)
+    return 0
+
+
 def mode_forward(a):
     """The s0p forward (all C requests per layer) of one configuration, repeated for a timeline."""
     cfg = KernelConfig(**json.loads(a.config))
@@ -438,6 +538,32 @@ def main():
     global SMS
     SMS = torch.cuda.get_device_properties(0).multi_processor_count
     torch.backends.cuda.matmul.allow_tf32 = False
+    if len(sys.argv) > 1 and sys.argv[1] == "ablate":
+        sys.argv.pop(1)
+        p = argparse.ArgumentParser()
+        p.add_argument("--out", required=True)
+        p.add_argument("--config", required=True)
+        p.add_argument("--cell", required=True)
+        p.add_argument("--width", type=int, required=True)
+        p.add_argument("--steps", type=int, default=128)
+        p.add_argument("--batches", default="1024,256")
+        p.add_argument("--variants", required=True)
+        p.add_argument("--reps", type=int, default=15)
+        return mode_ablate(p.parse_args())
+    if len(sys.argv) > 1 and sys.argv[1] == "numa_worker":
+        sys.argv.pop(1)
+        p = argparse.ArgumentParser()
+        p.add_argument("--out", required=True)
+        p.add_argument("--config", required=True)
+        p.add_argument("--cell", required=True)
+        p.add_argument("--width", type=int, required=True)
+        p.add_argument("--steps", type=int, default=128)
+        p.add_argument("--concurrency", type=int, default=1024)
+        p.add_argument("--bursts", type=int, required=True)
+        p.add_argument("--warmup", type=int, default=3)
+        p.add_argument("--condition", required=True)
+        p.add_argument("--go", required=True)
+        return mode_numa_worker(p.parse_args())
     if len(sys.argv) > 1 and sys.argv[1] in ("profile", "forward"):
         mode = sys.argv.pop(1)
         p = argparse.ArgumentParser()

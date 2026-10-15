@@ -47,8 +47,18 @@ def supported(width, slice_width, bm=16):
 
 
 def build(batch, total_steps, heads, width, slice_width, *, cell="lstm", dtype="float16", mode="full",
-          snapshot="float32", threads=128, bm=16, prefetch=False):
+          snapshot="float32", threads=128, bm=16, prefetch=False, _ablate=frozenset()):
+    """Cluster kernel (see the module docstring).
+    _ablate (timing only, never served): a set of components to remove for a ceiling estimate -- "exchange"
+    (h exchange and its synchronization), "gemm" (cleared gates instead of the WGMMA), "stage" (no FP32 gate
+    round trip through shared memory), "wx" (no input-projection loads), "epilogue" (cheap arithmetic instead
+    of the gate nonlinearities), "out" (no output stores). Results of an ablated kernel are wrong by design.
+    """
     import tilelang.language as T
+
+    ab = frozenset(_ablate)
+    if ab and prefetch:
+        raise ValueError("ablations apply to the kernel without prefetch")
 
     if not supported(width, slice_width, bm) or threads != 128:
         raise ValueError("unsupported (D, S, BM, threads) for the cluster path")
@@ -118,13 +128,18 @@ def build(batch, total_steps, heads, width, slice_width, *, cell="lstm", dtype="
             T.cluster_sync()
 
             for t in T.serial(NSTEPS):
-                if t > 0:
-                    T.mbarrier_wait_parity(ready[t % 2], ((t - 1) // 2) % 2)
-                if t % 2 == 0:
-                    T.gemm(rs, h0, gates, clear_accum=True)
+                if "exchange" not in ab:
+                    if t > 0:
+                        T.mbarrier_wait_parity(ready[t % 2], ((t - 1) // 2) % 2)
+                if "gemm" in ab:
+                    T.clear(gates)
                 else:
-                    T.gemm(rs, h1, gates, clear_accum=True)
-                T.copy(gates, stage)
+                    if t % 2 == 0:
+                        T.gemm(rs, h0, gates, clear_accum=True)
+                    else:
+                        T.gemm(rs, h1, gates, clear_accum=True)
+                if "stage" not in ab:
+                    T.copy(gates, stage)
                 for b, j in T.Parallel(BM, S):
                     row = bt * BM + b
                     col = s * S + j
@@ -140,6 +155,11 @@ def build(batch, total_steps, heads, width, slice_width, *, cell="lstm", dtype="
                         xf[b, j] = T.if_then_else(nxt, T.cast(WX[row, step + 1, 1, head, col], acc), 0.0)
                         xz[b, j] = T.if_then_else(nxt, T.cast(WX[row, step + 1, 2, head, col], acc), 0.0)
                         xo[b, j] = T.if_then_else(nxt, T.cast(WX[row, step + 1, 3, head, col], acc), 0.0)
+                    elif "wx" in ab:
+                        gi = stage[j, b] + T.cast(BIAS[0, head, col], acc)
+                        gf = stage[S + j, b] + T.cast(BIAS[1, head, col], acc)
+                        gz = stage[2 * S + j, b] + T.cast(BIAS[2, head, col], acc)
+                        go = stage[3 * S + j, b] + T.cast(BIAS[3, head, col], acc)
                     else:
                         gi = stage[j, b] + T.if_then_else(valid, T.cast(WX[row, step, 0, head, col], acc), 0.0) \
                             + T.cast(BIAS[0, head, col], acc)
@@ -149,9 +169,12 @@ def build(batch, total_steps, heads, width, slice_width, *, cell="lstm", dtype="
                                                                   0.0) + T.cast(BIAS[2, head, col], acc)
                         go = stage[3 * S + j, b] + T.if_then_else(valid, T.cast(WX[row, step, 3, head, col], acc),
                                                                   0.0) + T.cast(BIAS[3, head, col], acc)
-                    zv = 2.0 / (1.0 + T.exp(-2.0 * gz)) - 1.0
-                    og = 1.0 / (1.0 + T.exp(-go))
-                    if slstm:
+                    if "epilogue" in ab:
+                        c[b, j] = c[b, j] * 0.5 + gi * gf
+                        hid[b, j] = c[b, j] + go * gz
+                    elif slstm:
+                        zv = 2.0 / (1.0 + T.exp(-2.0 * gz)) - 1.0
+                        og = 1.0 / (1.0 + T.exp(-go))
                         logf = T.min(gf, 0.0) - T.log(1.0 + T.exp(-T.abs(gf))) + m[b, j]
                         nm = T.if_then_else((START != 0) & (t == 0) & (ZERO[0] != 0), gi, T.max(gi, logf))
                         ig = T.exp(gi - nm)
@@ -161,38 +184,42 @@ def build(batch, total_steps, heads, width, slice_width, *, cell="lstm", dtype="
                         hid[b, j] = og * c[b, j] / n[b, j]
                         m[b, j] = nm
                     else:
+                        zv = 2.0 / (1.0 + T.exp(-2.0 * gz)) - 1.0
+                        og = 1.0 / (1.0 + T.exp(-go))
                         c[b, j] = 1.0 / (1.0 + T.exp(-gf)) * c[b, j] + 1.0 / (1.0 + T.exp(-gi)) * zv
                         hid[b, j] = og * (2.0 / (1.0 + T.exp(-2.0 * c[b, j])) - 1.0)
-                    if valid:
-                        if out_mode == 0:
-                            OUT[0, row, step, head, col] = T.cast(hid[b, j], snapshot)
-                            OUT[1, row, step, head, col] = T.cast(c[b, j], snapshot)
-                            if slstm:
-                                OUT[2, row, step, head, col] = T.cast(n[b, j], snapshot)
-                                OUT[3, row, step, head, col] = T.cast(m[b, j], snapshot)
-                        elif out_mode == 1:
-                            OUT[row, step, head, col] = T.cast(hid[b, j], snapshot)
-                        else:
-                            if step == TT - 1:
-                                OUT[row, 0, head, col] = T.cast(hid[b, j], snapshot)
+                    if "out" not in ab:
+                        if valid:
+                            if out_mode == 0:
+                                OUT[0, row, step, head, col] = T.cast(hid[b, j], snapshot)
+                                OUT[1, row, step, head, col] = T.cast(c[b, j], snapshot)
+                                if slstm:
+                                    OUT[2, row, step, head, col] = T.cast(n[b, j], snapshot)
+                                    OUT[3, row, step, head, col] = T.cast(m[b, j], snapshot)
+                            elif out_mode == 1:
+                                OUT[row, step, head, col] = T.cast(hid[b, j], snapshot)
+                            else:
+                                if step == TT - 1:
+                                    OUT[row, 0, head, col] = T.cast(hid[b, j], snapshot)
                     if t + 1 < NSTEPS:
                         if t % 2 == 0:
                             h1[col, b] = T.cast(hid[b, j], dtype)
                         else:
                             h0[col, b] = T.cast(hid[b, j], dtype)
-                if t + 1 < NSTEPS:
-                    # Own slice written by all threads -> async-proxy fence -> block barrier -> thread 0 sends.
-                    T.fence_proxy_async()
-                    T.sync_threads()
-                    if tx == 0:
-                        for r in T.serial(k):
-                            if r != s:
-                                if t % 2 == 0:
-                                    T.copy_cluster(h1[s * S:(s + 1) * S, 0:BM], h1[s * S:(s + 1) * S, 0:BM],
-                                                   dst_block=r, remote_barrier=ready[1])
-                                else:
-                                    T.copy_cluster(h0[s * S:(s + 1) * S, 0:BM], h0[s * S:(s + 1) * S, 0:BM],
-                                                   dst_block=r, remote_barrier=ready[0])
+                if "exchange" not in ab:
+                    if t + 1 < NSTEPS:
+                        # Own slice written by all threads -> async-proxy fence -> block barrier -> thread 0 sends.
+                        T.fence_proxy_async()
+                        T.sync_threads()
+                        if tx == 0:
+                            for r in T.serial(k):
+                                if r != s:
+                                    if t % 2 == 0:
+                                        T.copy_cluster(h1[s * S:(s + 1) * S, 0:BM], h1[s * S:(s + 1) * S, 0:BM],
+                                                       dst_block=r, remote_barrier=ready[1])
+                                    else:
+                                        T.copy_cluster(h0[s * S:(s + 1) * S, 0:BM], h0[s * S:(s + 1) * S, 0:BM],
+                                                       dst_block=r, remote_barrier=ready[0])
 
             for b, j in T.Parallel(BM, S):
                 row = bt * BM + b
@@ -232,7 +259,7 @@ def supported_grid(width, slice_width, sms=132, bm=16):
 
 
 def build_grid(batch, total_steps, heads, width, slice_width, *, sms, cell="lstm", dtype="float16", mode="full",
-               snapshot="float32", threads=128, bm=16, prefetch=False):
+               snapshot="float32", threads=128, bm=16, prefetch=False, _ablate=frozenset()):
     """Same per-CTA work as build(), for k beyond the 16-CTA cluster limit (D = 768).
 
     The h exchange goes through a double-buffered global buffer XBUF[2, groups, D, BM]:
@@ -244,6 +271,9 @@ def build_grid(batch, total_steps, heads, width, slice_width, *, sms, cell="lstm
     """
     import tilelang.language as T
 
+    ab = frozenset(_ablate)
+    if ab and prefetch:
+        raise ValueError("ablations apply to the kernel without prefetch")
     if not supported_grid(width, slice_width, sms, bm):
         raise ValueError("unsupported (D, S, BM) for the grid path")
     S, D, H, B, BM, TT = slice_width, width, heads, batch, bm, total_steps
@@ -313,12 +343,17 @@ def build_grid(batch, total_steps, heads, width, slice_width, *, sms, cell="lstm
 
                 for t in T.serial(NSTEPS):
                     if active:
-                        if t > 0:
-                            T.copy(XBUF[(t - 1) % 2, g, 0:D, 0:BM], hs)
-                            T.fence_proxy_async()
-                            T.sync_threads()
-                        T.gemm(rs, hs, gates, clear_accum=True)
-                        T.copy(gates, stage)
+                        if "exchange" not in ab:
+                            if t > 0:
+                                T.copy(XBUF[(t - 1) % 2, g, 0:D, 0:BM], hs)
+                                T.fence_proxy_async()
+                                T.sync_threads()
+                        if "gemm" in ab:
+                            T.clear(gates)
+                        else:
+                            T.gemm(rs, hs, gates, clear_accum=True)
+                        if "stage" not in ab:
+                            T.copy(gates, stage)
                         for b, j in T.Parallel(BM, S):
                             row = bt * BM + b
                             col = s * S + j
@@ -334,6 +369,11 @@ def build_grid(batch, total_steps, heads, width, slice_width, *, sms, cell="lstm
                                 xf[b, j] = T.if_then_else(nxt, T.cast(WX[row, step + 1, 1, head, col], acc), 0.0)
                                 xz[b, j] = T.if_then_else(nxt, T.cast(WX[row, step + 1, 2, head, col], acc), 0.0)
                                 xo[b, j] = T.if_then_else(nxt, T.cast(WX[row, step + 1, 3, head, col], acc), 0.0)
+                            elif "wx" in ab:
+                                gi = stage[j, b] + T.cast(BIAS[0, head, col], acc)
+                                gf = stage[S + j, b] + T.cast(BIAS[1, head, col], acc)
+                                gz = stage[2 * S + j, b] + T.cast(BIAS[2, head, col], acc)
+                                go = stage[3 * S + j, b] + T.cast(BIAS[3, head, col], acc)
                             else:
                                 gi = stage[j, b] + T.if_then_else(valid, T.cast(WX[row, step, 0, head, col], acc), 0.0) \
                                     + T.cast(BIAS[0, head, col], acc)
@@ -343,9 +383,12 @@ def build_grid(batch, total_steps, heads, width, slice_width, *, sms, cell="lstm
                                     valid, T.cast(WX[row, step, 2, head, col], acc), 0.0) + T.cast(BIAS[2, head, col], acc)
                                 go = stage[3 * S + j, b] + T.if_then_else(
                                     valid, T.cast(WX[row, step, 3, head, col], acc), 0.0) + T.cast(BIAS[3, head, col], acc)
-                            zv = 2.0 / (1.0 + T.exp(-2.0 * gz)) - 1.0
-                            og = 1.0 / (1.0 + T.exp(-go))
-                            if slstm:
+                            if "epilogue" in ab:
+                                c[b, j] = c[b, j] * 0.5 + gi * gf
+                                hid[b, j] = c[b, j] + go * gz
+                            elif slstm:
+                                zv = 2.0 / (1.0 + T.exp(-2.0 * gz)) - 1.0
+                                og = 1.0 / (1.0 + T.exp(-go))
                                 logf = T.min(gf, 0.0) - T.log(1.0 + T.exp(-T.abs(gf))) + m[b, j]
                                 nm = T.if_then_else((START != 0) & (t == 0) & (ZERO[0] != 0), gi, T.max(gi, logf))
                                 ig = T.exp(gi - nm)
@@ -355,24 +398,29 @@ def build_grid(batch, total_steps, heads, width, slice_width, *, sms, cell="lstm
                                 hid[b, j] = og * c[b, j] / n[b, j]
                                 m[b, j] = nm
                             else:
+                                zv = 2.0 / (1.0 + T.exp(-2.0 * gz)) - 1.0
+                                og = 1.0 / (1.0 + T.exp(-go))
                                 c[b, j] = 1.0 / (1.0 + T.exp(-gf)) * c[b, j] + 1.0 / (1.0 + T.exp(-gi)) * zv
                                 hid[b, j] = og * (2.0 / (1.0 + T.exp(-2.0 * c[b, j])) - 1.0)
-                            if valid:
-                                if out_mode == 0:
-                                    OUT[0, row, step, head, col] = T.cast(hid[b, j], snapshot)
-                                    OUT[1, row, step, head, col] = T.cast(c[b, j], snapshot)
-                                    if slstm:
-                                        OUT[2, row, step, head, col] = T.cast(n[b, j], snapshot)
-                                        OUT[3, row, step, head, col] = T.cast(m[b, j], snapshot)
-                                elif out_mode == 1:
-                                    OUT[row, step, head, col] = T.cast(hid[b, j], snapshot)
-                                else:
-                                    if step == TT - 1:
-                                        OUT[row, 0, head, col] = T.cast(hid[b, j], snapshot)
-                            if t + 1 < NSTEPS:
-                                XBUF[t % 2, g, col, b] = T.cast(hid[b, j], dtype)
-                    if t + 1 < NSTEPS:
-                        T.sync_grid()
+                            if "out" not in ab:
+                                if valid:
+                                    if out_mode == 0:
+                                        OUT[0, row, step, head, col] = T.cast(hid[b, j], snapshot)
+                                        OUT[1, row, step, head, col] = T.cast(c[b, j], snapshot)
+                                        if slstm:
+                                            OUT[2, row, step, head, col] = T.cast(n[b, j], snapshot)
+                                            OUT[3, row, step, head, col] = T.cast(m[b, j], snapshot)
+                                    elif out_mode == 1:
+                                        OUT[row, step, head, col] = T.cast(hid[b, j], snapshot)
+                                    else:
+                                        if step == TT - 1:
+                                            OUT[row, 0, head, col] = T.cast(hid[b, j], snapshot)
+                            if "exchange" not in ab:
+                                if t + 1 < NSTEPS:
+                                    XBUF[t % 2, g, col, b] = T.cast(hid[b, j], dtype)
+                    if "exchange" not in ab:
+                        if t + 1 < NSTEPS:
+                            T.sync_grid()
 
                 if active:
                     for b, j in T.Parallel(BM, S):
@@ -395,7 +443,7 @@ def sm_count():
 
 
 def kernel(batch, total_steps, heads, width, slice_width, *, cell, dtype, mode, snapshot, sync="cluster", sms=None,
-           bm=16, threads=128, prefetch=False):
+           bm=16, threads=128, prefetch=False, _ablate=frozenset()):
     """Compiled kernel for one logical-call shape; chunk length, offset and start are runtime arguments."""
     import tilelang
 
@@ -404,17 +452,20 @@ def kernel(batch, total_steps, heads, width, slice_width, *, cell, dtype, mode, 
         key = ("grid", sms, batch, total_steps, heads, width, slice_width, cell, dtype, mode, snapshot)
         func = lambda: build_grid(batch, total_steps, heads, width, slice_width, sms=sms, cell=cell,  # noqa: E731
                                   dtype=dtype, mode=mode, snapshot=snapshot, bm=bm, threads=threads,
-                                  prefetch=prefetch)
+                                  prefetch=prefetch, _ablate=_ablate)
     else:
         key = (batch, total_steps, heads, width, slice_width, cell, dtype, mode, snapshot)
         func = lambda: build(batch, total_steps, heads, width, slice_width, cell=cell, dtype=dtype,  # noqa: E731
-                             mode=mode, snapshot=snapshot, bm=bm, threads=threads, prefetch=prefetch)
+                             mode=mode, snapshot=snapshot, bm=bm, threads=threads, prefetch=prefetch,
+                             _ablate=_ablate)
     if bm != 16:
         key = key + (("bm", bm),)  # BM = 16 keys stay as they were
     if threads != 128:
         key = key + (("threads", threads),)
     if prefetch:
         key = key + (("prefetch", True),)
+    if _ablate:
+        key = key + (("ablate", tuple(sorted(_ablate))),)
     if key not in _KERNELS:
         _KERNELS[key] = tilelang.compile(func(), target={"kind": "cuda", "arch": "sm_90a"})
     return _KERNELS[key]
@@ -427,7 +478,8 @@ def version():
 
 
 def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context, slice_width=32,
-               output_mode="full", snapshot_dtype=None, sync="cluster", batch_tile=16, threads=128, prefetch=False):
+               output_mode="full", snapshot_dtype=None, sync="cluster", batch_tile=16, threads=128, prefetch=False,
+               _ablate=frozenset()):
     """Public per-call API with the triton_rtiled contract; returns (output, FP32 compute carry).
 
     sync="cluster" exchanges h inside a thread-block cluster (k <= 16); sync="grid" exchanges it
@@ -471,7 +523,7 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context, s
     names = {torch.float16: "float16", torch.bfloat16: "bfloat16", torch.float32: "float32"}
     snap = wx.dtype if snapshot_dtype is None else snapshot_dtype
     fn = kernel(batch, steps, heads, width, slice_width, cell=cell, dtype=names[wx.dtype], mode=output_mode,
-                snapshot=names[snap], sync=sync, bm=batch_tile, threads=threads, prefetch=prefetch)
+                snapshot=names[snap], sync=sync, bm=batch_tile, threads=threads, prefetch=prefetch, _ablate=_ablate)
     out_shape = {"full": (states, batch, steps, heads, width), "hidden": (batch, steps, heads, width),
                  "last": (batch, 1, heads, width)}[output_mode]
     output = torch.empty(out_shape, device=wx.device, dtype=snap)
