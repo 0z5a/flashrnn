@@ -1,0 +1,441 @@
+{
+  "cell": "slstm",
+  "width": 256,
+  "steps": 128,
+  "group": 32,
+  "sms": 132,
+  "identity": {
+    "gpu": "NVIDIA H100",
+    "capability": [
+      9,
+      0
+    ],
+    "triton": "3.6.0",
+    "tilelang": "0.1.15"
+  },
+  "cases": [
+    {
+      "concurrency": 1024,
+      "configs": {
+        "s0": {
+          "config": {
+            "family": "tilelang",
+            "batch_tile": 16,
+            "warps": 4,
+            "weight_operand": "b",
+            "slice_width": 16,
+            "sync": "cluster",
+            "pad_k": false
+          },
+          "footprint": {
+            "k": 16,
+            "groups": 2,
+            "resident_groups_upper": 2,
+            "ctas_upper": 32
+          }
+        },
+        "s0p": {
+          "config": {
+            "family": "mma_rtiled",
+            "batch_tile": 16,
+            "warps": 8,
+            "weight_operand": "b",
+            "slice_width": 64,
+            "sync": "grid",
+            "pad_k": false
+          },
+          "footprint": {
+            "k": 4,
+            "groups": 64,
+            "resident_groups": 33,
+            "ctas": 132
+          }
+        },
+        "s0p_cfg": {
+          "config": {
+            "family": "tilelang",
+            "batch_tile": 16,
+            "warps": 4,
+            "weight_operand": "b",
+            "slice_width": 16,
+            "sync": "cluster",
+            "pad_k": false
+          },
+          "footprint": {
+            "k": 16,
+            "groups": 64,
+            "resident_groups_upper": 8,
+            "ctas_upper": 128
+          }
+        }
+      },
+      "oracle": {
+        "s0": {
+          "pass_": true,
+          "max_abs": 2.405857376714532e-05,
+          "worst_normalized": 0.0014915821242334002,
+          "failed_elements": 0
+        },
+        "s0p": {
+          "pass_": true,
+          "max_abs": 2.405857376714532e-05,
+          "worst_normalized": 0.0014915821242334002,
+          "failed_elements": 0
+        },
+        "s0p_cfg": {
+          "pass_": true,
+          "max_abs": 2.405857376714532e-05,
+          "worst_normalized": 0.0014915821242334002,
+          "failed_elements": 0
+        }
+      },
+      "runs": {
+        "s0": [
+          {
+            "makespan_ms": 42.496151,
+            "p50_ms": 21.985558,
+            "p90_ms": 38.520065
+          },
+          {
+            "makespan_ms": 41.428965,
+            "p50_ms": 21.289293999999998,
+            "p90_ms": 37.560498
+          },
+          {
+            "makespan_ms": 41.154382,
+            "p50_ms": 21.288627499999997,
+            "p90_ms": 37.30799
+          },
+          {
+            "makespan_ms": 41.160828,
+            "p50_ms": 21.2810495,
+            "p90_ms": 37.316187
+          },
+          {
+            "makespan_ms": 41.142167,
+            "p50_ms": 21.259597499999998,
+            "p90_ms": 37.294481
+          },
+          {
+            "makespan_ms": 41.19524,
+            "p50_ms": 21.280278,
+            "p90_ms": 37.334685
+          },
+          {
+            "makespan_ms": 41.432886,
+            "p50_ms": 21.293126,
+            "p90_ms": 37.528164
+          }
+        ],
+        "s0p": [
+          {
+            "makespan_ms": 6.399427,
+            "p50_ms": 6.384817,
+            "p90_ms": 6.384817
+          },
+          {
+            "makespan_ms": 6.351531,
+            "p50_ms": 6.346414,
+            "p90_ms": 6.346414
+          },
+          {
+            "makespan_ms": 6.356699,
+            "p50_ms": 6.34318,
+            "p90_ms": 6.34318
+          },
+          {
+            "makespan_ms": 6.3589,
+            "p50_ms": 6.345405,
+            "p90_ms": 6.345405
+          },
+          {
+            "makespan_ms": 6.355343,
+            "p50_ms": 6.350416,
+            "p90_ms": 6.350416
+          },
+          {
+            "makespan_ms": 6.356812,
+            "p50_ms": 6.343192,
+            "p90_ms": 6.343192
+          },
+          {
+            "makespan_ms": 6.381075,
+            "p50_ms": 6.367932,
+            "p90_ms": 6.367932
+          }
+        ],
+        "s0p_cfg": [
+          {
+            "makespan_ms": 6.5094,
+            "p50_ms": 6.504132,
+            "p90_ms": 6.504132
+          },
+          {
+            "makespan_ms": 6.23662,
+            "p50_ms": 6.231945,
+            "p90_ms": 6.231945
+          },
+          {
+            "makespan_ms": 6.202608,
+            "p50_ms": 6.188973,
+            "p90_ms": 6.188973
+          },
+          {
+            "makespan_ms": 6.281823,
+            "p50_ms": 6.276992,
+            "p90_ms": 6.276992
+          },
+          {
+            "makespan_ms": 6.259679,
+            "p50_ms": 6.254972,
+            "p90_ms": 6.254972
+          },
+          {
+            "makespan_ms": 6.208654,
+            "p50_ms": 6.194974,
+            "p90_ms": 6.194974
+          },
+          {
+            "makespan_ms": 6.206709,
+            "p50_ms": 6.201723,
+            "p90_ms": 6.201723
+          }
+        ]
+      },
+      "summary": {
+        "s0": {
+          "makespan_ms": 41.19524,
+          "p50_ms": 21.288627499999997,
+          "p90_ms": 37.334685,
+          "tokens_per_s": 3181726.820865712
+        },
+        "s0p": {
+          "makespan_ms": 6.356812,
+          "p50_ms": 6.346414,
+          "p90_ms": 6.346414,
+          "tokens_per_s": 20619140.537741244
+        },
+        "s0p_cfg": {
+          "makespan_ms": 6.23662,
+          "p50_ms": 6.231945,
+          "p90_ms": 6.231945,
+          "tokens_per_s": 21016512.149209026
+        }
+      },
+      "stages": {
+        "s0": {
+          "wall_ms": 43.506134,
+          "spans": {
+            "embed": 1.1358079984784126,
+            "proj": 2.958016007207334,
+            "recur": 38.00326392054558,
+            "readout": 0.2308800001628697,
+            "d2h": 0.834655998274684,
+            "between_groups": 0.25420800037682056
+          }
+        },
+        "s0p": {
+          "wall_ms": 7.280742,
+          "spans": {
+            "embed": 0.43302398920059204,
+            "proj": 1.1038079857826233,
+            "recur": 5.150752067565918,
+            "readout": 0.008927999995648861,
+            "d2h": 0.5242239832878113
+          }
+        },
+        "s0p_cfg": {
+          "wall_ms": 7.039412,
+          "spans": {
+            "embed": 0.3196159899234772,
+            "proj": 1.017632007598877,
+            "recur": 5.090975999832153,
+            "readout": 0.008767999708652496,
+            "d2h": 0.5591679811477661
+          }
+        }
+      },
+      "profile": {
+        "s0": {
+          "profiled_wall_ms": 47.311015,
+          "device_busy_ms": 37.81163600000008,
+          "device_events": 1280,
+          "busy_fraction": 0.7992142210434522,
+          "top": [
+            {
+              "name": "main_kernel",
+              "ms": 33.877,
+              "count": 128
+            },
+            {
+              "name": "sm90_xmma_gemm_f16f16_f16f32_f32_tn_n_tilesize128x128x64_warpgroupsize1x1x1_execute_segment_k_off_kernel__51_cublas",
+              "ms": 1.284,
+              "count": 128
+            },
+            {
+              "name": "void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}:",
+              "ms": 0.738,
+              "count": 256
+            },
+            {
+              "name": "void at::native::reduce_kernel<512, 1, at::native::ReduceOp<bool, at::native::func_wrapper_t<bool, at::native::and_kerne",
+              "ms": 0.516,
+              "count": 128
+            },
+            {
+              "name": "void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<c10::Half>, at::detail::Array<char*, 1> >(int,",
+              "ms": 0.477,
+              "count": 256
+            },
+            {
+              "name": "void at::native::vectorized_elementwise_kernel<4, at::native::AUnaryFunctor<c10::Half, c10::Half, bool, at::native::(ano",
+              "ms": 0.27,
+              "count": 128
+            },
+            {
+              "name": "void at::native::index_elementwise_kernel<128, 4, at::native::gpu_index_kernel<at::native::index_kernel_impl<at::native:",
+              "ms": 0.235,
+              "count": 32
+            },
+            {
+              "name": "memset",
+              "ms": 0.201,
+              "count": 128
+            },
+            {
+              "name": "memcpy",
+              "ms": 0.178,
+              "count": 64
+            },
+            {
+              "name": "sm80_xmma_gemm_f16f16_f16f32_f32_nn_n_tilesize32x32x64_stage6_warpsize2x2x1_tensor16x8x16_execute_kernel__51_cublas",
+              "ms": 0.136,
+              "count": 32
+            }
+          ]
+        },
+        "s0p": {
+          "profiled_wall_ms": 7.828078,
+          "device_busy_ms": 6.199552999999999,
+          "device_events": 44,
+          "busy_fraction": 0.7919636212107236,
+          "top": [
+            {
+              "name": "_rtiled",
+              "ms": 4.965,
+              "count": 4
+            },
+            {
+              "name": "sm90_xmma_gemm_f16f16_f16f32_f32_tn_n_tilesize128x128x64_warpgroupsize1x1x1_execute_segment_k_off_kernel__51_cublas",
+              "ms": 0.976,
+              "count": 4
+            },
+            {
+              "name": "void at::native::index_elementwise_kernel<128, 4, at::native::gpu_index_kernel<at::native::index_kernel_impl<at::native:",
+              "ms": 0.131,
+              "count": 1
+            },
+            {
+              "name": "memcpy",
+              "ms": 0.043,
+              "count": 2
+            },
+            {
+              "name": "void at::native::reduce_kernel<512, 1, at::native::ReduceOp<bool, at::native::func_wrapper_t<bool, at::native::and_kerne",
+              "ms": 0.026,
+              "count": 4
+            },
+            {
+              "name": "void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<c10::Half>, at::detail::Array<char*, 1> >(int,",
+              "ms": 0.016,
+              "count": 8
+            },
+            {
+              "name": "void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<int>, at::detail::Array<char*, 1> >(int, at::n",
+              "ms": 0.015,
+              "count": 8
+            },
+            {
+              "name": "memset",
+              "ms": 0.012,
+              "count": 8
+            },
+            {
+              "name": "void at::native::vectorized_elementwise_kernel<4, at::native::AUnaryFunctor<c10::Half, c10::Half, bool, at::native::(ano",
+              "ms": 0.01,
+              "count": 4
+            },
+            {
+              "name": "void cutlass::Kernel<cutlass_80_tensorop_f16_s16816gemm_relu_f16_128x64_64x4_nn_align8>(cutlass_80_tensorop_f16_s16816ge",
+              "ms": 0.006,
+              "count": 1
+            }
+          ]
+        },
+        "s0p_cfg": {
+          "profiled_wall_ms": 8.271388,
+          "device_busy_ms": 6.232927,
+          "device_events": 44,
+          "busy_fraction": 0.7535527289978418,
+          "top": [
+            {
+              "name": "main_kernel",
+              "ms": 4.968,
+              "count": 4
+            },
+            {
+              "name": "sm90_xmma_gemm_f16f16_f16f32_f32_tn_n_tilesize128x128x64_warpgroupsize1x1x1_execute_segment_k_off_kernel__51_cublas",
+              "ms": 0.994,
+              "count": 4
+            },
+            {
+              "name": "void at::native::index_elementwise_kernel<128, 4, at::native::gpu_index_kernel<at::native::index_kernel_impl<at::native:",
+              "ms": 0.131,
+              "count": 1
+            },
+            {
+              "name": "memcpy",
+              "ms": 0.043,
+              "count": 2
+            },
+            {
+              "name": "void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}:",
+              "ms": 0.027,
+              "count": 8
+            },
+            {
+              "name": "void at::native::reduce_kernel<512, 1, at::native::ReduceOp<bool, at::native::func_wrapper_t<bool, at::native::and_kerne",
+              "ms": 0.026,
+              "count": 4
+            },
+            {
+              "name": "void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<c10::Half>, at::detail::Array<char*, 1> >(int,",
+              "ms": 0.017,
+              "count": 8
+            },
+            {
+              "name": "memset",
+              "ms": 0.012,
+              "count": 8
+            },
+            {
+              "name": "void at::native::vectorized_elementwise_kernel<4, at::native::AUnaryFunctor<c10::Half, c10::Half, bool, at::native::(ano",
+              "ms": 0.01,
+              "count": 4
+            },
+            {
+              "name": "void cutlass::Kernel<cutlass_80_tensorop_f16_s16816gemm_relu_f16_128x64_64x4_nn_align8>(cutlass_80_tensorop_f16_s16816ge",
+              "ms": 0.005,
+              "count": 1
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "started": 1792018412.7151477,
+  "micro_configs": {},
+  "microbench": [],
+  "row_independence": {},
+  "finished": 1792018414.6954315
+}
