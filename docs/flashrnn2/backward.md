@@ -1,6 +1,6 @@
 # FlashRNN2 training path: R-tiled backward
 
-Status: implemented and qualified on H100 (168/168 cases); training-step timing against FlashRNN1 pending.
+Status: implemented and qualified on H100 (168/168 cases); training step timed against FlashRNN1 (faster at B = 64, slower at B = 16).
 
 ## Contract
 
@@ -80,4 +80,50 @@ Results (job 47323663, 30.9 min, `ALL_CASES_PASS`, archive verified, 555 files):
   state history and FP32 dG keep the rounding to the MMA operands). FlashRNN1 could not be loaded in 2 of 168
   calibration cases (two lanes building the same module at once; serialized since then with a node-wide lock).
 
-Training-step timing against FlashRNN1 (forward + backward): job 47334053, pending.
+## Training step against FlashRNN1 (job 47334053)
+
+One call = forward with gradients + loss <dH, h history> + backward (`torch.autograd.grad`); FP16, T = 256, H = 1.
+FlashRNN2: forward on a Triton backend (default_config, or for D > 128 the M0-qualified R-tiled S32/4 warps), backward
+slice width and warp count selected on split 0; FlashRNN1: pinned cuda_fused forward + backward. Every candidate of
+both arms was gradient-qualified against the FP64 oracle before selection (192/192 FlashRNN2 candidates, 28/28
+FlashRNN1). Split 1: 5 process starts x 20 ABBA/BAAB blocks, hierarchical bootstrap. 39 min, 140/140 starts,
+archive verified (643 files). A TileLang forward is not in the step: it needs the CUDA 12.8 toolchain, the pinned
+FlashRNN1 extension the module's CUDA 11.8, and both arms share one process.
+
+| cell | D | B | FlashRNN1 ms | FlashRNN2 ms | FlashRNN1 / FlashRNN2 [95% CI] | FlashRNN2 forward | backward S / warps |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| lstm | 64 | 16 | 1.667 | 1.796 | 0.956 [0.936, 0.982] | default | 32 / 8 |
+| lstm | 64 | 64 | 2.547 | 2.201 | 1.190 [1.165, 1.220] | default | 32 / 8 |
+| lstm | 128 | 16 | 2.033 | 2.439 | 0.861 [0.841, 0.886] | default | 32 / 4 |
+| lstm | 128 | 64 | 3.072 | 2.973 | 1.022 [1.010, 1.031] | default | 32 / 8 |
+| lstm | 192 | 16 | 2.031 | 2.768 | 0.759 [0.740, 0.784] | R-tiled S32/4w | 16 / 4 |
+| lstm | 192 | 64 | 4.468 | 3.707 | 1.180 [1.157, 1.200] | R-tiled S32/4w | 16 / 4 |
+| lstm | 256 | 16 | 2.226 | 2.812 | 0.815 [0.795, 0.841] | R-tiled S32/4w | 32 / 4 |
+| lstm | 256 | 64 | 4.869 | 3.827 | 1.243 [1.215, 1.266] | R-tiled S32/4w | 16 / 4 |
+| lstm | 384 | 16 | 2.490 | 3.440 | 0.712 [0.703, 0.721] | R-tiled S32/4w | 32 / 4 |
+| lstm | 384 | 64 | 6.666 | 5.084 | 1.307 [1.294, 1.313] | R-tiled S32/4w | 16 / 4 |
+| lstm | 512 | 16 | 2.819 | 3.850 | 0.711 [0.691, 0.728] | R-tiled S32/4w | 32 / 4 |
+| lstm | 512 | 64 | 7.305 | 6.177 | 1.182 [1.182, 1.183] | R-tiled S32/4w | 32 / 4 |
+| lstm | 768 | 16 | 3.536 | 5.040 | 0.682 [0.663, 0.697] | R-tiled S32/4w | 32 / 4 |
+| lstm | 768 | 64 | 12.450 | 9.075 | 1.371 [1.370, 1.372] | R-tiled S32/4w | 32 / 4 |
+| slstm | 64 | 16 | 1.754 | 2.305 | 0.750 [0.738, 0.761] | default | 32 / 8 |
+| slstm | 64 | 64 | 2.708 | 2.759 | 1.007 [0.987, 1.033] | default | 32 / 8 |
+| slstm | 128 | 16 | 2.156 | 2.931 | 0.716 [0.698, 0.730] | default | 32 / 8 |
+| slstm | 128 | 64 | 3.323 | 3.483 | 0.980 [0.960, 1.006] | default | 32 / 8 |
+| slstm | 192 | 16 | 2.133 | 3.165 | 0.673 [0.672, 0.674] | R-tiled S32/4w | 16 / 4 |
+| slstm | 192 | 64 | 4.715 | 4.122 | 1.144 [1.143, 1.145] | R-tiled S32/4w | 16 / 4 |
+| slstm | 256 | 16 | 2.231 | 3.278 | 0.680 [0.678, 0.681] | R-tiled S32/4w | 32 / 4 |
+| slstm | 256 | 64 | 5.487 | 4.383 | 1.253 [1.252, 1.255] | R-tiled S32/4w | 16 / 4 |
+| slstm | 384 | 16 | 2.640 | 4.042 | 0.652 [0.652, 0.653] | R-tiled S32/4w | 16 / 4 |
+| slstm | 384 | 64 | 6.547 | 5.687 | 1.150 [1.150, 1.151] | R-tiled S32/4w | 16 / 4 |
+| slstm | 512 | 16 | 2.926 | 4.522 | 0.647 [0.646, 0.648] | R-tiled S32/4w | 32 / 4 |
+| slstm | 512 | 64 | 7.514 | 6.848 | 1.097 [1.096, 1.098] | R-tiled S32/4w | 32 / 4 |
+| slstm | 768 | 16 | 3.700 | 5.567 | 0.665 [0.664, 0.665] | R-tiled S32/4w | 32 / 4 |
+| slstm | 768 | 64 | 12.623 | 9.639 | 1.310 [1.308, 1.310] | R-tiled S32/4w | 32 / 4 |
+
+* B = 64: FlashRNN2 is faster for every D >= 192 (LSTM 1.18-1.37x, sLSTM 1.10-1.31x) and for LSTM D = 64/128
+  (1.19x / 1.02x); sLSTM D = 64/128 is a tie (intervals cover 1).
+* B = 16: FlashRNN2 is slower everywhere (LSTM 0.68-0.96x, sLSTM 0.65-0.75x). With one batch tile per call the step
+  is a latency chain; FlashRNN2's step carries the FP32 history write in the forward, the separate preactivation and
+  dR GEMMs and a per-step exchange of 4D values (the backward GEMM reduces over all four gates). These are the
+  targets for the next round (profile at B = 16 first).
