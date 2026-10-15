@@ -51,9 +51,9 @@ def main():
             const = dict(H=1, D=width, SLSTM=cell == "slstm", BM=16, S=s, K1=k1, K2=k2, OUTPUT_MODE=mode,
                          SPIN=new.SPIN_LIMIT)
             a_ptx = ptx(old._rtiled, sig, const, 8)
-            sig_v = dict(sig, VERIFY="constexpr", SEED="constexpr")
-            c_ptx = ptx(new._rtiled, sig_v, dict(const, VERIFY=0, SEED=0), 8)
-            on = ptx(new._rtiled, sig_v, dict(const, VERIFY=3, SEED=5), 8)
+            sig_v = dict(sig, VERIFY="constexpr")
+            c_ptx = ptx(new._rtiled, sig_v, dict(const, VERIFY=0), 8)
+            on = ptx(new._rtiled, sig_v, dict(const, VERIFY=3), 8)
             rows.append(dict(kernel="forward", cell=cell, width=width, slice_width=s, mode=mode,
                              explicit_zero_equal=a_ptx == c_ptx,
                              verify_on_differs=on != a_ptx))
@@ -69,9 +69,9 @@ def main():
                        BM="constexpr", S="constexpr", K1="constexpr", K2="constexpr", SPIN="constexpr")
             const = dict(H=1, D=width, SLSTM=cell == "slstm", BM=16, S=s, K1=k1, K2=k2, SPIN=new.SPIN_LIMIT)
             a_ptx = ptx(old_bw._rtiled_bw, sig, const, 8)
-            sig_v = dict(sig, VERIFY="constexpr", SEED="constexpr")
-            c_ptx = ptx(new_bw._rtiled_bw, sig_v, dict(const, VERIFY=0, SEED=0), 8)
-            on = ptx(new_bw._rtiled_bw, sig_v, dict(const, VERIFY=3, SEED=5), 8)
+            sig_v = dict(sig, VERIFY="constexpr")
+            c_ptx = ptx(new_bw._rtiled_bw, sig_v, dict(const, VERIFY=0), 8)
+            on = ptx(new_bw._rtiled_bw, sig_v, dict(const, VERIFY=3), 8)
             rows.append(dict(kernel="backward", cell=cell, width=width, slice_width=s,
                              explicit_zero_equal=a_ptx == c_ptx, verify_on_differs=on != a_ptx))
     status = "PASS" if all(r["explicit_zero_equal"] and r["verify_on_differs"] for r in rows) \

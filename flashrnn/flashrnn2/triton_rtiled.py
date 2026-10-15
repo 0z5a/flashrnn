@@ -47,10 +47,10 @@ def _group_barrier(SYNC, slot, target, ERR, SPIN: tl.constexpr):
 
 
 @triton.jit
-def _verify_delay(SEED: tl.constexpr, a, b, c, POINT: tl.constexpr):
-    # Race-verification only: a pseudo-random sleep of 0-4 us per (CTA, step, point), from the seed.
-    x = (a * 73856093) ^ (b * 19349663) ^ (c * 83492791) ^ (SEED * 40503 + POINT * 977)
-    ns = ((x ^ (x >> 13)) * 1274126177) & 4095
+def _verify_delay(seed, a, b, c, POINT: tl.constexpr):
+    # Race-verification only: a pseudo-random sleep of 0-4 us per (CTA, step, point), from the runtime seed.
+    x = (a * 7919) ^ (b * 104729) ^ (c * 1299709) ^ (seed * 40503 + POINT * 977)
+    ns = ((x ^ (x >> 13)) * 48271) & 4095
     tl.inline_asm_elementwise("nanosleep.u32 $1; mov.u32 $0, 0;", "=r,r", [tl.full((1,), 0, tl.int32) + ns],
                               dtype=tl.int32, is_pure=False, pack=1)
 
@@ -117,11 +117,12 @@ def _rtiled(
     OUTPUT_MODE: tl.constexpr,
     SPIN: tl.constexpr,
     VERIFY: tl.constexpr = 0,
-    SEED: tl.constexpr = 0,
 ):
     split = tl.program_id(0)
     slot = tl.program_id(1)
     splits = tl.num_programs(0)
+    if VERIFY & V_DELAY:
+        seed = tl.load(ERR + 3)
     local = tl.arange(0, BM)
     o = split * S + tl.arange(0, S)
     k1 = tl.arange(0, K1)
@@ -175,7 +176,7 @@ def _rtiled(
                 if VERIFY & V_BROKEN_SINGLE:
                     parity = 0
                 if VERIFY & V_DELAY:
-                    _verify_delay(SEED, split + splits * slot, group, step, 1)
+                    _verify_delay(seed, split + splits * slot, group, step, 1)
                 read = XBUF + ((slot * 2 + parity) * BM + local[:, None]) * D
                 h1 = tl.load(read + k1[None, :], k1[None, :] < D, 0, cache_modifier=".cg")
                 if K2 > 0:
@@ -249,7 +250,7 @@ def _rtiled(
                         parity = 0
                     write = XBUF + ((slot * 2 + parity) * BM + local[:, None]) * D + o[None, :]
                     if VERIFY & V_DELAY:
-                        _verify_delay(SEED, split + splits * slot, group, step, 0)
+                        _verify_delay(seed, split + splits * slot, group, step, 0)
                     if VERIFY & V_BROKEN_ARRIVE_FIRST:
                         bars += 1
                         _group_barrier(SYNC, slot, bars * splits, ERR, SPIN)
@@ -381,7 +382,9 @@ def recurrence(
     verify, seed = verify_bits(_verify)
     if verify & 1 and (output_mode == "last" or snapshot_dtype != torch.float32):
         raise ValueError("the race check reads the FP32 hidden output")
-    err = torch.zeros((3 if verify else 1,), device=device, dtype=torch.int32)
+    err = torch.zeros((4 if verify else 1,), device=device, dtype=torch.int32)
+    if verify:
+        err[3] = seed
     mode = {"full": 0, "hidden": 1, "last": 2}[output_mode]
     start = sequence_context.step_offset == 0
     previous = initial
@@ -400,7 +403,7 @@ def recurrence(
             # The driver rejects a non-co-resident grid instead of deadlocking.
             # Both sync modes share the compiled kernel, so both launch cooperatively.
             launch_cooperative_grid=True,
-            **(dict(VERIFY=verify, SEED=seed) if verify else {}),
+            **(dict(VERIFY=verify) if verify else {}),
         )
         previous = carry
     if verify:

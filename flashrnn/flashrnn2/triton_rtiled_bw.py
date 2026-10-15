@@ -113,11 +113,12 @@ def _rtiled_bw(
     K2: tl.constexpr,
     SPIN: tl.constexpr,
     VERIFY: tl.constexpr = 0,
-    SEED: tl.constexpr = 0,
 ):
     split = tl.program_id(0)
     slot = tl.program_id(1)
     splits = tl.num_programs(0)
+    if VERIFY & V_DELAY:
+        seed = tl.load(ERR + 3)
     local = tl.arange(0, BM)
     p = split * S + tl.arange(0, S)
     p_valid = p < D
@@ -170,7 +171,7 @@ def _rtiled_bw(
                     if VERIFY & V_BROKEN_SINGLE:
                         parity = 0
                     if VERIFY & V_DELAY:
-                        _verify_delay(SEED, split + splits * slot, group, t, 1)
+                        _verify_delay(seed, split + splits * slot, group, t, 1)
                     src_row = ((slot * 2 + parity) * BM + local) * (4 * D)
                     dg_row = ((rows * T + t + 1) * 4 * H + head) * D
                     if VERIFY & V_CHECK:
@@ -239,7 +240,7 @@ def _rtiled_bw(
                     parity = 0
                 write = XBUF + ((slot * 2 + parity) * BM + local[:, None]) * (4 * D) + p[None, :]
                 if VERIFY & V_DELAY:
-                    _verify_delay(SEED, split + splits * slot, group, t, 0)
+                    _verify_delay(seed, split + splits * slot, group, t, 0)
                 if VERIFY & V_BROKEN_ARRIVE_FIRST:
                     bars += 1
                     _group_barrier(SYNC, slot, bars * splits, ERR, SPIN)
@@ -260,7 +261,7 @@ def _rtiled_bw(
                 if VERIFY & V_BROKEN_SINGLE:
                     parity = 0
                 if VERIFY & V_DELAY:
-                    _verify_delay(SEED, split + splits * slot, group, -1, 1)
+                    _verify_delay(seed, split + splits * slot, group, -1, 1)
                 src_row = ((slot * 2 + parity) * BM + local) * (4 * D)
                 dg_row = ((rows * T) * 4 * H + head) * D
                 if VERIFY & V_CHECK:
@@ -375,7 +376,9 @@ def backward(
     launches = 1 if sync == "grid" else steps + 1
     sync_counts = torch.zeros((launches, slots), device=device, dtype=torch.int32)
     verify, seed = verify_bits(_verify)
-    err = torch.zeros((3 if verify else 1,), device=device, dtype=torch.int32)
+    err = torch.zeros((4 if verify else 1,), device=device, dtype=torch.int32)
+    if verify:
+        err[3] = seed
     kernel = None
     for index in range(launches):
         if sync == "grid":
@@ -391,7 +394,7 @@ def backward(
             num_warps=num_warps,
             enable_fp_fusion=False,
             launch_cooperative_grid=True,
-            **(dict(VERIFY=verify, SEED=seed) if verify else {}),
+            **(dict(VERIFY=verify) if verify else {}),
         )
     if verify:
         counts = err.tolist()
