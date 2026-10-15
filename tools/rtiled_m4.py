@@ -190,7 +190,17 @@ def v1_module():
             flags = [f.replace("arch=compute_80,code=compute_80", "arch=compute_90,code=sm_90")
                      for f in keywords["extra_cuda_cflags"]]
             keywords["extra_cuda_cflags"] = flags
-            return super().load(*positional, **keywords)
+            # Lanes of one node share the build root: one build/import at a time, so that two lanes building the
+            # same module cannot see each other's half-written artifact (seen as hash mismatches / missing PyInit).
+            import fcntl
+            self_root = Path(os.environ["FRNN_V1_BUILD_ROOT"])
+            self_root.mkdir(parents=True, exist_ok=True)
+            with open(self_root / ".build.lock", "w") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX)
+                try:
+                    return super().load(*positional, **keywords)
+                finally:
+                    fcntl.flock(lock, fcntl.LOCK_UN)
 
     cuda_init._load = H100Builder(Path(os.environ["FRNN_V1_BUILD_ROOT"]), V1_BASE / "pinned/flashrnn/flashrnn").load
     dirs = [Path(p) for p in os.environ.get("LD_LIBRARY_PATH", "").split(":") if p]
