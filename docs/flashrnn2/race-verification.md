@@ -38,4 +38,25 @@ positive control), 21 runs per variant (no delay and 20 seeds):
 * a broken variant is detected when violations are counted in at least 80% of its runs, and no run may change the
   output without counting a violation.
 
-Results: pending.
+## Round 1 (job 47325397, 4 min 52 s, archive verified, 85 files)
+
+* **Every correct kernel is clean.** 16 configurations (Triton forward and backward at D = 256/768; TileLang cluster
+  D = 256 BM 16/32; TileLang grid D = 768 BM 16 one warpgroup and BM 64 two warpgroups; LSTM and sLSTM), 21 runs each
+  with and without delays: zero violations, outputs bitwise equal to the uninstrumented kernel in all 336 runs.
+* **Positive control.** The two-warpgroup cluster kernel was flagged in 21/21 runs for both cells (outputs differ
+  in all of them): what it consumes differs from what its peers stored, so its defect is in the exchange, not in the
+  cell arithmetic.
+* **Controls that removed or reordered synchronization were caught:** skipped barrier (Triton forward/backward,
+  TileLang grid) 21/21 everywhere; arrive before the stores 19/21-21/21 (the Triton backward's outputs happened to
+  stay equal, yet every run was flagged); skipped wait (cluster, LSTM) 21/21. No run anywhere changed its output
+  without being flagged.
+* **Weak or invalid controls under the pre-registered 80% rule:**
+  * single buffer: flagged in 0-21 of 21 runs depending on the configuration, never with a changed output: with
+    0-4 us delays the hazard window rarely opened (when it did, the post-MMA check saw the overwrite);
+  * cluster without the explicit block barrier: never flagged because it is not broken -- TileLang's generated
+    source still contains a `__syncthreads()` at that point (it inserts one for the shared-memory write/read itself);
+  * sLSTM cluster skipped wait: the variant corrupted the CUDA context ("unspecified launch failure") after 7 and 1
+    flagged runs, and the later variants of the same process could not run.
+
+Round 2 (job 47332827) widens the delays to 0-65 us, moves the cluster consumer delay after the wait (inside the
+single-buffer window), runs every variant in its own process, and reports the no-barrier cluster variant only.
