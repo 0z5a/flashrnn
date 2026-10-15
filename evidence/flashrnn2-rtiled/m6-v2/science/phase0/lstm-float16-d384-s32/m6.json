@@ -1,0 +1,212 @@
+{
+ "cell": "lstm",
+ "dtype": "float16",
+ "width": 384,
+ "slice_width": 32,
+ "identity": {
+  "gpu": "NVIDIA H100",
+  "capability": [
+   9,
+   0
+  ],
+  "triton": "3.6.0",
+  "tilelang": "0.1.15"
+ },
+ "source": {
+  "flashrnn/flashrnn2/tilelang_cluster.py": "f613c47084fe67346834e1b550d20e117083c2bab832c684a8b5a44f1707b262",
+  "flashrnn/flashrnn2/prepared.py": "1b2f0c5ccd6f972527479acf74d2f6b1de095414069661841338371e06d37182",
+  "flashrnn/flashrnn2/execution_policy.py": "209822804a42dc0ee000a92f3c13b86b63e510ad3e42175ecd348728d3e92a6e",
+  "flashrnn/flashrnn2/triton_rtiled.py": "5e822255adcd00c00c19c5aa217dfff268634e3b4e3c8ccb4ba5cc76b97eed12",
+  "tools/rtiled_m6_tilelang.py": "fc273f3603101c00ffb70dc98aebe29bc969c629f14e1d2d7381ecd7a4916ad9",
+  "fixture_math.py": "c5f11bd98a4091f9a7e910a6e9ecc6fc5cfea6845ca3089238a1169fac892c81"
+ },
+ "started": 1792012762.4254134,
+ "gates": {
+  "e1": "PASS",
+  "protocol": "PASS",
+  "stress": "PASS"
+ },
+ "e1": [
+  {
+   "case": "m6-lstm-float16-b3-t17-d384-h2-warm",
+   "checks": {
+    "history": {
+     "pass_": true,
+     "max_abs": 3.658565365521893e-07,
+     "failed_elements": 0,
+     "worst_normalized": 0.00015657900993873002,
+     "bitwise": false
+    },
+    "carry": {
+     "pass_": true,
+     "max_abs": 1.569076576168893e-07,
+     "failed_elements": 0,
+     "worst_normalized": 6.794287228974846e-05,
+     "bitwise": false
+    },
+    "hidden": {
+     "pass_": true,
+     "max_abs": 1.738339868717631e-07,
+     "failed_elements": 0,
+     "worst_normalized": 7.787146252548867e-05,
+     "bitwise": false
+    },
+    "last": {
+     "pass_": true,
+     "max_abs": 1.230233935556324e-07,
+     "failed_elements": 0,
+     "worst_normalized": 5.201915622696015e-05,
+     "bitwise": false
+    }
+   },
+   "status": "PASS"
+  },
+  {
+   "case": "m6-lstm-float16-b16-t128-d384-h1-warm",
+   "checks": {
+    "history": {
+     "pass_": true,
+     "max_abs": 6.531155589892257e-07,
+     "failed_elements": 0,
+     "worst_normalized": 0.0002735681826569228,
+     "bitwise": false
+    },
+    "carry": {
+     "pass_": true,
+     "max_abs": 2.888583809368406e-07,
+     "failed_elements": 0,
+     "worst_normalized": 0.0001270312838544601,
+     "bitwise": false
+    },
+    "hidden": {
+     "pass_": true,
+     "max_abs": 3.175573078783439e-07,
+     "failed_elements": 0,
+     "worst_normalized": 0.00014204574266580566,
+     "bitwise": false
+    },
+    "last": {
+     "pass_": true,
+     "max_abs": 1.7161274047444372e-07,
+     "failed_elements": 0,
+     "worst_normalized": 8.330415427718475e-05,
+     "bitwise": false
+    }
+   },
+   "status": "PASS"
+  }
+ ],
+ "protocol": [
+  {
+   "batch": 1,
+   "steps": 33,
+   "heads": 1,
+   "normalizer": "nonzero",
+   "chunks": [
+    1,
+    3,
+    13,
+    16
+   ],
+   "checks": {
+    "per_step_launches_bitwise": true,
+    "prepared_ragged_chunks_bitwise": true,
+    "public_chunked_calls_bitwise": true,
+    "hidden_last_equal_full_bitwise": true,
+    "repeat_20_bitwise": true,
+    "side_stream_bitwise": true,
+    "graph_replay_bitwise": true,
+    "graph_tracks_bound_initial": true
+   },
+   "vs_triton": {
+    "slice_width": 32,
+    "warps": 8,
+    "history_max_abs": 4.6879053115844727e-05,
+    "carry_max_abs": 1.9550323486328125e-05,
+    "bitwise": false
+   },
+   "status": "PASS"
+  },
+  {
+   "batch": 3,
+   "steps": 17,
+   "heads": 2,
+   "normalizer": "nonzero",
+   "chunks": [
+    1,
+    3,
+    13
+   ],
+   "checks": {
+    "per_step_launches_bitwise": true,
+    "prepared_ragged_chunks_bitwise": true,
+    "public_chunked_calls_bitwise": true,
+    "hidden_last_equal_full_bitwise": true,
+    "repeat_20_bitwise": true,
+    "side_stream_bitwise": true,
+    "graph_replay_bitwise": true,
+    "graph_tracks_bound_initial": true
+   },
+   "vs_triton": {
+    "slice_width": 32,
+    "warps": 8,
+    "history_max_abs": 4.251301288604736e-05,
+    "carry_max_abs": 3.3653806895017624e-05,
+    "bitwise": false
+   },
+   "status": "PASS"
+  },
+  {
+   "batch": 33,
+   "steps": 40,
+   "heads": 2,
+   "normalizer": "nonzero",
+   "chunks": [
+    1,
+    3,
+    13,
+    23
+   ],
+   "checks": {
+    "per_step_launches_bitwise": true,
+    "prepared_ragged_chunks_bitwise": true,
+    "public_chunked_calls_bitwise": true,
+    "hidden_last_equal_full_bitwise": true,
+    "repeat_20_bitwise": true,
+    "side_stream_bitwise": true,
+    "graph_replay_bitwise": true,
+    "graph_tracks_bound_initial": true
+   },
+   "vs_triton": {
+    "slice_width": 32,
+    "warps": 8,
+    "history_max_abs": 6.126612424850464e-05,
+    "carry_max_abs": 4.598498344421387e-05,
+    "bitwise": false
+   },
+   "status": "PASS"
+  }
+ ],
+ "stress": [
+  {
+   "batch": 64,
+   "steps": 128,
+   "heads": 4,
+   "ctas": 192,
+   "repeats": 50,
+   "bitwise": true,
+   "status": "PASS"
+  },
+  {
+   "batch": 128,
+   "steps": 64,
+   "heads": 8,
+   "ctas": 768,
+   "repeats": 50,
+   "bitwise": true,
+   "status": "PASS"
+  }
+ ],
+ "status": "PASS",
+ "finished": 1792012867.8824942
+}

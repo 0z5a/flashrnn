@@ -1,0 +1,5670 @@
+{
+ "started": 1792006968.023835,
+ "plan": {
+  "purpose": "ThunderKittens vs TileLang R splitting on H100: same algorithm in both (cluster of k CTAs, WGMMA with the R slice as operand A, h slices exchanged by bulk shared::cluster copies completing on the receiver's mbarrier, no per-step cluster barrier); each also against Triton R tiling (L2 barrier); kernel-level comparison at T=1024 isolates the R-splitting kernels from each framework's launch path, the classifier rows include it",
+  "workload": "external-baseline classifier as in M4: 4 layers, vocab 512, FP16, (B,C,T) in (1,8,32),(16,32,32),(32,64,128); D in 192,256,384,512",
+  "protocol": "phase 0 cell checks (hidden + FP32 carry vs FP64 GPU oracle, CELL_BUDGET, FP16, LSTM warm / sLSTM zero,mixed,warm, (3,17,2),(16,128,1)); split-0 selection among passing configurations -> frozen hashed table -> split-1 timing 5 starts x 20 ABBA/BAAB blocks; model-budget checks of every arm vs FP64 model oracle and arm-vs-arm before timing; hierarchical bootstrap seed 20261013+index",
+  "minutes": 160,
+  "starts": 5,
+  "blocks": 20,
+  "cellcheck_timeout_s": 300,
+  "cell_checks": [
+   [
+    "tk",
+    "lstm",
+    128,
+    32
+   ],
+   [
+    "tk",
+    "lstm",
+    128,
+    64
+   ],
+   [
+    "tk",
+    "lstm",
+    192,
+    16
+   ],
+   [
+    "tk",
+    "lstm",
+    192,
+    32
+   ],
+   [
+    "tk",
+    "lstm",
+    192,
+    64
+   ],
+   [
+    "tk",
+    "lstm",
+    256,
+    16
+   ],
+   [
+    "tk",
+    "lstm",
+    256,
+    32
+   ],
+   [
+    "tk",
+    "lstm",
+    256,
+    64
+   ],
+   [
+    "tk",
+    "lstm",
+    384,
+    32
+   ],
+   [
+    "tk",
+    "lstm",
+    512,
+    32
+   ],
+   [
+    "tk",
+    "slstm",
+    128,
+    32
+   ],
+   [
+    "tk",
+    "slstm",
+    128,
+    64
+   ],
+   [
+    "tk",
+    "slstm",
+    192,
+    16
+   ],
+   [
+    "tk",
+    "slstm",
+    192,
+    32
+   ],
+   [
+    "tk",
+    "slstm",
+    192,
+    64
+   ],
+   [
+    "tk",
+    "slstm",
+    256,
+    16
+   ],
+   [
+    "tk",
+    "slstm",
+    256,
+    32
+   ],
+   [
+    "tk",
+    "slstm",
+    256,
+    64
+   ],
+   [
+    "tk",
+    "slstm",
+    384,
+    32
+   ],
+   [
+    "tk",
+    "slstm",
+    512,
+    32
+   ],
+   [
+    "tilelang_v2",
+    "lstm",
+    128,
+    32
+   ],
+   [
+    "tilelang_v2",
+    "lstm",
+    128,
+    64
+   ],
+   [
+    "tilelang_v2",
+    "lstm",
+    192,
+    16
+   ],
+   [
+    "tilelang_v2",
+    "lstm",
+    192,
+    32
+   ],
+   [
+    "tilelang_v2",
+    "lstm",
+    192,
+    64
+   ],
+   [
+    "tilelang_v2",
+    "lstm",
+    256,
+    16
+   ],
+   [
+    "tilelang_v2",
+    "lstm",
+    256,
+    32
+   ],
+   [
+    "tilelang_v2",
+    "lstm",
+    256,
+    64
+   ],
+   [
+    "tilelang_v2",
+    "lstm",
+    384,
+    32
+   ],
+   [
+    "tilelang_v2",
+    "lstm",
+    512,
+    32
+   ],
+   [
+    "tilelang_v2",
+    "slstm",
+    128,
+    32
+   ],
+   [
+    "tilelang_v2",
+    "slstm",
+    128,
+    64
+   ],
+   [
+    "tilelang_v2",
+    "slstm",
+    192,
+    16
+   ],
+   [
+    "tilelang_v2",
+    "slstm",
+    192,
+    32
+   ],
+   [
+    "tilelang_v2",
+    "slstm",
+    192,
+    64
+   ],
+   [
+    "tilelang_v2",
+    "slstm",
+    256,
+    16
+   ],
+   [
+    "tilelang_v2",
+    "slstm",
+    256,
+    32
+   ],
+   [
+    "tilelang_v2",
+    "slstm",
+    256,
+    64
+   ],
+   [
+    "tilelang_v2",
+    "slstm",
+    384,
+    32
+   ],
+   [
+    "tilelang_v2",
+    "slstm",
+    512,
+    32
+   ]
+  ],
+  "select_cases": [
+   {
+    "name": "k5-lstm-d192-b16-t1024",
+    "level": "kernel",
+    "lane": 0,
+    "cell": "lstm",
+    "width": 192,
+    "batch": 16,
+    "concurrency": 16,
+    "steps": 1024,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 16
+      },
+      {
+       "kind": "tk",
+       "slice_width": 32
+      },
+      {
+       "kind": "tk",
+       "slice_width": 64
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 16
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 64
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 128,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 128,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "k5-lstm-d192-b64-t1024",
+    "level": "kernel",
+    "lane": 1,
+    "cell": "lstm",
+    "width": 192,
+    "batch": 64,
+    "concurrency": 64,
+    "steps": 1024,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 16
+      },
+      {
+       "kind": "tk",
+       "slice_width": 32
+      },
+      {
+       "kind": "tk",
+       "slice_width": 64
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 16
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 64
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 128,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 128,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "k5-lstm-d256-b16-t1024",
+    "level": "kernel",
+    "lane": 2,
+    "cell": "lstm",
+    "width": 256,
+    "batch": 16,
+    "concurrency": 16,
+    "steps": 1024,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 16
+      },
+      {
+       "kind": "tk",
+       "slice_width": 32
+      },
+      {
+       "kind": "tk",
+       "slice_width": 64
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 16
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 64
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "k5-lstm-d256-b64-t1024",
+    "level": "kernel",
+    "lane": 3,
+    "cell": "lstm",
+    "width": 256,
+    "batch": 64,
+    "concurrency": 64,
+    "steps": 1024,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 16
+      },
+      {
+       "kind": "tk",
+       "slice_width": 32
+      },
+      {
+       "kind": "tk",
+       "slice_width": 64
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 16
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 64
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "k5-lstm-d384-b16-t1024",
+    "level": "kernel",
+    "lane": 0,
+    "cell": "lstm",
+    "width": 384,
+    "batch": 16,
+    "concurrency": 16,
+    "steps": 1024,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 32
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "k5-lstm-d384-b64-t1024",
+    "level": "kernel",
+    "lane": 1,
+    "cell": "lstm",
+    "width": 384,
+    "batch": 64,
+    "concurrency": 64,
+    "steps": 1024,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 32
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "k5-lstm-d512-b16-t1024",
+    "level": "kernel",
+    "lane": 2,
+    "cell": "lstm",
+    "width": 512,
+    "batch": 16,
+    "concurrency": 16,
+    "steps": 1024,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 32
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "k5-lstm-d512-b64-t1024",
+    "level": "kernel",
+    "lane": 3,
+    "cell": "lstm",
+    "width": 512,
+    "batch": 64,
+    "concurrency": 64,
+    "steps": 1024,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 32
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "k5-slstm-d192-b16-t1024",
+    "level": "kernel",
+    "lane": 0,
+    "cell": "slstm",
+    "width": 192,
+    "batch": 16,
+    "concurrency": 16,
+    "steps": 1024,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 16
+      },
+      {
+       "kind": "tk",
+       "slice_width": 32
+      },
+      {
+       "kind": "tk",
+       "slice_width": 64
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 16
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 64
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 128,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 128,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "k5-slstm-d192-b64-t1024",
+    "level": "kernel",
+    "lane": 1,
+    "cell": "slstm",
+    "width": 192,
+    "batch": 64,
+    "concurrency": 64,
+    "steps": 1024,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 16
+      },
+      {
+       "kind": "tk",
+       "slice_width": 32
+      },
+      {
+       "kind": "tk",
+       "slice_width": 64
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 16
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 64
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 128,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 128,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "k5-slstm-d256-b16-t1024",
+    "level": "kernel",
+    "lane": 2,
+    "cell": "slstm",
+    "width": 256,
+    "batch": 16,
+    "concurrency": 16,
+    "steps": 1024,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 16
+      },
+      {
+       "kind": "tk",
+       "slice_width": 32
+      },
+      {
+       "kind": "tk",
+       "slice_width": 64
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 16
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 64
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "k5-slstm-d256-b64-t1024",
+    "level": "kernel",
+    "lane": 3,
+    "cell": "slstm",
+    "width": 256,
+    "batch": 64,
+    "concurrency": 64,
+    "steps": 1024,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 16
+      },
+      {
+       "kind": "tk",
+       "slice_width": 32
+      },
+      {
+       "kind": "tk",
+       "slice_width": 64
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 16
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 64
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "k5-slstm-d384-b16-t1024",
+    "level": "kernel",
+    "lane": 0,
+    "cell": "slstm",
+    "width": 384,
+    "batch": 16,
+    "concurrency": 16,
+    "steps": 1024,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 32
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "k5-slstm-d384-b64-t1024",
+    "level": "kernel",
+    "lane": 1,
+    "cell": "slstm",
+    "width": 384,
+    "batch": 64,
+    "concurrency": 64,
+    "steps": 1024,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 32
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "k5-slstm-d512-b16-t1024",
+    "level": "kernel",
+    "lane": 2,
+    "cell": "slstm",
+    "width": 512,
+    "batch": 16,
+    "concurrency": 16,
+    "steps": 1024,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 32
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "k5-slstm-d512-b64-t1024",
+    "level": "kernel",
+    "lane": 3,
+    "cell": "slstm",
+    "width": 512,
+    "batch": 64,
+    "concurrency": 64,
+    "steps": 1024,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 32
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "m5-lstm-d192-b1-c8-t32",
+    "lane": 0,
+    "cell": "lstm",
+    "width": 192,
+    "batch": 1,
+    "concurrency": 8,
+    "steps": 32,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 16
+      },
+      {
+       "kind": "tk",
+       "slice_width": 32
+      },
+      {
+       "kind": "tk",
+       "slice_width": 64
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 16
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 64
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 128,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 128,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "m5-lstm-d192-b16-c32-t32",
+    "lane": 1,
+    "cell": "lstm",
+    "width": 192,
+    "batch": 16,
+    "concurrency": 32,
+    "steps": 32,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 16
+      },
+      {
+       "kind": "tk",
+       "slice_width": 32
+      },
+      {
+       "kind": "tk",
+       "slice_width": 64
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 16
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 64
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 128,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 128,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "m5-lstm-d192-b32-c64-t128",
+    "lane": 2,
+    "cell": "lstm",
+    "width": 192,
+    "batch": 32,
+    "concurrency": 64,
+    "steps": 128,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 16
+      },
+      {
+       "kind": "tk",
+       "slice_width": 32
+      },
+      {
+       "kind": "tk",
+       "slice_width": 64
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 16
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 64
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 128,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 128,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "m5-lstm-d256-b1-c8-t32",
+    "lane": 3,
+    "cell": "lstm",
+    "width": 256,
+    "batch": 1,
+    "concurrency": 8,
+    "steps": 32,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 16
+      },
+      {
+       "kind": "tk",
+       "slice_width": 32
+      },
+      {
+       "kind": "tk",
+       "slice_width": 64
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 16
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 64
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "m5-lstm-d256-b16-c32-t32",
+    "lane": 0,
+    "cell": "lstm",
+    "width": 256,
+    "batch": 16,
+    "concurrency": 32,
+    "steps": 32,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 16
+      },
+      {
+       "kind": "tk",
+       "slice_width": 32
+      },
+      {
+       "kind": "tk",
+       "slice_width": 64
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 16
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 64
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "m5-lstm-d256-b32-c64-t128",
+    "lane": 1,
+    "cell": "lstm",
+    "width": 256,
+    "batch": 32,
+    "concurrency": 64,
+    "steps": 128,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 16
+      },
+      {
+       "kind": "tk",
+       "slice_width": 32
+      },
+      {
+       "kind": "tk",
+       "slice_width": 64
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 16
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 64
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "m5-lstm-d384-b1-c8-t32",
+    "lane": 2,
+    "cell": "lstm",
+    "width": 384,
+    "batch": 1,
+    "concurrency": 8,
+    "steps": 32,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 32
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "m5-lstm-d384-b16-c32-t32",
+    "lane": 3,
+    "cell": "lstm",
+    "width": 384,
+    "batch": 16,
+    "concurrency": 32,
+    "steps": 32,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 32
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "m5-lstm-d384-b32-c64-t128",
+    "lane": 0,
+    "cell": "lstm",
+    "width": 384,
+    "batch": 32,
+    "concurrency": 64,
+    "steps": 128,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 32
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "m5-lstm-d512-b1-c8-t32",
+    "lane": 1,
+    "cell": "lstm",
+    "width": 512,
+    "batch": 1,
+    "concurrency": 8,
+    "steps": 32,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 32
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "m5-lstm-d512-b16-c32-t32",
+    "lane": 2,
+    "cell": "lstm",
+    "width": 512,
+    "batch": 16,
+    "concurrency": 32,
+    "steps": 32,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 32
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "m5-lstm-d512-b32-c64-t128",
+    "lane": 3,
+    "cell": "lstm",
+    "width": 512,
+    "batch": 32,
+    "concurrency": 64,
+    "steps": 128,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 32
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "m5-slstm-d192-b1-c8-t32",
+    "lane": 0,
+    "cell": "slstm",
+    "width": 192,
+    "batch": 1,
+    "concurrency": 8,
+    "steps": 32,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 16
+      },
+      {
+       "kind": "tk",
+       "slice_width": 32
+      },
+      {
+       "kind": "tk",
+       "slice_width": 64
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 16
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 64
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 128,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 128,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "m5-slstm-d192-b16-c32-t32",
+    "lane": 1,
+    "cell": "slstm",
+    "width": 192,
+    "batch": 16,
+    "concurrency": 32,
+    "steps": 32,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 16
+      },
+      {
+       "kind": "tk",
+       "slice_width": 32
+      },
+      {
+       "kind": "tk",
+       "slice_width": 64
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 16
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 64
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 128,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 128,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "m5-slstm-d192-b32-c64-t128",
+    "lane": 2,
+    "cell": "slstm",
+    "width": 192,
+    "batch": 32,
+    "concurrency": 64,
+    "steps": 128,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 16
+      },
+      {
+       "kind": "tk",
+       "slice_width": 32
+      },
+      {
+       "kind": "tk",
+       "slice_width": 64
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 16
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 64
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 128,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 128,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "m5-slstm-d256-b1-c8-t32",
+    "lane": 3,
+    "cell": "slstm",
+    "width": 256,
+    "batch": 1,
+    "concurrency": 8,
+    "steps": 32,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 16
+      },
+      {
+       "kind": "tk",
+       "slice_width": 32
+      },
+      {
+       "kind": "tk",
+       "slice_width": 64
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 16
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 64
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "m5-slstm-d256-b16-c32-t32",
+    "lane": 0,
+    "cell": "slstm",
+    "width": 256,
+    "batch": 16,
+    "concurrency": 32,
+    "steps": 32,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 16
+      },
+      {
+       "kind": "tk",
+       "slice_width": 32
+      },
+      {
+       "kind": "tk",
+       "slice_width": 64
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 16
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 64
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "m5-slstm-d256-b32-c64-t128",
+    "lane": 1,
+    "cell": "slstm",
+    "width": 256,
+    "batch": 32,
+    "concurrency": 64,
+    "steps": 128,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 16
+      },
+      {
+       "kind": "tk",
+       "slice_width": 32
+      },
+      {
+       "kind": "tk",
+       "slice_width": 64
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 16
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      },
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 64
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "m5-slstm-d384-b1-c8-t32",
+    "lane": 2,
+    "cell": "slstm",
+    "width": 384,
+    "batch": 1,
+    "concurrency": 8,
+    "steps": 32,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 32
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "m5-slstm-d384-b16-c32-t32",
+    "lane": 3,
+    "cell": "slstm",
+    "width": 384,
+    "batch": 16,
+    "concurrency": 32,
+    "steps": 32,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 32
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "m5-slstm-d384-b32-c64-t128",
+    "lane": 0,
+    "cell": "slstm",
+    "width": 384,
+    "batch": 32,
+    "concurrency": 64,
+    "steps": 128,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 32
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": true
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 64,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "m5-slstm-d512-b1-c8-t32",
+    "lane": 1,
+    "cell": "slstm",
+    "width": 512,
+    "batch": 1,
+    "concurrency": 8,
+    "steps": 32,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 32
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "m5-slstm-d512-b16-c32-t32",
+    "lane": 2,
+    "cell": "slstm",
+    "width": 512,
+    "batch": 16,
+    "concurrency": 32,
+    "steps": 32,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 32
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   },
+   {
+    "name": "m5-slstm-d512-b32-c64-t128",
+    "lane": 3,
+    "cell": "slstm",
+    "width": 512,
+    "batch": 32,
+    "concurrency": 64,
+    "steps": 128,
+    "roles": {
+     "tk": [
+      {
+       "kind": "tk",
+       "slice_width": 32
+      }
+     ],
+     "tilelang_v2": [
+      {
+       "kind": "tilelang_v2",
+       "slice_width": 32
+      }
+     ],
+     "triton": [
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 16,
+       "warps": 8,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 4,
+       "pad_k": false
+      },
+      {
+       "kind": "rtiled",
+       "slice_width": 32,
+       "warps": 8,
+       "pad_k": false
+      }
+     ]
+    }
+   }
+  ],
+  "comparisons": [
+   {
+    "cell": "lstm",
+    "width": 192,
+    "batch": 16,
+    "concurrency": 16,
+    "steps": 1024,
+    "select_case": "k5-lstm-d192-b16-t1024",
+    "level": "kernel",
+    "name": "k5-lstm-d192-b16-t1024-tk-vs-tl",
+    "experiment": "K_TK_VS_TL",
+    "lane": 0,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "lstm",
+    "width": 192,
+    "batch": 16,
+    "concurrency": 16,
+    "steps": 1024,
+    "select_case": "k5-lstm-d192-b16-t1024",
+    "level": "kernel",
+    "name": "k5-lstm-d192-b16-t1024-tl-vs-triton",
+    "experiment": "K_TL_VS_TRITON",
+    "lane": 2,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "lstm",
+    "width": 192,
+    "batch": 64,
+    "concurrency": 64,
+    "steps": 1024,
+    "select_case": "k5-lstm-d192-b64-t1024",
+    "level": "kernel",
+    "name": "k5-lstm-d192-b64-t1024-tk-vs-tl",
+    "experiment": "K_TK_VS_TL",
+    "lane": 3,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "lstm",
+    "width": 192,
+    "batch": 64,
+    "concurrency": 64,
+    "steps": 1024,
+    "select_case": "k5-lstm-d192-b64-t1024",
+    "level": "kernel",
+    "name": "k5-lstm-d192-b64-t1024-tl-vs-triton",
+    "experiment": "K_TL_VS_TRITON",
+    "lane": 1,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "lstm",
+    "width": 256,
+    "batch": 16,
+    "concurrency": 16,
+    "steps": 1024,
+    "select_case": "k5-lstm-d256-b16-t1024",
+    "level": "kernel",
+    "name": "k5-lstm-d256-b16-t1024-tk-vs-tl",
+    "experiment": "K_TK_VS_TL",
+    "lane": 2,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "lstm",
+    "width": 256,
+    "batch": 16,
+    "concurrency": 16,
+    "steps": 1024,
+    "select_case": "k5-lstm-d256-b16-t1024",
+    "level": "kernel",
+    "name": "k5-lstm-d256-b16-t1024-tl-vs-triton",
+    "experiment": "K_TL_VS_TRITON",
+    "lane": 0,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "lstm",
+    "width": 256,
+    "batch": 64,
+    "concurrency": 64,
+    "steps": 1024,
+    "select_case": "k5-lstm-d256-b64-t1024",
+    "level": "kernel",
+    "name": "k5-lstm-d256-b64-t1024-tk-vs-tl",
+    "experiment": "K_TK_VS_TL",
+    "lane": 1,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "lstm",
+    "width": 256,
+    "batch": 64,
+    "concurrency": 64,
+    "steps": 1024,
+    "select_case": "k5-lstm-d256-b64-t1024",
+    "level": "kernel",
+    "name": "k5-lstm-d256-b64-t1024-tl-vs-triton",
+    "experiment": "K_TL_VS_TRITON",
+    "lane": 3,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "lstm",
+    "width": 384,
+    "batch": 16,
+    "concurrency": 16,
+    "steps": 1024,
+    "select_case": "k5-lstm-d384-b16-t1024",
+    "level": "kernel",
+    "name": "k5-lstm-d384-b16-t1024-tk-vs-tl",
+    "experiment": "K_TK_VS_TL",
+    "lane": 0,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "lstm",
+    "width": 384,
+    "batch": 16,
+    "concurrency": 16,
+    "steps": 1024,
+    "select_case": "k5-lstm-d384-b16-t1024",
+    "level": "kernel",
+    "name": "k5-lstm-d384-b16-t1024-tl-vs-triton",
+    "experiment": "K_TL_VS_TRITON",
+    "lane": 2,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "lstm",
+    "width": 384,
+    "batch": 64,
+    "concurrency": 64,
+    "steps": 1024,
+    "select_case": "k5-lstm-d384-b64-t1024",
+    "level": "kernel",
+    "name": "k5-lstm-d384-b64-t1024-tk-vs-tl",
+    "experiment": "K_TK_VS_TL",
+    "lane": 3,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "lstm",
+    "width": 384,
+    "batch": 64,
+    "concurrency": 64,
+    "steps": 1024,
+    "select_case": "k5-lstm-d384-b64-t1024",
+    "level": "kernel",
+    "name": "k5-lstm-d384-b64-t1024-tl-vs-triton",
+    "experiment": "K_TL_VS_TRITON",
+    "lane": 1,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "lstm",
+    "width": 512,
+    "batch": 16,
+    "concurrency": 16,
+    "steps": 1024,
+    "select_case": "k5-lstm-d512-b16-t1024",
+    "level": "kernel",
+    "name": "k5-lstm-d512-b16-t1024-tk-vs-tl",
+    "experiment": "K_TK_VS_TL",
+    "lane": 2,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "lstm",
+    "width": 512,
+    "batch": 16,
+    "concurrency": 16,
+    "steps": 1024,
+    "select_case": "k5-lstm-d512-b16-t1024",
+    "level": "kernel",
+    "name": "k5-lstm-d512-b16-t1024-tl-vs-triton",
+    "experiment": "K_TL_VS_TRITON",
+    "lane": 0,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "lstm",
+    "width": 512,
+    "batch": 64,
+    "concurrency": 64,
+    "steps": 1024,
+    "select_case": "k5-lstm-d512-b64-t1024",
+    "level": "kernel",
+    "name": "k5-lstm-d512-b64-t1024-tk-vs-tl",
+    "experiment": "K_TK_VS_TL",
+    "lane": 1,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "lstm",
+    "width": 512,
+    "batch": 64,
+    "concurrency": 64,
+    "steps": 1024,
+    "select_case": "k5-lstm-d512-b64-t1024",
+    "level": "kernel",
+    "name": "k5-lstm-d512-b64-t1024-tl-vs-triton",
+    "experiment": "K_TL_VS_TRITON",
+    "lane": 3,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "slstm",
+    "width": 192,
+    "batch": 16,
+    "concurrency": 16,
+    "steps": 1024,
+    "select_case": "k5-slstm-d192-b16-t1024",
+    "level": "kernel",
+    "name": "k5-slstm-d192-b16-t1024-tk-vs-tl",
+    "experiment": "K_TK_VS_TL",
+    "lane": 0,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "slstm",
+    "width": 192,
+    "batch": 16,
+    "concurrency": 16,
+    "steps": 1024,
+    "select_case": "k5-slstm-d192-b16-t1024",
+    "level": "kernel",
+    "name": "k5-slstm-d192-b16-t1024-tl-vs-triton",
+    "experiment": "K_TL_VS_TRITON",
+    "lane": 2,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "slstm",
+    "width": 192,
+    "batch": 64,
+    "concurrency": 64,
+    "steps": 1024,
+    "select_case": "k5-slstm-d192-b64-t1024",
+    "level": "kernel",
+    "name": "k5-slstm-d192-b64-t1024-tk-vs-tl",
+    "experiment": "K_TK_VS_TL",
+    "lane": 3,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "slstm",
+    "width": 192,
+    "batch": 64,
+    "concurrency": 64,
+    "steps": 1024,
+    "select_case": "k5-slstm-d192-b64-t1024",
+    "level": "kernel",
+    "name": "k5-slstm-d192-b64-t1024-tl-vs-triton",
+    "experiment": "K_TL_VS_TRITON",
+    "lane": 1,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "slstm",
+    "width": 256,
+    "batch": 16,
+    "concurrency": 16,
+    "steps": 1024,
+    "select_case": "k5-slstm-d256-b16-t1024",
+    "level": "kernel",
+    "name": "k5-slstm-d256-b16-t1024-tk-vs-tl",
+    "experiment": "K_TK_VS_TL",
+    "lane": 2,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "slstm",
+    "width": 256,
+    "batch": 16,
+    "concurrency": 16,
+    "steps": 1024,
+    "select_case": "k5-slstm-d256-b16-t1024",
+    "level": "kernel",
+    "name": "k5-slstm-d256-b16-t1024-tl-vs-triton",
+    "experiment": "K_TL_VS_TRITON",
+    "lane": 0,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "slstm",
+    "width": 256,
+    "batch": 64,
+    "concurrency": 64,
+    "steps": 1024,
+    "select_case": "k5-slstm-d256-b64-t1024",
+    "level": "kernel",
+    "name": "k5-slstm-d256-b64-t1024-tk-vs-tl",
+    "experiment": "K_TK_VS_TL",
+    "lane": 1,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "slstm",
+    "width": 256,
+    "batch": 64,
+    "concurrency": 64,
+    "steps": 1024,
+    "select_case": "k5-slstm-d256-b64-t1024",
+    "level": "kernel",
+    "name": "k5-slstm-d256-b64-t1024-tl-vs-triton",
+    "experiment": "K_TL_VS_TRITON",
+    "lane": 3,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "slstm",
+    "width": 384,
+    "batch": 16,
+    "concurrency": 16,
+    "steps": 1024,
+    "select_case": "k5-slstm-d384-b16-t1024",
+    "level": "kernel",
+    "name": "k5-slstm-d384-b16-t1024-tk-vs-tl",
+    "experiment": "K_TK_VS_TL",
+    "lane": 0,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "slstm",
+    "width": 384,
+    "batch": 16,
+    "concurrency": 16,
+    "steps": 1024,
+    "select_case": "k5-slstm-d384-b16-t1024",
+    "level": "kernel",
+    "name": "k5-slstm-d384-b16-t1024-tl-vs-triton",
+    "experiment": "K_TL_VS_TRITON",
+    "lane": 2,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "slstm",
+    "width": 384,
+    "batch": 64,
+    "concurrency": 64,
+    "steps": 1024,
+    "select_case": "k5-slstm-d384-b64-t1024",
+    "level": "kernel",
+    "name": "k5-slstm-d384-b64-t1024-tk-vs-tl",
+    "experiment": "K_TK_VS_TL",
+    "lane": 3,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "slstm",
+    "width": 384,
+    "batch": 64,
+    "concurrency": 64,
+    "steps": 1024,
+    "select_case": "k5-slstm-d384-b64-t1024",
+    "level": "kernel",
+    "name": "k5-slstm-d384-b64-t1024-tl-vs-triton",
+    "experiment": "K_TL_VS_TRITON",
+    "lane": 1,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "slstm",
+    "width": 512,
+    "batch": 16,
+    "concurrency": 16,
+    "steps": 1024,
+    "select_case": "k5-slstm-d512-b16-t1024",
+    "level": "kernel",
+    "name": "k5-slstm-d512-b16-t1024-tk-vs-tl",
+    "experiment": "K_TK_VS_TL",
+    "lane": 2,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "slstm",
+    "width": 512,
+    "batch": 16,
+    "concurrency": 16,
+    "steps": 1024,
+    "select_case": "k5-slstm-d512-b16-t1024",
+    "level": "kernel",
+    "name": "k5-slstm-d512-b16-t1024-tl-vs-triton",
+    "experiment": "K_TL_VS_TRITON",
+    "lane": 0,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "slstm",
+    "width": 512,
+    "batch": 64,
+    "concurrency": 64,
+    "steps": 1024,
+    "select_case": "k5-slstm-d512-b64-t1024",
+    "level": "kernel",
+    "name": "k5-slstm-d512-b64-t1024-tk-vs-tl",
+    "experiment": "K_TK_VS_TL",
+    "lane": 1,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "slstm",
+    "width": 512,
+    "batch": 64,
+    "concurrency": 64,
+    "steps": 1024,
+    "select_case": "k5-slstm-d512-b64-t1024",
+    "level": "kernel",
+    "name": "k5-slstm-d512-b64-t1024-tl-vs-triton",
+    "experiment": "K_TL_VS_TRITON",
+    "lane": 3,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "lstm",
+    "width": 192,
+    "batch": 1,
+    "concurrency": 8,
+    "steps": 32,
+    "select_case": "m5-lstm-d192-b1-c8-t32",
+    "name": "m5-lstm-d192-b1-c8-t32-tk-vs-tl",
+    "experiment": "TK_VS_TL",
+    "lane": 0,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "lstm",
+    "width": 192,
+    "batch": 1,
+    "concurrency": 8,
+    "steps": 32,
+    "select_case": "m5-lstm-d192-b1-c8-t32",
+    "name": "m5-lstm-d192-b1-c8-t32-tl-vs-triton",
+    "experiment": "TL_VS_TRITON",
+    "lane": 2,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "lstm",
+    "width": 192,
+    "batch": 16,
+    "concurrency": 32,
+    "steps": 32,
+    "select_case": "m5-lstm-d192-b16-c32-t32",
+    "name": "m5-lstm-d192-b16-c32-t32-tk-vs-tl",
+    "experiment": "TK_VS_TL",
+    "lane": 3,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "lstm",
+    "width": 192,
+    "batch": 16,
+    "concurrency": 32,
+    "steps": 32,
+    "select_case": "m5-lstm-d192-b16-c32-t32",
+    "name": "m5-lstm-d192-b16-c32-t32-tl-vs-triton",
+    "experiment": "TL_VS_TRITON",
+    "lane": 1,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "lstm",
+    "width": 192,
+    "batch": 32,
+    "concurrency": 64,
+    "steps": 128,
+    "select_case": "m5-lstm-d192-b32-c64-t128",
+    "name": "m5-lstm-d192-b32-c64-t128-tk-vs-tl",
+    "experiment": "TK_VS_TL",
+    "lane": 2,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "lstm",
+    "width": 192,
+    "batch": 32,
+    "concurrency": 64,
+    "steps": 128,
+    "select_case": "m5-lstm-d192-b32-c64-t128",
+    "name": "m5-lstm-d192-b32-c64-t128-tl-vs-triton",
+    "experiment": "TL_VS_TRITON",
+    "lane": 0,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "lstm",
+    "width": 256,
+    "batch": 1,
+    "concurrency": 8,
+    "steps": 32,
+    "select_case": "m5-lstm-d256-b1-c8-t32",
+    "name": "m5-lstm-d256-b1-c8-t32-tk-vs-tl",
+    "experiment": "TK_VS_TL",
+    "lane": 1,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "lstm",
+    "width": 256,
+    "batch": 1,
+    "concurrency": 8,
+    "steps": 32,
+    "select_case": "m5-lstm-d256-b1-c8-t32",
+    "name": "m5-lstm-d256-b1-c8-t32-tl-vs-triton",
+    "experiment": "TL_VS_TRITON",
+    "lane": 3,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "lstm",
+    "width": 256,
+    "batch": 16,
+    "concurrency": 32,
+    "steps": 32,
+    "select_case": "m5-lstm-d256-b16-c32-t32",
+    "name": "m5-lstm-d256-b16-c32-t32-tk-vs-tl",
+    "experiment": "TK_VS_TL",
+    "lane": 0,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "lstm",
+    "width": 256,
+    "batch": 16,
+    "concurrency": 32,
+    "steps": 32,
+    "select_case": "m5-lstm-d256-b16-c32-t32",
+    "name": "m5-lstm-d256-b16-c32-t32-tl-vs-triton",
+    "experiment": "TL_VS_TRITON",
+    "lane": 2,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "lstm",
+    "width": 256,
+    "batch": 32,
+    "concurrency": 64,
+    "steps": 128,
+    "select_case": "m5-lstm-d256-b32-c64-t128",
+    "name": "m5-lstm-d256-b32-c64-t128-tk-vs-tl",
+    "experiment": "TK_VS_TL",
+    "lane": 3,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "lstm",
+    "width": 256,
+    "batch": 32,
+    "concurrency": 64,
+    "steps": 128,
+    "select_case": "m5-lstm-d256-b32-c64-t128",
+    "name": "m5-lstm-d256-b32-c64-t128-tl-vs-triton",
+    "experiment": "TL_VS_TRITON",
+    "lane": 1,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "lstm",
+    "width": 384,
+    "batch": 1,
+    "concurrency": 8,
+    "steps": 32,
+    "select_case": "m5-lstm-d384-b1-c8-t32",
+    "name": "m5-lstm-d384-b1-c8-t32-tk-vs-tl",
+    "experiment": "TK_VS_TL",
+    "lane": 2,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "lstm",
+    "width": 384,
+    "batch": 1,
+    "concurrency": 8,
+    "steps": 32,
+    "select_case": "m5-lstm-d384-b1-c8-t32",
+    "name": "m5-lstm-d384-b1-c8-t32-tl-vs-triton",
+    "experiment": "TL_VS_TRITON",
+    "lane": 0,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "lstm",
+    "width": 384,
+    "batch": 16,
+    "concurrency": 32,
+    "steps": 32,
+    "select_case": "m5-lstm-d384-b16-c32-t32",
+    "name": "m5-lstm-d384-b16-c32-t32-tk-vs-tl",
+    "experiment": "TK_VS_TL",
+    "lane": 1,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "lstm",
+    "width": 384,
+    "batch": 16,
+    "concurrency": 32,
+    "steps": 32,
+    "select_case": "m5-lstm-d384-b16-c32-t32",
+    "name": "m5-lstm-d384-b16-c32-t32-tl-vs-triton",
+    "experiment": "TL_VS_TRITON",
+    "lane": 3,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "lstm",
+    "width": 384,
+    "batch": 32,
+    "concurrency": 64,
+    "steps": 128,
+    "select_case": "m5-lstm-d384-b32-c64-t128",
+    "name": "m5-lstm-d384-b32-c64-t128-tk-vs-tl",
+    "experiment": "TK_VS_TL",
+    "lane": 0,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "lstm",
+    "width": 384,
+    "batch": 32,
+    "concurrency": 64,
+    "steps": 128,
+    "select_case": "m5-lstm-d384-b32-c64-t128",
+    "name": "m5-lstm-d384-b32-c64-t128-tl-vs-triton",
+    "experiment": "TL_VS_TRITON",
+    "lane": 2,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "lstm",
+    "width": 512,
+    "batch": 1,
+    "concurrency": 8,
+    "steps": 32,
+    "select_case": "m5-lstm-d512-b1-c8-t32",
+    "name": "m5-lstm-d512-b1-c8-t32-tk-vs-tl",
+    "experiment": "TK_VS_TL",
+    "lane": 3,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "lstm",
+    "width": 512,
+    "batch": 1,
+    "concurrency": 8,
+    "steps": 32,
+    "select_case": "m5-lstm-d512-b1-c8-t32",
+    "name": "m5-lstm-d512-b1-c8-t32-tl-vs-triton",
+    "experiment": "TL_VS_TRITON",
+    "lane": 1,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "lstm",
+    "width": 512,
+    "batch": 16,
+    "concurrency": 32,
+    "steps": 32,
+    "select_case": "m5-lstm-d512-b16-c32-t32",
+    "name": "m5-lstm-d512-b16-c32-t32-tk-vs-tl",
+    "experiment": "TK_VS_TL",
+    "lane": 2,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "lstm",
+    "width": 512,
+    "batch": 16,
+    "concurrency": 32,
+    "steps": 32,
+    "select_case": "m5-lstm-d512-b16-c32-t32",
+    "name": "m5-lstm-d512-b16-c32-t32-tl-vs-triton",
+    "experiment": "TL_VS_TRITON",
+    "lane": 0,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "lstm",
+    "width": 512,
+    "batch": 32,
+    "concurrency": 64,
+    "steps": 128,
+    "select_case": "m5-lstm-d512-b32-c64-t128",
+    "name": "m5-lstm-d512-b32-c64-t128-tk-vs-tl",
+    "experiment": "TK_VS_TL",
+    "lane": 1,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "lstm",
+    "width": 512,
+    "batch": 32,
+    "concurrency": 64,
+    "steps": 128,
+    "select_case": "m5-lstm-d512-b32-c64-t128",
+    "name": "m5-lstm-d512-b32-c64-t128-tl-vs-triton",
+    "experiment": "TL_VS_TRITON",
+    "lane": 3,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "slstm",
+    "width": 192,
+    "batch": 1,
+    "concurrency": 8,
+    "steps": 32,
+    "select_case": "m5-slstm-d192-b1-c8-t32",
+    "name": "m5-slstm-d192-b1-c8-t32-tk-vs-tl",
+    "experiment": "TK_VS_TL",
+    "lane": 0,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "slstm",
+    "width": 192,
+    "batch": 1,
+    "concurrency": 8,
+    "steps": 32,
+    "select_case": "m5-slstm-d192-b1-c8-t32",
+    "name": "m5-slstm-d192-b1-c8-t32-tl-vs-triton",
+    "experiment": "TL_VS_TRITON",
+    "lane": 2,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "slstm",
+    "width": 192,
+    "batch": 16,
+    "concurrency": 32,
+    "steps": 32,
+    "select_case": "m5-slstm-d192-b16-c32-t32",
+    "name": "m5-slstm-d192-b16-c32-t32-tk-vs-tl",
+    "experiment": "TK_VS_TL",
+    "lane": 3,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "slstm",
+    "width": 192,
+    "batch": 16,
+    "concurrency": 32,
+    "steps": 32,
+    "select_case": "m5-slstm-d192-b16-c32-t32",
+    "name": "m5-slstm-d192-b16-c32-t32-tl-vs-triton",
+    "experiment": "TL_VS_TRITON",
+    "lane": 1,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "slstm",
+    "width": 192,
+    "batch": 32,
+    "concurrency": 64,
+    "steps": 128,
+    "select_case": "m5-slstm-d192-b32-c64-t128",
+    "name": "m5-slstm-d192-b32-c64-t128-tk-vs-tl",
+    "experiment": "TK_VS_TL",
+    "lane": 2,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "slstm",
+    "width": 192,
+    "batch": 32,
+    "concurrency": 64,
+    "steps": 128,
+    "select_case": "m5-slstm-d192-b32-c64-t128",
+    "name": "m5-slstm-d192-b32-c64-t128-tl-vs-triton",
+    "experiment": "TL_VS_TRITON",
+    "lane": 0,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "slstm",
+    "width": 256,
+    "batch": 1,
+    "concurrency": 8,
+    "steps": 32,
+    "select_case": "m5-slstm-d256-b1-c8-t32",
+    "name": "m5-slstm-d256-b1-c8-t32-tk-vs-tl",
+    "experiment": "TK_VS_TL",
+    "lane": 1,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "slstm",
+    "width": 256,
+    "batch": 1,
+    "concurrency": 8,
+    "steps": 32,
+    "select_case": "m5-slstm-d256-b1-c8-t32",
+    "name": "m5-slstm-d256-b1-c8-t32-tl-vs-triton",
+    "experiment": "TL_VS_TRITON",
+    "lane": 3,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "slstm",
+    "width": 256,
+    "batch": 16,
+    "concurrency": 32,
+    "steps": 32,
+    "select_case": "m5-slstm-d256-b16-c32-t32",
+    "name": "m5-slstm-d256-b16-c32-t32-tk-vs-tl",
+    "experiment": "TK_VS_TL",
+    "lane": 0,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "slstm",
+    "width": 256,
+    "batch": 16,
+    "concurrency": 32,
+    "steps": 32,
+    "select_case": "m5-slstm-d256-b16-c32-t32",
+    "name": "m5-slstm-d256-b16-c32-t32-tl-vs-triton",
+    "experiment": "TL_VS_TRITON",
+    "lane": 2,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "slstm",
+    "width": 256,
+    "batch": 32,
+    "concurrency": 64,
+    "steps": 128,
+    "select_case": "m5-slstm-d256-b32-c64-t128",
+    "name": "m5-slstm-d256-b32-c64-t128-tk-vs-tl",
+    "experiment": "TK_VS_TL",
+    "lane": 3,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "slstm",
+    "width": 256,
+    "batch": 32,
+    "concurrency": 64,
+    "steps": 128,
+    "select_case": "m5-slstm-d256-b32-c64-t128",
+    "name": "m5-slstm-d256-b32-c64-t128-tl-vs-triton",
+    "experiment": "TL_VS_TRITON",
+    "lane": 1,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "slstm",
+    "width": 384,
+    "batch": 1,
+    "concurrency": 8,
+    "steps": 32,
+    "select_case": "m5-slstm-d384-b1-c8-t32",
+    "name": "m5-slstm-d384-b1-c8-t32-tk-vs-tl",
+    "experiment": "TK_VS_TL",
+    "lane": 2,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "slstm",
+    "width": 384,
+    "batch": 1,
+    "concurrency": 8,
+    "steps": 32,
+    "select_case": "m5-slstm-d384-b1-c8-t32",
+    "name": "m5-slstm-d384-b1-c8-t32-tl-vs-triton",
+    "experiment": "TL_VS_TRITON",
+    "lane": 0,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "slstm",
+    "width": 384,
+    "batch": 16,
+    "concurrency": 32,
+    "steps": 32,
+    "select_case": "m5-slstm-d384-b16-c32-t32",
+    "name": "m5-slstm-d384-b16-c32-t32-tk-vs-tl",
+    "experiment": "TK_VS_TL",
+    "lane": 1,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "slstm",
+    "width": 384,
+    "batch": 16,
+    "concurrency": 32,
+    "steps": 32,
+    "select_case": "m5-slstm-d384-b16-c32-t32",
+    "name": "m5-slstm-d384-b16-c32-t32-tl-vs-triton",
+    "experiment": "TL_VS_TRITON",
+    "lane": 3,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "slstm",
+    "width": 384,
+    "batch": 32,
+    "concurrency": 64,
+    "steps": 128,
+    "select_case": "m5-slstm-d384-b32-c64-t128",
+    "name": "m5-slstm-d384-b32-c64-t128-tk-vs-tl",
+    "experiment": "TK_VS_TL",
+    "lane": 0,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "slstm",
+    "width": 384,
+    "batch": 32,
+    "concurrency": 64,
+    "steps": 128,
+    "select_case": "m5-slstm-d384-b32-c64-t128",
+    "name": "m5-slstm-d384-b32-c64-t128-tl-vs-triton",
+    "experiment": "TL_VS_TRITON",
+    "lane": 2,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "slstm",
+    "width": 512,
+    "batch": 1,
+    "concurrency": 8,
+    "steps": 32,
+    "select_case": "m5-slstm-d512-b1-c8-t32",
+    "name": "m5-slstm-d512-b1-c8-t32-tk-vs-tl",
+    "experiment": "TK_VS_TL",
+    "lane": 3,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "slstm",
+    "width": 512,
+    "batch": 1,
+    "concurrency": 8,
+    "steps": 32,
+    "select_case": "m5-slstm-d512-b1-c8-t32",
+    "name": "m5-slstm-d512-b1-c8-t32-tl-vs-triton",
+    "experiment": "TL_VS_TRITON",
+    "lane": 1,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "slstm",
+    "width": 512,
+    "batch": 16,
+    "concurrency": 32,
+    "steps": 32,
+    "select_case": "m5-slstm-d512-b16-c32-t32",
+    "name": "m5-slstm-d512-b16-c32-t32-tk-vs-tl",
+    "experiment": "TK_VS_TL",
+    "lane": 2,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "slstm",
+    "width": 512,
+    "batch": 16,
+    "concurrency": 32,
+    "steps": 32,
+    "select_case": "m5-slstm-d512-b16-c32-t32",
+    "name": "m5-slstm-d512-b16-c32-t32-tl-vs-triton",
+    "experiment": "TL_VS_TRITON",
+    "lane": 0,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   },
+   {
+    "cell": "slstm",
+    "width": 512,
+    "batch": 32,
+    "concurrency": 64,
+    "steps": 128,
+    "select_case": "m5-slstm-d512-b32-c64-t128",
+    "name": "m5-slstm-d512-b32-c64-t128-tk-vs-tl",
+    "experiment": "TK_VS_TL",
+    "lane": 1,
+    "baseline": {
+     "from_role": "tilelang_v2"
+    },
+    "candidate_role": "tk"
+   },
+   {
+    "cell": "slstm",
+    "width": 512,
+    "batch": 32,
+    "concurrency": 64,
+    "steps": 128,
+    "select_case": "m5-slstm-d512-b32-c64-t128",
+    "name": "m5-slstm-d512-b32-c64-t128-tl-vs-triton",
+    "experiment": "TL_VS_TRITON",
+    "lane": 3,
+    "baseline": {
+     "from_role": "triton"
+    },
+    "candidate_role": "tilelang_v2"
+   }
+  ],
+  "node_reason": "One H100 node (4 H100): four single-GPU lanes pinned to GPU-local cores; checks and selection behind barriers before timing",
+  "deviations": [
+   "ThunderKittens and TileLang paths implement the spike contract (one full logical call, hidden history and FP32 final carry), not chunk continuation or full-state output",
+   "FP16 only for ThunderKittens",
+   "lanes time concurrently",
+   "TileLang v2 issues two block barriers before the exchange copies (one explicit, one inserted by TileLang); ThunderKittens issues one",
+   "barrier arming differs by framework idiom: ThunderKittens receiver arms expect_tx once per step; TileLang copy_cluster sender does one remote arrive.expect_tx per copy"
+  ],
+  "not_claimed": [
+   "E2E model quality",
+   "backward",
+   "multi-GPU",
+   "TileLang or ThunderKittens ceiling beyond this algorithm"
+  ],
+  "kernel_level": "primary R-splitting comparison: preallocated FP16 inputs, H=1, T=1024, B in 16,64, D in 192,256,384,512; CUDA-event time per call; 5 starts x 20 ABBA/BAAB blocks; CELL_BUDGET vs FP64 and arm-vs-arm; repeated outputs must stay bit-identical",
+  "predecessor": {
+   "name": "32",
+   "result": "TileLang v2 first cell check BACKEND_ERROR (barrier hang trapped as launch failure); ThunderKittens 20/20 available; 40 TK-vs-Triton comparisons completed",
+   "diagnosis": "debug run M5 debug 1/M5 debug 2: synchronous-exchange variant correct; bulk variant hung in Barrier::wait because TileLang tma_store_cluster arms the remote barrier itself (arrive.expect_tx per copy) while the receiver also armed it with count 1",
+   "repair": "receiver barrier count k-1, no receiver-side expect_tx (TileLang copy_cluster convention)"
+  }
+ },
+ "phases": {
+  "phase0_first_tk": {
+   "out": "<cluster storage>",
+   "gpu": "0",
+   "started": 1792006968.447153,
+   "exit": 0,
+   "finished": 1792007003.6197793,
+   "joined": true,
+   "done": true
+  },
+  "phase0_first_tilelang_v2": {
+   "out": "<cluster storage>",
+   "gpu": "0",
+   "started": 1792007003.6240456,
+   "exit": 0,
+   "finished": 1792007021.5682395,
+   "joined": true,
+   "done": true
+  },
+  "phase0": {
+   "records": [
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792007021.5754156,
+     "exit": 0,
+     "finished": 1792007031.3549452,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792007021.5734746,
+     "exit": 0,
+     "finished": 1792007031.7086856,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792007021.576378,
+     "exit": 0,
+     "finished": 1792007031.8124716,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792007021.5728307,
+     "exit": 0,
+     "finished": 1792007031.9125452,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792007021.5760398,
+     "exit": 0,
+     "finished": 1792007032.4099183,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792007021.5739985,
+     "exit": 0,
+     "finished": 1792007032.5101273,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792007021.5752277,
+     "exit": 0,
+     "finished": 1792007032.5638168,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792007021.5747538,
+     "exit": 0,
+     "finished": 1792007032.660293,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792007031.3600247,
+     "exit": 0,
+     "finished": 1792007042.2394254,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792007031.9168026,
+     "exit": 0,
+     "finished": 1792007042.4455044,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792007031.8192067,
+     "exit": 0,
+     "finished": 1792007042.6519737,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792007031.71372,
+     "exit": 0,
+     "finished": 1792007042.846342,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792007032.4146807,
+     "exit": 0,
+     "finished": 1792007042.9463222,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792007032.6646264,
+     "exit": 0,
+     "finished": 1792007043.0464587,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792007032.567929,
+     "exit": 0,
+     "finished": 1792007043.1997066,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792007032.5144367,
+     "exit": 0,
+     "finished": 1792007043.246402,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792007042.2440033,
+     "exit": 0,
+     "finished": 1792007052.1723368,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792007042.6559958,
+     "exit": 0,
+     "finished": 1792007052.3366146,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792007043.0503433,
+     "exit": 0,
+     "finished": 1792007052.8802993,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792007042.9500942,
+     "exit": 0,
+     "finished": 1792007057.536985,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792007043.2042718,
+     "exit": 0,
+     "finished": 1792007057.6401117,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792007043.2501094,
+     "exit": 0,
+     "finished": 1792007057.7903214,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792007042.850378,
+     "exit": 0,
+     "finished": 1792007058.6949384,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792007042.449899,
+     "exit": 0,
+     "finished": 1792007059.5466788,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792007052.1767335,
+     "exit": 0,
+     "finished": 1792007062.1559613,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792007052.884058,
+     "exit": 0,
+     "finished": 1792007062.4623067,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792007052.3407876,
+     "exit": 0,
+     "finished": 1792007063.9723608,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792007057.6441343,
+     "exit": 0,
+     "finished": 1792007069.475469,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792007057.5409129,
+     "exit": 0,
+     "finished": 1792007069.875087,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792007058.69919,
+     "exit": 0,
+     "finished": 1792007070.1316938,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792007059.5505776,
+     "exit": 0,
+     "finished": 1792007070.3318784,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792007057.794347,
+     "exit": 0,
+     "finished": 1792007070.4752588,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792007062.4662848,
+     "exit": 0,
+     "finished": 1792007072.8961248,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792007063.976578,
+     "exit": 0,
+     "finished": 1792007073.4536047,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792007062.160386,
+     "exit": 0,
+     "finished": 1792007074.0923479,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792007069.8793008,
+     "exit": 0,
+     "finished": 1792007080.3601327,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792007069.4792697,
+     "exit": 0,
+     "finished": 1792007081.1142828,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792007070.4790382,
+     "exit": 0,
+     "finished": 1792007081.1643171,
+     "joined": true,
+     "done": true
+    }
+   ],
+   "finished": 1792007081.1677382,
+   "cell_status": {
+    "tk/lstm/128/32": "AVAILABLE",
+    "tk/lstm/128/64": "AVAILABLE",
+    "tk/lstm/192/16": "AVAILABLE",
+    "tk/lstm/192/32": "AVAILABLE",
+    "tk/lstm/192/64": "AVAILABLE",
+    "tk/lstm/256/16": "AVAILABLE",
+    "tk/lstm/256/32": "AVAILABLE",
+    "tk/lstm/256/64": "AVAILABLE",
+    "tk/lstm/384/32": "AVAILABLE",
+    "tk/lstm/512/32": "AVAILABLE",
+    "tk/slstm/128/32": "AVAILABLE",
+    "tk/slstm/128/64": "AVAILABLE",
+    "tk/slstm/192/16": "AVAILABLE",
+    "tk/slstm/192/32": "AVAILABLE",
+    "tk/slstm/192/64": "AVAILABLE",
+    "tk/slstm/256/16": "AVAILABLE",
+    "tk/slstm/256/32": "AVAILABLE",
+    "tk/slstm/256/64": "AVAILABLE",
+    "tk/slstm/384/32": "AVAILABLE",
+    "tk/slstm/512/32": "AVAILABLE",
+    "tilelang_v2/lstm/128/32": "AVAILABLE",
+    "tilelang_v2/lstm/128/64": "AVAILABLE",
+    "tilelang_v2/lstm/192/16": "AVAILABLE",
+    "tilelang_v2/lstm/192/32": "AVAILABLE",
+    "tilelang_v2/lstm/192/64": "AVAILABLE",
+    "tilelang_v2/lstm/256/16": "AVAILABLE",
+    "tilelang_v2/lstm/256/32": "AVAILABLE",
+    "tilelang_v2/lstm/256/64": "AVAILABLE",
+    "tilelang_v2/lstm/384/32": "AVAILABLE",
+    "tilelang_v2/lstm/512/32": "AVAILABLE",
+    "tilelang_v2/slstm/128/32": "AVAILABLE",
+    "tilelang_v2/slstm/128/64": "AVAILABLE",
+    "tilelang_v2/slstm/192/16": "AVAILABLE",
+    "tilelang_v2/slstm/192/32": "AVAILABLE",
+    "tilelang_v2/slstm/192/64": "AVAILABLE",
+    "tilelang_v2/slstm/256/16": "AVAILABLE",
+    "tilelang_v2/slstm/256/32": "AVAILABLE",
+    "tilelang_v2/slstm/256/64": "AVAILABLE",
+    "tilelang_v2/slstm/384/32": "AVAILABLE",
+    "tilelang_v2/slstm/512/32": "AVAILABLE"
+   }
+  },
+  "phase1": {
+   "records": [
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792007081.1762123,
+     "exit": 0,
+     "finished": 1792007091.3577383,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792007081.176352,
+     "exit": 0,
+     "finished": 1792007092.6132994,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792007081.1757553,
+     "exit": 0,
+     "finished": 1792007097.2670112,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792007081.1768422,
+     "exit": 0,
+     "finished": 1792007098.1218827,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792007091.3634052,
+     "exit": 0,
+     "finished": 1792007100.6931546,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792007092.6178775,
+     "exit": 0,
+     "finished": 1792007102.0494375,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792007100.6989896,
+     "exit": 0,
+     "finished": 1792007109.5283048,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792007097.2724562,
+     "exit": 0,
+     "finished": 1792007110.759386,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792007102.0542827,
+     "exit": 0,
+     "finished": 1792007111.935145,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792007098.1273491,
+     "exit": 0,
+     "finished": 1792007112.065637,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792007109.5339305,
+     "exit": 0,
+     "finished": 1792007118.1129434,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792007111.9400375,
+     "exit": 0,
+     "finished": 1792007121.471871,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792007118.118269,
+     "exit": 0,
+     "finished": 1792007124.0931659,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792007110.7640562,
+     "exit": 0,
+     "finished": 1792007126.6021864,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792007121.4771934,
+     "exit": 0,
+     "finished": 1792007126.7507064,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792007112.070012,
+     "exit": 0,
+     "finished": 1792007126.9085612,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792007124.106832,
+     "exit": 0,
+     "finished": 1792007131.0330186,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792007126.7547429,
+     "exit": 0,
+     "finished": 1792007133.3797476,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792007131.0382884,
+     "exit": 0,
+     "finished": 1792007134.7092366,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792007133.3843532,
+     "exit": 0,
+     "finished": 1792007138.4071767,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792007134.7146235,
+     "exit": 0,
+     "finished": 1792007141.5412512,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792007126.6069293,
+     "exit": 0,
+     "finished": 1792007142.7981877,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792007138.4135072,
+     "exit": 0,
+     "finished": 1792007144.0873635,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792007126.9132068,
+     "exit": 0,
+     "finished": 1792007144.1041014,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792007141.5466053,
+     "exit": 0,
+     "finished": 1792007148.3203998,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792007142.8045006,
+     "exit": 0,
+     "finished": 1792007148.4757822,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792007144.108475,
+     "exit": 0,
+     "finished": 1792007149.386948,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792007144.0920944,
+     "exit": 0,
+     "finished": 1792007149.415721,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792007148.3254838,
+     "exit": 0,
+     "finished": 1792007154.9488525,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792007148.4804184,
+     "exit": 0,
+     "finished": 1792007155.1027467,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792007149.4208546,
+     "exit": 0,
+     "finished": 1792007155.8961375,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792007149.3919945,
+     "exit": 0,
+     "finished": 1792007156.067208,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792007156.0723233,
+     "exit": 0,
+     "finished": 1792007160.5942466,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792007155.1071508,
+     "exit": 0,
+     "finished": 1792007161.3823187,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792007160.5989087,
+     "exit": 0,
+     "finished": 1792007165.3710847,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792007161.386841,
+     "exit": 0,
+     "finished": 1792007168.0122056,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792007165.3758082,
+     "exit": 0,
+     "finished": 1792007170.2982314,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792007168.0171046,
+     "exit": 0,
+     "finished": 1792007172.1391559,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792007170.3026903,
+     "exit": 0,
+     "finished": 1792007174.5233881,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792007172.1443734,
+     "exit": 0,
+     "finished": 1792007177.7181938,
+     "joined": true,
+     "done": true
+    }
+   ],
+   "finished": 1792007177.722333
+  }
+ },
+ "scientific_pass": false,
+ "frozen_table": {
+  "path": "<cluster storage>",
+  "sha256": "66ce537510593c35afe06d3caa0fc4e233f9d361078d5de2eb504cc158deaa76",
+  "comparisons": 0,
+  "unavailable": 80
+ },
+ "status": "NO_COMPARISON_QUALIFIED",
+ "finished": 1792007177.735919
+}

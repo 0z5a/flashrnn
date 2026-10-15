@@ -1,0 +1,4099 @@
+{
+ "started": 1792020504.2620478,
+ "plan": {
+  "purpose": "High-concurrency round 1, SM-cost plane: TileLang R tiling with batch tiles BM > 16 (rows per CTA per step, WGMMA N), qualified at the M0 + M6 standard plus bitwise agreement with BM = 16; then, for C requests of 128 tokens arriving together (C = 256, 1024; D = 256, 768; LSTM and sLSTM), split-0 selection among s0, s0p_default, every BM = 16 configuration at B = C and the qualified BM > 16 configurations, and split-1 paired timing of the best against s0p_default (headline), against the best BM = 16 configuration (plane attribution) and against s0 at C = 1024 (latency)",
+  "deviations": [
+   "v2 of run HC1 v1: cluster BM = 128 removed; sanitizer on the largest remaining cluster tile; a sanitizer finding now excludes its configuration instead of stopping the batch"
+  ],
+  "stop_criterion": "at C = 1024 for D = 256 and D = 768, LSTM and sLSTM: throughput >= 2x max(s0, s0p) and P90 no worse than s0",
+  "minutes": 160,
+  "starts": 5,
+  "blocks": 20,
+  "qualification_timeout_s": 2400,
+  "select_reps": 5,
+  "qualifications": [
+   [
+    "lstm",
+    "bfloat16",
+    256,
+    16,
+    "cluster",
+    64,
+    "e1,protocol,stress,vs_bm16"
+   ],
+   [
+    "lstm",
+    "bfloat16",
+    256,
+    16,
+    "cluster",
+    32,
+    "e1,protocol,stress,vs_bm16"
+   ],
+   [
+    "lstm",
+    "float16",
+    256,
+    16,
+    "cluster",
+    32,
+    "e1,protocol,stress,vs_bm16"
+   ],
+   [
+    "slstm",
+    "bfloat16",
+    256,
+    16,
+    "cluster",
+    32,
+    "e1,protocol,stress,vs_bm16"
+   ],
+   [
+    "slstm",
+    "float16",
+    256,
+    16,
+    "cluster",
+    32,
+    "e1,protocol,stress,vs_bm16"
+   ],
+   [
+    "lstm",
+    "float16",
+    256,
+    16,
+    "cluster",
+    64,
+    "e1,protocol,stress,vs_bm16"
+   ],
+   [
+    "slstm",
+    "bfloat16",
+    256,
+    16,
+    "cluster",
+    64,
+    "e1,protocol,stress,vs_bm16"
+   ],
+   [
+    "slstm",
+    "float16",
+    256,
+    16,
+    "cluster",
+    64,
+    "e1,protocol,stress,vs_bm16"
+   ],
+   [
+    "lstm",
+    "bfloat16",
+    256,
+    32,
+    "cluster",
+    32,
+    "e1,protocol,stress,vs_bm16"
+   ],
+   [
+    "lstm",
+    "float16",
+    256,
+    32,
+    "cluster",
+    32,
+    "e1,protocol,stress,vs_bm16"
+   ],
+   [
+    "slstm",
+    "bfloat16",
+    256,
+    32,
+    "cluster",
+    32,
+    "e1,protocol,stress,vs_bm16"
+   ],
+   [
+    "slstm",
+    "float16",
+    256,
+    32,
+    "cluster",
+    32,
+    "e1,protocol,stress,vs_bm16"
+   ],
+   [
+    "lstm",
+    "bfloat16",
+    256,
+    32,
+    "cluster",
+    64,
+    "e1,protocol,stress,vs_bm16"
+   ],
+   [
+    "lstm",
+    "float16",
+    256,
+    32,
+    "cluster",
+    64,
+    "e1,protocol,stress,vs_bm16"
+   ],
+   [
+    "slstm",
+    "bfloat16",
+    256,
+    32,
+    "cluster",
+    64,
+    "e1,protocol,stress,vs_bm16"
+   ],
+   [
+    "slstm",
+    "float16",
+    256,
+    32,
+    "cluster",
+    64,
+    "e1,protocol,stress,vs_bm16"
+   ],
+   [
+    "lstm",
+    "bfloat16",
+    256,
+    64,
+    "cluster",
+    32,
+    "e1,protocol,stress,vs_bm16"
+   ],
+   [
+    "lstm",
+    "float16",
+    256,
+    64,
+    "cluster",
+    32,
+    "e1,protocol,stress,vs_bm16"
+   ],
+   [
+    "slstm",
+    "bfloat16",
+    256,
+    64,
+    "cluster",
+    32,
+    "e1,protocol,stress,vs_bm16"
+   ],
+   [
+    "slstm",
+    "float16",
+    256,
+    64,
+    "cluster",
+    32,
+    "e1,protocol,stress,vs_bm16"
+   ],
+   [
+    "lstm",
+    "bfloat16",
+    768,
+    16,
+    "grid",
+    32,
+    "e1,protocol,stress,vs_bm16"
+   ],
+   [
+    "lstm",
+    "float16",
+    768,
+    16,
+    "grid",
+    32,
+    "e1,protocol,stress,vs_bm16"
+   ],
+   [
+    "slstm",
+    "bfloat16",
+    768,
+    16,
+    "grid",
+    32,
+    "e1,protocol,stress,vs_bm16"
+   ],
+   [
+    "slstm",
+    "float16",
+    768,
+    16,
+    "grid",
+    32,
+    "e1,protocol,stress,vs_bm16"
+   ],
+   [
+    "lstm",
+    "bfloat16",
+    768,
+    16,
+    "grid",
+    64,
+    "e1,protocol,stress,vs_bm16"
+   ],
+   [
+    "lstm",
+    "float16",
+    768,
+    16,
+    "grid",
+    64,
+    "e1,protocol,stress,vs_bm16"
+   ],
+   [
+    "slstm",
+    "bfloat16",
+    768,
+    16,
+    "grid",
+    64,
+    "e1,protocol,stress,vs_bm16"
+   ],
+   [
+    "slstm",
+    "float16",
+    768,
+    16,
+    "grid",
+    64,
+    "e1,protocol,stress,vs_bm16"
+   ]
+  ],
+  "sanitizer_runs": [
+   {
+    "tool": "memcheck-cluster-d256-bm64",
+    "prefix": "CUDA 12.8 compute-sanitizer --target-processes application-only --error-exitcode 99 --tool memcheck",
+    "stages": "sanity",
+    "blocking": true,
+    "case": [
+     "lstm",
+     "float16",
+     256,
+     16,
+     "cluster",
+     64
+    ]
+   },
+   {
+    "tool": "synccheck-cluster-d256-bm64",
+    "prefix": "CUDA 12.8 compute-sanitizer --target-processes application-only --error-exitcode 99 --tool synccheck",
+    "stages": "sanity",
+    "blocking": true,
+    "case": [
+     "lstm",
+     "float16",
+     256,
+     16,
+     "cluster",
+     64
+    ]
+   },
+   {
+    "tool": "memcheck-grid-d768-bm64",
+    "prefix": "CUDA 12.8 compute-sanitizer --target-processes application-only --error-exitcode 99 --tool memcheck",
+    "stages": "sanity",
+    "blocking": true,
+    "case": [
+     "lstm",
+     "float16",
+     768,
+     16,
+     "grid",
+     64
+    ]
+   },
+   {
+    "tool": "synccheck-grid-d768-bm64",
+    "prefix": "CUDA 12.8 compute-sanitizer --target-processes application-only --error-exitcode 99 --tool synccheck",
+    "stages": "sanity",
+    "blocking": true,
+    "case": [
+     "lstm",
+     "float16",
+     768,
+     16,
+     "grid",
+     64
+    ]
+   }
+  ],
+  "select_cases": [
+   {
+    "name": "hc1-lstm-d256-c256-t128",
+    "lane": 0,
+    "cell": "lstm",
+    "width": 256,
+    "steps": 128,
+    "concurrency": 256,
+    "reference": "s0p_default",
+    "candidates": [
+     {
+      "label": "s0",
+      "strategy": "s0",
+      "group": 32,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "cluster",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "s0p_default",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 8,
+       "weight_operand": "b",
+       "slice_width": 64,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s16_w4",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s16_w8",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 8,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s32_w4",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s32_w8",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 8,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s64_w4",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 64,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tl_cluster_s16_bm16",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "cluster",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tl_cluster_s32_bm16",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "cluster",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tl_cluster_s64_bm16",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 64,
+       "sync": "cluster",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tl_cluster_s16_bm32",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 32,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "cluster",
+       "pad_k": false
+      },
+      "wide": true
+     },
+     {
+      "label": "tl_cluster_s16_bm64",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 64,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "cluster",
+       "pad_k": false
+      },
+      "wide": true
+     },
+     {
+      "label": "tl_cluster_s32_bm32",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 32,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "cluster",
+       "pad_k": false
+      },
+      "wide": true
+     },
+     {
+      "label": "tl_cluster_s32_bm64",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 64,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "cluster",
+       "pad_k": false
+      },
+      "wide": true
+     },
+     {
+      "label": "tl_cluster_s64_bm32",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 32,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 64,
+       "sync": "cluster",
+       "pad_k": false
+      },
+      "wide": true
+     }
+    ],
+    "roles": {
+     "best": [
+      "s0p_default",
+      "tri_s16_w4",
+      "tri_s16_w8",
+      "tri_s32_w4",
+      "tri_s32_w8",
+      "tri_s64_w4",
+      "tl_cluster_s16_bm16",
+      "tl_cluster_s32_bm16",
+      "tl_cluster_s64_bm16",
+      "tl_cluster_s16_bm32",
+      "tl_cluster_s16_bm64",
+      "tl_cluster_s32_bm32",
+      "tl_cluster_s32_bm64",
+      "tl_cluster_s64_bm32"
+     ],
+     "best_bm16": [
+      "s0p_default",
+      "tri_s16_w4",
+      "tri_s16_w8",
+      "tri_s32_w4",
+      "tri_s32_w8",
+      "tri_s64_w4",
+      "tl_cluster_s16_bm16",
+      "tl_cluster_s32_bm16",
+      "tl_cluster_s64_bm16"
+     ],
+     "s0": [
+      "s0"
+     ],
+     "s0p_default": [
+      "s0p_default"
+     ]
+    }
+   },
+   {
+    "name": "hc1-lstm-d256-c1024-t128",
+    "lane": 1,
+    "cell": "lstm",
+    "width": 256,
+    "steps": 128,
+    "concurrency": 1024,
+    "reference": "s0p_default",
+    "candidates": [
+     {
+      "label": "s0",
+      "strategy": "s0",
+      "group": 32,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "cluster",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "s0p_default",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 8,
+       "weight_operand": "b",
+       "slice_width": 64,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s16_w4",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s16_w8",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 8,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s32_w4",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s32_w8",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 8,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s64_w4",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 64,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tl_cluster_s16_bm16",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "cluster",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tl_cluster_s32_bm16",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "cluster",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tl_cluster_s64_bm16",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 64,
+       "sync": "cluster",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tl_cluster_s16_bm32",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 32,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "cluster",
+       "pad_k": false
+      },
+      "wide": true
+     },
+     {
+      "label": "tl_cluster_s16_bm64",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 64,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "cluster",
+       "pad_k": false
+      },
+      "wide": true
+     },
+     {
+      "label": "tl_cluster_s32_bm32",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 32,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "cluster",
+       "pad_k": false
+      },
+      "wide": true
+     },
+     {
+      "label": "tl_cluster_s32_bm64",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 64,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "cluster",
+       "pad_k": false
+      },
+      "wide": true
+     },
+     {
+      "label": "tl_cluster_s64_bm32",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 32,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 64,
+       "sync": "cluster",
+       "pad_k": false
+      },
+      "wide": true
+     }
+    ],
+    "roles": {
+     "best": [
+      "s0p_default",
+      "tri_s16_w4",
+      "tri_s16_w8",
+      "tri_s32_w4",
+      "tri_s32_w8",
+      "tri_s64_w4",
+      "tl_cluster_s16_bm16",
+      "tl_cluster_s32_bm16",
+      "tl_cluster_s64_bm16",
+      "tl_cluster_s16_bm32",
+      "tl_cluster_s16_bm64",
+      "tl_cluster_s32_bm32",
+      "tl_cluster_s32_bm64",
+      "tl_cluster_s64_bm32"
+     ],
+     "best_bm16": [
+      "s0p_default",
+      "tri_s16_w4",
+      "tri_s16_w8",
+      "tri_s32_w4",
+      "tri_s32_w8",
+      "tri_s64_w4",
+      "tl_cluster_s16_bm16",
+      "tl_cluster_s32_bm16",
+      "tl_cluster_s64_bm16"
+     ],
+     "s0": [
+      "s0"
+     ],
+     "s0p_default": [
+      "s0p_default"
+     ]
+    }
+   },
+   {
+    "name": "hc1-slstm-d256-c256-t128",
+    "lane": 2,
+    "cell": "slstm",
+    "width": 256,
+    "steps": 128,
+    "concurrency": 256,
+    "reference": "s0p_default",
+    "candidates": [
+     {
+      "label": "s0",
+      "strategy": "s0",
+      "group": 32,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "cluster",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "s0p_default",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 8,
+       "weight_operand": "b",
+       "slice_width": 64,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s16_w4",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s16_w8",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 8,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s32_w4",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s32_w8",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 8,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s64_w4",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 64,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tl_cluster_s16_bm16",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "cluster",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tl_cluster_s32_bm16",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "cluster",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tl_cluster_s64_bm16",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 64,
+       "sync": "cluster",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tl_cluster_s16_bm32",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 32,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "cluster",
+       "pad_k": false
+      },
+      "wide": true
+     },
+     {
+      "label": "tl_cluster_s16_bm64",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 64,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "cluster",
+       "pad_k": false
+      },
+      "wide": true
+     },
+     {
+      "label": "tl_cluster_s32_bm32",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 32,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "cluster",
+       "pad_k": false
+      },
+      "wide": true
+     },
+     {
+      "label": "tl_cluster_s32_bm64",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 64,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "cluster",
+       "pad_k": false
+      },
+      "wide": true
+     },
+     {
+      "label": "tl_cluster_s64_bm32",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 32,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 64,
+       "sync": "cluster",
+       "pad_k": false
+      },
+      "wide": true
+     }
+    ],
+    "roles": {
+     "best": [
+      "s0p_default",
+      "tri_s16_w4",
+      "tri_s16_w8",
+      "tri_s32_w4",
+      "tri_s32_w8",
+      "tri_s64_w4",
+      "tl_cluster_s16_bm16",
+      "tl_cluster_s32_bm16",
+      "tl_cluster_s64_bm16",
+      "tl_cluster_s16_bm32",
+      "tl_cluster_s16_bm64",
+      "tl_cluster_s32_bm32",
+      "tl_cluster_s32_bm64",
+      "tl_cluster_s64_bm32"
+     ],
+     "best_bm16": [
+      "s0p_default",
+      "tri_s16_w4",
+      "tri_s16_w8",
+      "tri_s32_w4",
+      "tri_s32_w8",
+      "tri_s64_w4",
+      "tl_cluster_s16_bm16",
+      "tl_cluster_s32_bm16",
+      "tl_cluster_s64_bm16"
+     ],
+     "s0": [
+      "s0"
+     ],
+     "s0p_default": [
+      "s0p_default"
+     ]
+    }
+   },
+   {
+    "name": "hc1-slstm-d256-c1024-t128",
+    "lane": 3,
+    "cell": "slstm",
+    "width": 256,
+    "steps": 128,
+    "concurrency": 1024,
+    "reference": "s0p_default",
+    "candidates": [
+     {
+      "label": "s0",
+      "strategy": "s0",
+      "group": 32,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "cluster",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "s0p_default",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 8,
+       "weight_operand": "b",
+       "slice_width": 64,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s16_w4",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s16_w8",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 8,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s32_w4",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s32_w8",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 8,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s64_w4",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 64,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tl_cluster_s16_bm16",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "cluster",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tl_cluster_s32_bm16",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "cluster",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tl_cluster_s64_bm16",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 64,
+       "sync": "cluster",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tl_cluster_s16_bm32",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 32,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "cluster",
+       "pad_k": false
+      },
+      "wide": true
+     },
+     {
+      "label": "tl_cluster_s16_bm64",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 64,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "cluster",
+       "pad_k": false
+      },
+      "wide": true
+     },
+     {
+      "label": "tl_cluster_s32_bm32",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 32,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "cluster",
+       "pad_k": false
+      },
+      "wide": true
+     },
+     {
+      "label": "tl_cluster_s32_bm64",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 64,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "cluster",
+       "pad_k": false
+      },
+      "wide": true
+     },
+     {
+      "label": "tl_cluster_s64_bm32",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 32,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 64,
+       "sync": "cluster",
+       "pad_k": false
+      },
+      "wide": true
+     }
+    ],
+    "roles": {
+     "best": [
+      "s0p_default",
+      "tri_s16_w4",
+      "tri_s16_w8",
+      "tri_s32_w4",
+      "tri_s32_w8",
+      "tri_s64_w4",
+      "tl_cluster_s16_bm16",
+      "tl_cluster_s32_bm16",
+      "tl_cluster_s64_bm16",
+      "tl_cluster_s16_bm32",
+      "tl_cluster_s16_bm64",
+      "tl_cluster_s32_bm32",
+      "tl_cluster_s32_bm64",
+      "tl_cluster_s64_bm32"
+     ],
+     "best_bm16": [
+      "s0p_default",
+      "tri_s16_w4",
+      "tri_s16_w8",
+      "tri_s32_w4",
+      "tri_s32_w8",
+      "tri_s64_w4",
+      "tl_cluster_s16_bm16",
+      "tl_cluster_s32_bm16",
+      "tl_cluster_s64_bm16"
+     ],
+     "s0": [
+      "s0"
+     ],
+     "s0p_default": [
+      "s0p_default"
+     ]
+    }
+   },
+   {
+    "name": "hc1-lstm-d768-c256-t128",
+    "lane": 0,
+    "cell": "lstm",
+    "width": 768,
+    "steps": 128,
+    "concurrency": 256,
+    "reference": "s0p_default",
+    "candidates": [
+     {
+      "label": "s0",
+      "strategy": "s0",
+      "group": 32,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "s0p_default",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 8,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s16_w4",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s16_w4_pad",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": true
+      }
+     },
+     {
+      "label": "tri_s16_w8",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 8,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s16_w8_pad",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 8,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": true
+      }
+     },
+     {
+      "label": "tri_s32_w4",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tl_grid_s16_bm16",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tl_grid_s32_bm16",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tl_grid_s16_bm32",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 32,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      },
+      "wide": true
+     },
+     {
+      "label": "tl_grid_s16_bm64",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 64,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      },
+      "wide": true
+     }
+    ],
+    "roles": {
+     "best": [
+      "s0p_default",
+      "tri_s16_w4",
+      "tri_s16_w4_pad",
+      "tri_s16_w8",
+      "tri_s16_w8_pad",
+      "tri_s32_w4",
+      "tl_grid_s16_bm16",
+      "tl_grid_s32_bm16",
+      "tl_grid_s16_bm32",
+      "tl_grid_s16_bm64"
+     ],
+     "best_bm16": [
+      "s0p_default",
+      "tri_s16_w4",
+      "tri_s16_w4_pad",
+      "tri_s16_w8",
+      "tri_s16_w8_pad",
+      "tri_s32_w4",
+      "tl_grid_s16_bm16",
+      "tl_grid_s32_bm16"
+     ],
+     "s0": [
+      "s0"
+     ],
+     "s0p_default": [
+      "s0p_default"
+     ]
+    }
+   },
+   {
+    "name": "hc1-lstm-d768-c1024-t128",
+    "lane": 1,
+    "cell": "lstm",
+    "width": 768,
+    "steps": 128,
+    "concurrency": 1024,
+    "reference": "s0p_default",
+    "candidates": [
+     {
+      "label": "s0",
+      "strategy": "s0",
+      "group": 32,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "s0p_default",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 8,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s16_w4",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s16_w4_pad",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": true
+      }
+     },
+     {
+      "label": "tri_s16_w8",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 8,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s16_w8_pad",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 8,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": true
+      }
+     },
+     {
+      "label": "tri_s32_w4",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tl_grid_s16_bm16",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tl_grid_s32_bm16",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tl_grid_s16_bm32",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 32,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      },
+      "wide": true
+     },
+     {
+      "label": "tl_grid_s16_bm64",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 64,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      },
+      "wide": true
+     }
+    ],
+    "roles": {
+     "best": [
+      "s0p_default",
+      "tri_s16_w4",
+      "tri_s16_w4_pad",
+      "tri_s16_w8",
+      "tri_s16_w8_pad",
+      "tri_s32_w4",
+      "tl_grid_s16_bm16",
+      "tl_grid_s32_bm16",
+      "tl_grid_s16_bm32",
+      "tl_grid_s16_bm64"
+     ],
+     "best_bm16": [
+      "s0p_default",
+      "tri_s16_w4",
+      "tri_s16_w4_pad",
+      "tri_s16_w8",
+      "tri_s16_w8_pad",
+      "tri_s32_w4",
+      "tl_grid_s16_bm16",
+      "tl_grid_s32_bm16"
+     ],
+     "s0": [
+      "s0"
+     ],
+     "s0p_default": [
+      "s0p_default"
+     ]
+    }
+   },
+   {
+    "name": "hc1-slstm-d768-c256-t128",
+    "lane": 2,
+    "cell": "slstm",
+    "width": 768,
+    "steps": 128,
+    "concurrency": 256,
+    "reference": "s0p_default",
+    "candidates": [
+     {
+      "label": "s0",
+      "strategy": "s0",
+      "group": 32,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "s0p_default",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 8,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s16_w4",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s16_w4_pad",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": true
+      }
+     },
+     {
+      "label": "tri_s16_w8",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 8,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s16_w8_pad",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 8,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": true
+      }
+     },
+     {
+      "label": "tri_s32_w4",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tl_grid_s16_bm16",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tl_grid_s32_bm16",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tl_grid_s16_bm32",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 32,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      },
+      "wide": true
+     },
+     {
+      "label": "tl_grid_s16_bm64",
+      "strategy": "s0p",
+      "group": 256,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 64,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      },
+      "wide": true
+     }
+    ],
+    "roles": {
+     "best": [
+      "s0p_default",
+      "tri_s16_w4",
+      "tri_s16_w4_pad",
+      "tri_s16_w8",
+      "tri_s16_w8_pad",
+      "tri_s32_w4",
+      "tl_grid_s16_bm16",
+      "tl_grid_s32_bm16",
+      "tl_grid_s16_bm32",
+      "tl_grid_s16_bm64"
+     ],
+     "best_bm16": [
+      "s0p_default",
+      "tri_s16_w4",
+      "tri_s16_w4_pad",
+      "tri_s16_w8",
+      "tri_s16_w8_pad",
+      "tri_s32_w4",
+      "tl_grid_s16_bm16",
+      "tl_grid_s32_bm16"
+     ],
+     "s0": [
+      "s0"
+     ],
+     "s0p_default": [
+      "s0p_default"
+     ]
+    }
+   },
+   {
+    "name": "hc1-slstm-d768-c1024-t128",
+    "lane": 3,
+    "cell": "slstm",
+    "width": 768,
+    "steps": 128,
+    "concurrency": 1024,
+    "reference": "s0p_default",
+    "candidates": [
+     {
+      "label": "s0",
+      "strategy": "s0",
+      "group": 32,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "s0p_default",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 8,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s16_w4",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s16_w4_pad",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": true
+      }
+     },
+     {
+      "label": "tri_s16_w8",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 8,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tri_s16_w8_pad",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 8,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": true
+      }
+     },
+     {
+      "label": "tri_s32_w4",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "mma_rtiled",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tl_grid_s16_bm16",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tl_grid_s32_bm16",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 16,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 32,
+       "sync": "grid",
+       "pad_k": false
+      }
+     },
+     {
+      "label": "tl_grid_s16_bm32",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 32,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      },
+      "wide": true
+     },
+     {
+      "label": "tl_grid_s16_bm64",
+      "strategy": "s0p",
+      "group": 1024,
+      "config": {
+       "family": "tilelang",
+       "batch_tile": 64,
+       "warps": 4,
+       "weight_operand": "b",
+       "slice_width": 16,
+       "sync": "grid",
+       "pad_k": false
+      },
+      "wide": true
+     }
+    ],
+    "roles": {
+     "best": [
+      "s0p_default",
+      "tri_s16_w4",
+      "tri_s16_w4_pad",
+      "tri_s16_w8",
+      "tri_s16_w8_pad",
+      "tri_s32_w4",
+      "tl_grid_s16_bm16",
+      "tl_grid_s32_bm16",
+      "tl_grid_s16_bm32",
+      "tl_grid_s16_bm64"
+     ],
+     "best_bm16": [
+      "s0p_default",
+      "tri_s16_w4",
+      "tri_s16_w4_pad",
+      "tri_s16_w8",
+      "tri_s16_w8_pad",
+      "tri_s32_w4",
+      "tl_grid_s16_bm16",
+      "tl_grid_s32_bm16"
+     ],
+     "s0": [
+      "s0"
+     ],
+     "s0p_default": [
+      "s0p_default"
+     ]
+    }
+   }
+  ],
+  "comparisons": [
+   {
+    "cell": "lstm",
+    "width": 256,
+    "batch": 256,
+    "concurrency": 256,
+    "steps": 128,
+    "select_case": "hc1-lstm-d256-c256-t128",
+    "lane": 0,
+    "name": "hc1-lstm-d256-c256-t128-best-vs-s0p",
+    "experiment": "HC_BEST_VS_S0P",
+    "baseline_role": "s0p_default",
+    "candidate_role": "best"
+   },
+   {
+    "cell": "lstm",
+    "width": 256,
+    "batch": 256,
+    "concurrency": 256,
+    "steps": 128,
+    "select_case": "hc1-lstm-d256-c256-t128",
+    "lane": 0,
+    "name": "hc1-lstm-d256-c256-t128-best-vs-bm16",
+    "experiment": "HC_BEST_VS_BEST_BM16",
+    "baseline_role": "best_bm16",
+    "candidate_role": "best"
+   },
+   {
+    "cell": "lstm",
+    "width": 256,
+    "batch": 1024,
+    "concurrency": 1024,
+    "steps": 128,
+    "select_case": "hc1-lstm-d256-c1024-t128",
+    "lane": 1,
+    "name": "hc1-lstm-d256-c1024-t128-best-vs-s0p",
+    "experiment": "HC_BEST_VS_S0P",
+    "baseline_role": "s0p_default",
+    "candidate_role": "best"
+   },
+   {
+    "cell": "lstm",
+    "width": 256,
+    "batch": 1024,
+    "concurrency": 1024,
+    "steps": 128,
+    "select_case": "hc1-lstm-d256-c1024-t128",
+    "lane": 1,
+    "name": "hc1-lstm-d256-c1024-t128-best-vs-bm16",
+    "experiment": "HC_BEST_VS_BEST_BM16",
+    "baseline_role": "best_bm16",
+    "candidate_role": "best"
+   },
+   {
+    "cell": "lstm",
+    "width": 256,
+    "batch": 1024,
+    "concurrency": 1024,
+    "steps": 128,
+    "select_case": "hc1-lstm-d256-c1024-t128",
+    "lane": 1,
+    "name": "hc1-lstm-d256-c1024-t128-best-vs-s0",
+    "experiment": "HC_BEST_VS_S0",
+    "baseline_role": "s0",
+    "candidate_role": "best"
+   },
+   {
+    "cell": "slstm",
+    "width": 256,
+    "batch": 256,
+    "concurrency": 256,
+    "steps": 128,
+    "select_case": "hc1-slstm-d256-c256-t128",
+    "lane": 2,
+    "name": "hc1-slstm-d256-c256-t128-best-vs-s0p",
+    "experiment": "HC_BEST_VS_S0P",
+    "baseline_role": "s0p_default",
+    "candidate_role": "best"
+   },
+   {
+    "cell": "slstm",
+    "width": 256,
+    "batch": 256,
+    "concurrency": 256,
+    "steps": 128,
+    "select_case": "hc1-slstm-d256-c256-t128",
+    "lane": 2,
+    "name": "hc1-slstm-d256-c256-t128-best-vs-bm16",
+    "experiment": "HC_BEST_VS_BEST_BM16",
+    "baseline_role": "best_bm16",
+    "candidate_role": "best"
+   },
+   {
+    "cell": "slstm",
+    "width": 256,
+    "batch": 1024,
+    "concurrency": 1024,
+    "steps": 128,
+    "select_case": "hc1-slstm-d256-c1024-t128",
+    "lane": 3,
+    "name": "hc1-slstm-d256-c1024-t128-best-vs-s0p",
+    "experiment": "HC_BEST_VS_S0P",
+    "baseline_role": "s0p_default",
+    "candidate_role": "best"
+   },
+   {
+    "cell": "slstm",
+    "width": 256,
+    "batch": 1024,
+    "concurrency": 1024,
+    "steps": 128,
+    "select_case": "hc1-slstm-d256-c1024-t128",
+    "lane": 3,
+    "name": "hc1-slstm-d256-c1024-t128-best-vs-bm16",
+    "experiment": "HC_BEST_VS_BEST_BM16",
+    "baseline_role": "best_bm16",
+    "candidate_role": "best"
+   },
+   {
+    "cell": "slstm",
+    "width": 256,
+    "batch": 1024,
+    "concurrency": 1024,
+    "steps": 128,
+    "select_case": "hc1-slstm-d256-c1024-t128",
+    "lane": 3,
+    "name": "hc1-slstm-d256-c1024-t128-best-vs-s0",
+    "experiment": "HC_BEST_VS_S0",
+    "baseline_role": "s0",
+    "candidate_role": "best"
+   },
+   {
+    "cell": "lstm",
+    "width": 768,
+    "batch": 256,
+    "concurrency": 256,
+    "steps": 128,
+    "select_case": "hc1-lstm-d768-c256-t128",
+    "lane": 0,
+    "name": "hc1-lstm-d768-c256-t128-best-vs-s0p",
+    "experiment": "HC_BEST_VS_S0P",
+    "baseline_role": "s0p_default",
+    "candidate_role": "best"
+   },
+   {
+    "cell": "lstm",
+    "width": 768,
+    "batch": 256,
+    "concurrency": 256,
+    "steps": 128,
+    "select_case": "hc1-lstm-d768-c256-t128",
+    "lane": 0,
+    "name": "hc1-lstm-d768-c256-t128-best-vs-bm16",
+    "experiment": "HC_BEST_VS_BEST_BM16",
+    "baseline_role": "best_bm16",
+    "candidate_role": "best"
+   },
+   {
+    "cell": "lstm",
+    "width": 768,
+    "batch": 1024,
+    "concurrency": 1024,
+    "steps": 128,
+    "select_case": "hc1-lstm-d768-c1024-t128",
+    "lane": 1,
+    "name": "hc1-lstm-d768-c1024-t128-best-vs-s0p",
+    "experiment": "HC_BEST_VS_S0P",
+    "baseline_role": "s0p_default",
+    "candidate_role": "best"
+   },
+   {
+    "cell": "lstm",
+    "width": 768,
+    "batch": 1024,
+    "concurrency": 1024,
+    "steps": 128,
+    "select_case": "hc1-lstm-d768-c1024-t128",
+    "lane": 1,
+    "name": "hc1-lstm-d768-c1024-t128-best-vs-bm16",
+    "experiment": "HC_BEST_VS_BEST_BM16",
+    "baseline_role": "best_bm16",
+    "candidate_role": "best"
+   },
+   {
+    "cell": "lstm",
+    "width": 768,
+    "batch": 1024,
+    "concurrency": 1024,
+    "steps": 128,
+    "select_case": "hc1-lstm-d768-c1024-t128",
+    "lane": 1,
+    "name": "hc1-lstm-d768-c1024-t128-best-vs-s0",
+    "experiment": "HC_BEST_VS_S0",
+    "baseline_role": "s0",
+    "candidate_role": "best"
+   },
+   {
+    "cell": "slstm",
+    "width": 768,
+    "batch": 256,
+    "concurrency": 256,
+    "steps": 128,
+    "select_case": "hc1-slstm-d768-c256-t128",
+    "lane": 2,
+    "name": "hc1-slstm-d768-c256-t128-best-vs-s0p",
+    "experiment": "HC_BEST_VS_S0P",
+    "baseline_role": "s0p_default",
+    "candidate_role": "best"
+   },
+   {
+    "cell": "slstm",
+    "width": 768,
+    "batch": 256,
+    "concurrency": 256,
+    "steps": 128,
+    "select_case": "hc1-slstm-d768-c256-t128",
+    "lane": 2,
+    "name": "hc1-slstm-d768-c256-t128-best-vs-bm16",
+    "experiment": "HC_BEST_VS_BEST_BM16",
+    "baseline_role": "best_bm16",
+    "candidate_role": "best"
+   },
+   {
+    "cell": "slstm",
+    "width": 768,
+    "batch": 1024,
+    "concurrency": 1024,
+    "steps": 128,
+    "select_case": "hc1-slstm-d768-c1024-t128",
+    "lane": 3,
+    "name": "hc1-slstm-d768-c1024-t128-best-vs-s0p",
+    "experiment": "HC_BEST_VS_S0P",
+    "baseline_role": "s0p_default",
+    "candidate_role": "best"
+   },
+   {
+    "cell": "slstm",
+    "width": 768,
+    "batch": 1024,
+    "concurrency": 1024,
+    "steps": 128,
+    "select_case": "hc1-slstm-d768-c1024-t128",
+    "lane": 3,
+    "name": "hc1-slstm-d768-c1024-t128-best-vs-bm16",
+    "experiment": "HC_BEST_VS_BEST_BM16",
+    "baseline_role": "best_bm16",
+    "candidate_role": "best"
+   },
+   {
+    "cell": "slstm",
+    "width": 768,
+    "batch": 1024,
+    "concurrency": 1024,
+    "steps": 128,
+    "select_case": "hc1-slstm-d768-c1024-t128",
+    "lane": 3,
+    "name": "hc1-slstm-d768-c1024-t128-best-vs-s0",
+    "experiment": "HC_BEST_VS_S0",
+    "baseline_role": "s0",
+    "candidate_role": "best"
+   }
+  ],
+  "node_reason": "One H100 node (4 H100): qualification lanes in parallel, then selection and paired timing per lane",
+  "not_claimed": [
+   "arrival processes other than a closed batch",
+   "multi-GPU",
+   "model quality",
+   "backward"
+  ]
+ },
+ "phases": {
+  "phase0_first": {
+   "out": "<cluster storage>",
+   "gpu": "0",
+   "started": 1792020504.6805801,
+   "exit": 0,
+   "finished": 1792020689.701293,
+   "joined": true,
+   "done": true
+  },
+  "phase0": {
+   "records": [
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792020689.7085245,
+     "exit": 0,
+     "finished": 1792020819.5311272,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792020689.710764,
+     "exit": 0,
+     "finished": 1792020858.5674064,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792020689.7091835,
+     "exit": 0,
+     "finished": 1792020859.8364258,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792020689.7156708,
+     "exit": 0,
+     "finished": 1792020863.6984766,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792020689.7110217,
+     "exit": 0,
+     "finished": 1792020864.696915,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792020689.71697,
+     "exit": 0,
+     "finished": 1792020864.8899057,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792020689.7077343,
+     "exit": 0,
+     "finished": 1792020864.9306834,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792020689.7080839,
+     "exit": 0,
+     "finished": 1792020868.1211925,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792020819.5366766,
+     "exit": 0,
+     "finished": 1792020995.4272885,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792020859.8390615,
+     "exit": 0,
+     "finished": 1792020997.6256695,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792020864.9329984,
+     "exit": 0,
+     "finished": 1792021004.320977,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792020864.6992111,
+     "exit": 0,
+     "finished": 1792021017.2064915,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792020859.3941166,
+     "exit": 0,
+     "finished": 1792021018.0868733,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792020864.8926647,
+     "exit": 0,
+     "finished": 1792021025.112227,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792020863.7007713,
+     "exit": 0,
+     "finished": 1792021027.3214195,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792020868.1243446,
+     "exit": 0,
+     "finished": 1792021041.9459953,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792020995.4323275,
+     "exit": 0,
+     "finished": 1792021182.897579,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792021017.5937915,
+     "exit": 0,
+     "finished": 1792021203.8559275,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792021025.1146474,
+     "exit": 0,
+     "finished": 1792021211.0679364,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792021004.4821868,
+     "exit": 0,
+     "finished": 1792021223.394426,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792021041.9669557,
+     "exit": 0,
+     "finished": 1792021224.235325,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792020997.8063073,
+     "exit": 0,
+     "finished": 1792021225.837874,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792021018.0894887,
+     "exit": 0,
+     "finished": 1792021232.3901742,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792021027.3239968,
+     "exit": 0,
+     "finished": 1792021233.5320358,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792021223.4298816,
+     "exit": 0,
+     "finished": 1792021235.7146075,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792021225.8404877,
+     "exit": 0,
+     "finished": 1792021235.9718099,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792021233.5346053,
+     "exit": 0,
+     "finished": 1792021247.3715038,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792021232.392958,
+     "exit": 0,
+     "finished": 1792021247.4405208,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792021182.9153013,
+     "exit": 0,
+     "finished": 1792021361.502123,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792021203.8644042,
+     "exit": 0,
+     "finished": 1792021391.124126,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792021211.0700479,
+     "exit": 0,
+     "finished": 1792021398.4231517,
+     "joined": true,
+     "done": true
+    }
+   ],
+   "finished": 1792021398.4251916,
+   "qualification": {
+    "lstm/bfloat16/256/16/cluster/64": "PASS",
+    "lstm/bfloat16/256/16/cluster/32": "PASS",
+    "lstm/float16/256/16/cluster/32": "PASS",
+    "slstm/bfloat16/256/16/cluster/32": "PASS",
+    "slstm/float16/256/16/cluster/32": "PASS",
+    "lstm/float16/256/16/cluster/64": "PASS",
+    "slstm/bfloat16/256/16/cluster/64": "PASS",
+    "slstm/float16/256/16/cluster/64": "PASS",
+    "lstm/bfloat16/256/32/cluster/32": "PASS",
+    "lstm/float16/256/32/cluster/32": "PASS",
+    "slstm/bfloat16/256/32/cluster/32": "PASS",
+    "slstm/float16/256/32/cluster/32": "PASS",
+    "lstm/bfloat16/256/32/cluster/64": "PASS",
+    "lstm/float16/256/32/cluster/64": "PASS",
+    "slstm/bfloat16/256/32/cluster/64": "PASS",
+    "slstm/float16/256/32/cluster/64": "PASS",
+    "lstm/bfloat16/256/64/cluster/32": "PASS",
+    "lstm/float16/256/64/cluster/32": "PASS",
+    "slstm/bfloat16/256/64/cluster/32": "PASS",
+    "slstm/float16/256/64/cluster/32": "PASS",
+    "lstm/bfloat16/768/16/grid/32": "PASS",
+    "lstm/float16/768/16/grid/32": "PASS",
+    "slstm/bfloat16/768/16/grid/32": "PASS",
+    "slstm/float16/768/16/grid/32": "PASS",
+    "lstm/bfloat16/768/16/grid/64": "PASS",
+    "lstm/float16/768/16/grid/64": "PASS",
+    "slstm/bfloat16/768/16/grid/64": "PASS",
+    "slstm/float16/768/16/grid/64": "PASS"
+   },
+   "sanitizer": {
+    "memcheck-cluster-d256-bm64": {
+     "exit": 0,
+     "summaries": [
+      "========= ERROR SUMMARY: 0 errors"
+     ],
+     "sanity": "PASS",
+     "blocking": true,
+     "status": "PASS"
+    },
+    "synccheck-cluster-d256-bm64": {
+     "exit": 0,
+     "summaries": [
+      "========= ERROR SUMMARY: 0 errors"
+     ],
+     "sanity": "PASS",
+     "blocking": true,
+     "status": "PASS"
+    },
+    "memcheck-grid-d768-bm64": {
+     "exit": 0,
+     "summaries": [
+      "========= ERROR SUMMARY: 0 errors"
+     ],
+     "sanity": "PASS",
+     "blocking": true,
+     "status": "PASS"
+    },
+    "synccheck-grid-d768-bm64": {
+     "exit": 0,
+     "summaries": [
+      "========= ERROR SUMMARY: 0 errors"
+     ],
+     "sanity": "PASS",
+     "blocking": true,
+     "status": "PASS"
+    }
+   },
+   "excluded_by_sanitizer": []
+  },
+  "phase1": {
+   "records": [
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792021398.4329329,
+     "exit": 0,
+     "finished": 1792021441.6654756,
+     "joined": true,
+     "done": false
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792021398.4412997,
+     "exit": 0,
+     "finished": 1792021442.4676905,
+     "joined": true,
+     "done": false
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792021398.441636,
+     "exit": 0,
+     "finished": 1792021445.0210571,
+     "joined": true,
+     "done": false
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792021398.4335642,
+     "exit": 0,
+     "finished": 1792021445.4182432,
+     "joined": true,
+     "done": false
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792021441.670124,
+     "exit": 0,
+     "finished": 1792021478.0364683,
+     "joined": true,
+     "done": false
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792021445.0450983,
+     "exit": 0,
+     "finished": 1792021482.1176968,
+     "joined": true,
+     "done": false
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792021442.4709227,
+     "exit": 0,
+     "finished": 1792021484.3028316,
+     "joined": true,
+     "done": false
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792021445.4211357,
+     "exit": 0,
+     "finished": 1792021488.7020524,
+     "joined": true,
+     "done": false
+    }
+   ],
+   "finished": 1792021488.7045393
+  },
+  "phase2_canary": {
+   "out": "<cluster storage>",
+   "gpu": "1",
+   "started": 1792021488.7168045,
+   "exit": 0,
+   "finished": 1792021493.8902214,
+   "joined": true,
+   "done": false,
+   "comparison": "hc1-lstm-d256-c1024-t128-best-vs-bm16",
+   "start": 0
+  },
+  "phase2": {
+   "records": [
+    {
+     "comparison": "hc1-lstm-d256-c1024-t128-best-vs-bm16",
+     "starts": [
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021488.7168045,
+       "exit": 0,
+       "finished": 1792021493.8902214,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d256-c1024-t128-best-vs-bm16",
+       "start": 0
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021493.8942754,
+       "exit": 0,
+       "finished": 1792021501.7722168,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d256-c1024-t128-best-vs-bm16",
+       "start": 1
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021501.7728884,
+       "exit": 0,
+       "finished": 1792021508.2487798,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d256-c1024-t128-best-vs-bm16",
+       "start": 2
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021508.2497044,
+       "exit": 0,
+       "finished": 1792021514.5745597,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d256-c1024-t128-best-vs-bm16",
+       "start": 3
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021514.5770192,
+       "exit": 0,
+       "finished": 1792021521.0523076,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d256-c1024-t128-best-vs-bm16",
+       "start": 4
+      }
+     ]
+    },
+    {
+     "comparison": "hc1-lstm-d256-c256-t128-best-vs-bm16",
+     "starts": [
+      {
+       "out": "<cluster storage>",
+       "gpu": "0",
+       "started": 1792021493.899031,
+       "exit": 0,
+       "finished": 1792021500.624646,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d256-c256-t128-best-vs-bm16",
+       "start": 0
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "0",
+       "started": 1792021500.6252296,
+       "exit": 0,
+       "finished": 1792021506.950407,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d256-c256-t128-best-vs-bm16",
+       "start": 1
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "0",
+       "started": 1792021506.951031,
+       "exit": 0,
+       "finished": 1792021513.4267163,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d256-c256-t128-best-vs-bm16",
+       "start": 2
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "0",
+       "started": 1792021513.4276052,
+       "exit": 0,
+       "finished": 1792021519.702717,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d256-c256-t128-best-vs-bm16",
+       "start": 3
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "0",
+       "started": 1792021519.7033792,
+       "exit": 0,
+       "finished": 1792021526.028872,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d256-c256-t128-best-vs-bm16",
+       "start": 4
+      }
+     ]
+    },
+    {
+     "comparison": "hc1-slstm-d256-c256-t128-best-vs-bm16",
+     "starts": [
+      {
+       "out": "<cluster storage>",
+       "gpu": "2",
+       "started": 1792021493.89508,
+       "exit": 0,
+       "finished": 1792021500.6714103,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d256-c256-t128-best-vs-bm16",
+       "start": 0
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "2",
+       "started": 1792021500.6721551,
+       "exit": 0,
+       "finished": 1792021507.0468578,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d256-c256-t128-best-vs-bm16",
+       "start": 1
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "2",
+       "started": 1792021507.0504353,
+       "exit": 0,
+       "finished": 1792021513.4752524,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d256-c256-t128-best-vs-bm16",
+       "start": 2
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "2",
+       "started": 1792021513.475756,
+       "exit": 0,
+       "finished": 1792021519.850829,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d256-c256-t128-best-vs-bm16",
+       "start": 3
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "2",
+       "started": 1792021519.851293,
+       "exit": 0,
+       "finished": 1792021526.1815603,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d256-c256-t128-best-vs-bm16",
+       "start": 4
+      }
+     ]
+    },
+    {
+     "comparison": "hc1-slstm-d256-c1024-t128-best-vs-bm16",
+     "starts": [
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021493.896006,
+       "exit": 0,
+       "finished": 1792021501.3225124,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d256-c1024-t128-best-vs-bm16",
+       "start": 0
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021501.3233342,
+       "exit": 0,
+       "finished": 1792021507.6973941,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d256-c1024-t128-best-vs-bm16",
+       "start": 1
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021507.6982725,
+       "exit": 0,
+       "finished": 1792021514.1232188,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d256-c1024-t128-best-vs-bm16",
+       "start": 2
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021514.1237175,
+       "exit": 0,
+       "finished": 1792021520.5102723,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d256-c1024-t128-best-vs-bm16",
+       "start": 3
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021520.5111933,
+       "exit": 0,
+       "finished": 1792021526.835615,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d256-c1024-t128-best-vs-bm16",
+       "start": 4
+      }
+     ]
+    },
+    {
+     "comparison": "hc1-lstm-d256-c256-t128-best-vs-s0p",
+     "starts": [
+      {
+       "out": "<cluster storage>",
+       "gpu": "0",
+       "started": 1792021526.0330245,
+       "exit": 0,
+       "finished": 1792021533.1594667,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d256-c256-t128-best-vs-s0p",
+       "start": 0
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "0",
+       "started": 1792021533.1603098,
+       "exit": 0,
+       "finished": 1792021539.2333546,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d256-c256-t128-best-vs-s0p",
+       "start": 1
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "0",
+       "started": 1792021539.2339606,
+       "exit": 0,
+       "finished": 1792021544.3573081,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d256-c256-t128-best-vs-s0p",
+       "start": 2
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "0",
+       "started": 1792021544.3584576,
+       "exit": 0,
+       "finished": 1792021550.0420132,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d256-c256-t128-best-vs-s0p",
+       "start": 3
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "0",
+       "started": 1792021550.0426617,
+       "exit": 0,
+       "finished": 1792021556.1172621,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d256-c256-t128-best-vs-s0p",
+       "start": 4
+      }
+     ]
+    },
+    {
+     "comparison": "hc1-slstm-d256-c256-t128-best-vs-s0p",
+     "starts": [
+      {
+       "out": "<cluster storage>",
+       "gpu": "2",
+       "started": 1792021526.1852002,
+       "exit": 0,
+       "finished": 1792021533.2617505,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d256-c256-t128-best-vs-s0p",
+       "start": 0
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "2",
+       "started": 1792021533.2624648,
+       "exit": 0,
+       "finished": 1792021540.0437744,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d256-c256-t128-best-vs-s0p",
+       "start": 1
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "2",
+       "started": 1792021540.0443575,
+       "exit": 0,
+       "finished": 1792021544.9671867,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d256-c256-t128-best-vs-s0p",
+       "start": 2
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "2",
+       "started": 1792021544.9677722,
+       "exit": 0,
+       "finished": 1792021550.5922403,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d256-c256-t128-best-vs-s0p",
+       "start": 3
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "2",
+       "started": 1792021550.5928438,
+       "exit": 0,
+       "finished": 1792021556.267097,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d256-c256-t128-best-vs-s0p",
+       "start": 4
+      }
+     ]
+    },
+    {
+     "comparison": "hc1-lstm-d256-c1024-t128-best-vs-s0",
+     "starts": [
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021521.0563707,
+       "exit": 0,
+       "finished": 1792021530.5885332,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d256-c1024-t128-best-vs-s0",
+       "start": 0
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021530.5984747,
+       "exit": 0,
+       "finished": 1792021537.5229192,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d256-c1024-t128-best-vs-s0",
+       "start": 1
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021537.5613961,
+       "exit": 0,
+       "finished": 1792021548.4919202,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d256-c1024-t128-best-vs-s0",
+       "start": 2
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021548.4928803,
+       "exit": 0,
+       "finished": 1792021557.3214514,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d256-c1024-t128-best-vs-s0",
+       "start": 3
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021557.322503,
+       "exit": 0,
+       "finished": 1792021567.1026351,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d256-c1024-t128-best-vs-s0",
+       "start": 4
+      }
+     ]
+    },
+    {
+     "comparison": "hc1-slstm-d256-c1024-t128-best-vs-s0",
+     "starts": [
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021526.8436975,
+       "exit": 0,
+       "finished": 1792021536.771526,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d256-c1024-t128-best-vs-s0",
+       "start": 0
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021536.7719996,
+       "exit": 0,
+       "finished": 1792021544.0989373,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d256-c1024-t128-best-vs-s0",
+       "start": 1
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021544.0995638,
+       "exit": 0,
+       "finished": 1792021553.5302165,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d256-c1024-t128-best-vs-s0",
+       "start": 2
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021553.5309756,
+       "exit": 0,
+       "finished": 1792021560.8075888,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d256-c1024-t128-best-vs-s0",
+       "start": 3
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021560.8086011,
+       "exit": 0,
+       "finished": 1792021567.3839514,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d256-c1024-t128-best-vs-s0",
+       "start": 4
+      }
+     ]
+    },
+    {
+     "comparison": "hc1-slstm-d768-c256-t128-best-vs-bm16",
+     "starts": [
+      {
+       "out": "<cluster storage>",
+       "gpu": "2",
+       "started": 1792021556.270128,
+       "exit": 0,
+       "finished": 1792021563.496656,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d768-c256-t128-best-vs-bm16",
+       "start": 0
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "2",
+       "started": 1792021563.497276,
+       "exit": 0,
+       "finished": 1792021570.5735042,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d768-c256-t128-best-vs-bm16",
+       "start": 1
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "2",
+       "started": 1792021570.5745158,
+       "exit": 0,
+       "finished": 1792021577.9014878,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d768-c256-t128-best-vs-bm16",
+       "start": 2
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "2",
+       "started": 1792021577.9021478,
+       "exit": 0,
+       "finished": 1792021584.7286694,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d768-c256-t128-best-vs-bm16",
+       "start": 3
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "2",
+       "started": 1792021584.7314367,
+       "exit": 0,
+       "finished": 1792021592.006597,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d768-c256-t128-best-vs-bm16",
+       "start": 4
+      }
+     ]
+    },
+    {
+     "comparison": "hc1-lstm-d768-c256-t128-best-vs-bm16",
+     "starts": [
+      {
+       "out": "<cluster storage>",
+       "gpu": "0",
+       "started": 1792021556.1214113,
+       "exit": 0,
+       "finished": 1792021563.546985,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d768-c256-t128-best-vs-bm16",
+       "start": 0
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "0",
+       "started": 1792021563.5477717,
+       "exit": 0,
+       "finished": 1792021570.7238886,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d768-c256-t128-best-vs-bm16",
+       "start": 1
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "0",
+       "started": 1792021570.7245383,
+       "exit": 0,
+       "finished": 1792021577.9520483,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d768-c256-t128-best-vs-bm16",
+       "start": 2
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "0",
+       "started": 1792021577.9525752,
+       "exit": 0,
+       "finished": 1792021584.8786128,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d768-c256-t128-best-vs-bm16",
+       "start": 3
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "0",
+       "started": 1792021584.879496,
+       "exit": 0,
+       "finished": 1792021592.1590388,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d768-c256-t128-best-vs-bm16",
+       "start": 4
+      }
+     ]
+    },
+    {
+     "comparison": "hc1-lstm-d256-c1024-t128-best-vs-s0p",
+     "starts": [
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021567.106548,
+       "exit": 0,
+       "finished": 1792021574.2820275,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d256-c1024-t128-best-vs-s0p",
+       "start": 0
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021574.2826414,
+       "exit": 0,
+       "finished": 1792021581.1071558,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d256-c1024-t128-best-vs-s0p",
+       "start": 1
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021581.1089873,
+       "exit": 0,
+       "finished": 1792021588.4344459,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d256-c1024-t128-best-vs-s0p",
+       "start": 2
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021588.4352612,
+       "exit": 0,
+       "finished": 1792021595.5620725,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d256-c1024-t128-best-vs-s0p",
+       "start": 3
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021595.56268,
+       "exit": 0,
+       "finished": 1792021602.839896,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d256-c1024-t128-best-vs-s0p",
+       "start": 4
+      }
+     ]
+    },
+    {
+     "comparison": "hc1-slstm-d256-c1024-t128-best-vs-s0p",
+     "starts": [
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021567.3912463,
+       "exit": 0,
+       "finished": 1792021574.3672788,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d256-c1024-t128-best-vs-s0p",
+       "start": 0
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021574.3680673,
+       "exit": 0,
+       "finished": 1792021581.3609107,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d256-c1024-t128-best-vs-s0p",
+       "start": 1
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021581.361364,
+       "exit": 0,
+       "finished": 1792021588.5376315,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d256-c1024-t128-best-vs-s0p",
+       "start": 2
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021588.5420907,
+       "exit": 0,
+       "finished": 1792021595.6675062,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d256-c1024-t128-best-vs-s0p",
+       "start": 3
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021595.6680624,
+       "exit": 0,
+       "finished": 1792021602.944242,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d256-c1024-t128-best-vs-s0p",
+       "start": 4
+      }
+     ]
+    },
+    {
+     "comparison": "hc1-slstm-d768-c256-t128-best-vs-s0p",
+     "starts": [
+      {
+       "out": "<cluster storage>",
+       "gpu": "2",
+       "started": 1792021592.013556,
+       "exit": 0,
+       "finished": 1792021599.1887777,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d768-c256-t128-best-vs-s0p",
+       "start": 0
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "2",
+       "started": 1792021599.189654,
+       "exit": 0,
+       "finished": 1792021606.5164433,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d768-c256-t128-best-vs-s0p",
+       "start": 1
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "2",
+       "started": 1792021606.5173202,
+       "exit": 0,
+       "finished": 1792021612.6423457,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d768-c256-t128-best-vs-s0p",
+       "start": 2
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "2",
+       "started": 1792021612.6514287,
+       "exit": 0,
+       "finished": 1792021622.732202,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d768-c256-t128-best-vs-s0p",
+       "start": 3
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "2",
+       "started": 1792021622.7327135,
+       "exit": 0,
+       "finished": 1792021629.9087152,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d768-c256-t128-best-vs-s0p",
+       "start": 4
+      }
+     ]
+    },
+    {
+     "comparison": "hc1-lstm-d768-c256-t128-best-vs-s0p",
+     "starts": [
+      {
+       "out": "<cluster storage>",
+       "gpu": "0",
+       "started": 1792021592.1624534,
+       "exit": 0,
+       "finished": 1792021599.337086,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d768-c256-t128-best-vs-s0p",
+       "start": 0
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "0",
+       "started": 1792021599.3379123,
+       "exit": 0,
+       "finished": 1792021606.664787,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d768-c256-t128-best-vs-s0p",
+       "start": 1
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "0",
+       "started": 1792021606.6895373,
+       "exit": 0,
+       "finished": 1792021613.2152393,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d768-c256-t128-best-vs-s0p",
+       "start": 2
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "0",
+       "started": 1792021613.2158031,
+       "exit": 0,
+       "finished": 1792021622.7962148,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d768-c256-t128-best-vs-s0p",
+       "start": 3
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "0",
+       "started": 1792021622.797435,
+       "exit": 0,
+       "finished": 1792021630.0739667,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d768-c256-t128-best-vs-s0p",
+       "start": 4
+      }
+     ]
+    },
+    {
+     "comparison": "hc1-lstm-d768-c1024-t128-best-vs-bm16",
+     "starts": [
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021602.844027,
+       "exit": 0,
+       "finished": 1792021611.773012,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d768-c1024-t128-best-vs-bm16",
+       "start": 0
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021611.7738967,
+       "exit": 0,
+       "finished": 1792021626.3606603,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d768-c1024-t128-best-vs-bm16",
+       "start": 1
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021626.3616116,
+       "exit": 0,
+       "finished": 1792021635.1406152,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d768-c1024-t128-best-vs-bm16",
+       "start": 2
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021635.1411958,
+       "exit": 0,
+       "finished": 1792021643.0186021,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d768-c1024-t128-best-vs-bm16",
+       "start": 3
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021643.0191643,
+       "exit": 0,
+       "finished": 1792021651.0469658,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d768-c1024-t128-best-vs-bm16",
+       "start": 4
+      }
+     ]
+    },
+    {
+     "comparison": "hc1-slstm-d768-c1024-t128-best-vs-bm16",
+     "starts": [
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021602.947664,
+       "exit": 0,
+       "finished": 1792021612.5285225,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d768-c1024-t128-best-vs-bm16",
+       "start": 0
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021612.5291598,
+       "exit": 0,
+       "finished": 1792021626.5144308,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d768-c1024-t128-best-vs-bm16",
+       "start": 1
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021626.515127,
+       "exit": 0,
+       "finished": 1792021635.6437228,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d768-c1024-t128-best-vs-bm16",
+       "start": 2
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021635.6447582,
+       "exit": 0,
+       "finished": 1792021643.7226012,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d768-c1024-t128-best-vs-bm16",
+       "start": 3
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021643.7235563,
+       "exit": 0,
+       "finished": 1792021651.701184,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d768-c1024-t128-best-vs-bm16",
+       "start": 4
+      }
+     ]
+    },
+    {
+     "comparison": "hc1-lstm-d768-c1024-t128-best-vs-s0",
+     "starts": [
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021651.053734,
+       "exit": 0,
+       "finished": 1792021660.232933,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d768-c1024-t128-best-vs-s0",
+       "start": 0
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021660.2338521,
+       "exit": 0,
+       "finished": 1792021669.3132818,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d768-c1024-t128-best-vs-s0",
+       "start": 1
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021669.3138466,
+       "exit": 0,
+       "finished": 1792021678.4432273,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d768-c1024-t128-best-vs-s0",
+       "start": 2
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021678.4441633,
+       "exit": 0,
+       "finished": 1792021688.7253232,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d768-c1024-t128-best-vs-s0",
+       "start": 3
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021688.7360597,
+       "exit": 0,
+       "finished": 1792021697.9657404,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d768-c1024-t128-best-vs-s0",
+       "start": 4
+      }
+     ]
+    },
+    {
+     "comparison": "hc1-slstm-d768-c1024-t128-best-vs-s0",
+     "starts": [
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021651.7052462,
+       "exit": 0,
+       "finished": 1792021660.8049424,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d768-c1024-t128-best-vs-s0",
+       "start": 0
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021660.8059902,
+       "exit": 0,
+       "finished": 1792021669.8903315,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d768-c1024-t128-best-vs-s0",
+       "start": 1
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021669.891357,
+       "exit": 0,
+       "finished": 1792021679.0204568,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d768-c1024-t128-best-vs-s0",
+       "start": 2
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021679.0216563,
+       "exit": 0,
+       "finished": 1792021689.1020014,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d768-c1024-t128-best-vs-s0",
+       "start": 3
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021689.1032143,
+       "exit": 0,
+       "finished": 1792021698.332739,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d768-c1024-t128-best-vs-s0",
+       "start": 4
+      }
+     ]
+    },
+    {
+     "comparison": "hc1-lstm-d768-c1024-t128-best-vs-s0p",
+     "starts": [
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021697.9767091,
+       "exit": 0,
+       "finished": 1792021706.4550877,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d768-c1024-t128-best-vs-s0p",
+       "start": 0
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021706.4556818,
+       "exit": 0,
+       "finished": 1792021714.683896,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d768-c1024-t128-best-vs-s0p",
+       "start": 1
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021714.684481,
+       "exit": 0,
+       "finished": 1792021722.8624313,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d768-c1024-t128-best-vs-s0p",
+       "start": 2
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021722.8630016,
+       "exit": 0,
+       "finished": 1792021731.1408987,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d768-c1024-t128-best-vs-s0p",
+       "start": 3
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "1",
+       "started": 1792021731.1416733,
+       "exit": 0,
+       "finished": 1792021739.820413,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-lstm-d768-c1024-t128-best-vs-s0p",
+       "start": 4
+      }
+     ]
+    },
+    {
+     "comparison": "hc1-slstm-d768-c1024-t128-best-vs-s0p",
+     "starts": [
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021698.3373718,
+       "exit": 0,
+       "finished": 1792021706.8658836,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d768-c1024-t128-best-vs-s0p",
+       "start": 0
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021706.8926,
+       "exit": 0,
+       "finished": 1792021715.3210328,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d768-c1024-t128-best-vs-s0p",
+       "start": 1
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021715.3223922,
+       "exit": 0,
+       "finished": 1792021723.500303,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d768-c1024-t128-best-vs-s0p",
+       "start": 2
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021723.5009036,
+       "exit": 0,
+       "finished": 1792021731.728795,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d768-c1024-t128-best-vs-s0p",
+       "start": 3
+      },
+      {
+       "out": "<cluster storage>",
+       "gpu": "3",
+       "started": 1792021731.7296817,
+       "exit": 0,
+       "finished": 1792021740.1582854,
+       "joined": true,
+       "done": false,
+       "comparison": "hc1-slstm-d768-c1024-t128-best-vs-s0p",
+       "start": 4
+      }
+     ]
+    }
+   ],
+   "finished": 1792021740.1610665
+  }
+ },
+ "scientific_pass": false,
+ "frozen_table": {
+  "path": "<cluster storage>",
+  "sha256": "bf0c32cb9d8e46a2936e89d680d04ea6fa0fe2fb63f5ab4d897145eed9810372",
+  "comparisons": 20,
+  "unavailable": 0
+ },
+ "finished": 1792021740.5260646,
+ "completed_starts": 100,
+ "planned_starts": 100,
+ "concurrent_lanes": "four GPU lanes timed concurrently on one node, each pinned to GPU-local cores",
+ "status": "ALL_STARTS_COMPLETED"
+}

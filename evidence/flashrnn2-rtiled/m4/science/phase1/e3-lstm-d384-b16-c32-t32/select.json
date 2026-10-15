@@ -1,0 +1,233 @@
+{
+ "mode": "select",
+ "case": {
+  "name": "e3-lstm-d384-b16-c32-t32",
+  "lane": 3,
+  "cell": "lstm",
+  "width": 384,
+  "batch": 16,
+  "concurrency": 32,
+  "steps": 32,
+  "roles": {
+   "candidate": [
+    {
+     "kind": "rtiled",
+     "slice_width": 16,
+     "warps": 4,
+     "pad_k": false
+    },
+    {
+     "kind": "rtiled",
+     "slice_width": 16,
+     "warps": 4,
+     "pad_k": true
+    },
+    {
+     "kind": "rtiled",
+     "slice_width": 16,
+     "warps": 8,
+     "pad_k": false
+    },
+    {
+     "kind": "rtiled",
+     "slice_width": 16,
+     "warps": 8,
+     "pad_k": true
+    },
+    {
+     "kind": "rtiled",
+     "slice_width": 32,
+     "warps": 4,
+     "pad_k": false
+    },
+    {
+     "kind": "rtiled",
+     "slice_width": 32,
+     "warps": 4,
+     "pad_k": true
+    },
+    {
+     "kind": "rtiled",
+     "slice_width": 32,
+     "warps": 8,
+     "pad_k": false
+    },
+    {
+     "kind": "rtiled",
+     "slice_width": 32,
+     "warps": 8,
+     "pad_k": true
+    },
+    {
+     "kind": "rtiled",
+     "slice_width": 64,
+     "warps": 4,
+     "pad_k": false
+    },
+    {
+     "kind": "rtiled",
+     "slice_width": 64,
+     "warps": 8,
+     "pad_k": false
+    }
+   ]
+  }
+ },
+ "identity": {
+  "gpu": "NVIDIA H100",
+  "capability": [
+   9,
+   0
+  ],
+  "triton": "3.6.0",
+  "torch": "2.4.0a0+gite3b9b71",
+  "cuda": "11.8",
+  "source": {
+   "tools/rtiled_m4.py": "429a244753fc846288c845b443928676ee4eedde4b86e7167393e158ea384116",
+   "flashrnn/flashrnn2/triton_rtiled.py": "5e822255adcd00c00c19c5aa217dfff268634e3b4e3c8ccb4ba5cc76b97eed12",
+   "flashrnn/flashrnn2/triton_persistent.py": "c83a6255f01e1db30e5ea6bc9a50f5f7a6d24cffe26b7bd8a89faffe7b2148e1",
+   "flashrnn/flashrnn2/tilelang_rtiled.py": "1e776015693e0cdfd65a0cb1b9affbee9b250208bbf682ec95cfd404df20f042",
+   "flashrnn/flashrnn2/reference.py": "9b6351ded119b071f6d7bc749e9a20269dde09c9a536cb6094afd6961c1d8260",
+   "flashrnn/flashrnn2/execution_policy.py": "ccf7e487dfc106c14aa07e38ba46ab18361f5893d4c979c928a62b0adf0cdc45",
+   "flashrnn/flashrnn2/state_contract.py": "b99311ca231c478860b55ecae216e88ecb3a55f9d8aa212428b82157f8b9485e"
+  }
+ },
+ "split": 0,
+ "candidates": {
+  "candidate": {
+   "qualification": {
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 16, \"warps\": 4}": "PASS",
+    "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 16, \"warps\": 4}": "PASS",
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 16, \"warps\": 8}": "PASS",
+    "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 16, \"warps\": 8}": "PASS",
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 4}": "PASS",
+    "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 32, \"warps\": 4}": "PASS",
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 8}": "PASS",
+    "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 32, \"warps\": 8}": "PASS",
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 4}": "PASS",
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 8}": "PASS"
+   },
+   "median_ms": {
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 16, \"warps\": 4}": 1.494948,
+    "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 16, \"warps\": 4}": 1.698239,
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 16, \"warps\": 8}": 1.840878,
+    "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 16, \"warps\": 8}": 2.033365,
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 4}": 1.234396,
+    "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 32, \"warps\": 4}": 1.417079,
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 8}": 1.470359,
+    "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 32, \"warps\": 8}": 1.558998,
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 4}": 1.481211,
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 8}": 1.445988
+   },
+   "raw_ms": {
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 16, \"warps\": 4}": [
+     1.508893,
+     1.495158,
+     1.494948,
+     1.490283,
+     1.502374,
+     1.475262,
+     1.482,
+     1.484895
+    ],
+    "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 16, \"warps\": 4}": [
+     1.725257,
+     1.739468,
+     1.698239,
+     1.690187,
+     1.683483,
+     1.704835,
+     1.697024,
+     1.674221
+    ],
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 16, \"warps\": 8}": [
+     1.965058,
+     1.842044,
+     1.848041,
+     1.832342,
+     1.840878,
+     1.833574,
+     1.834948,
+     1.802619
+    ],
+    "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 16, \"warps\": 8}": [
+     2.219111,
+     2.033365,
+     2.035167,
+     2.034926,
+     2.026877,
+     2.027313,
+     2.026371,
+     1.993214
+    ],
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 4}": [
+     1.351392,
+     1.234396,
+     1.237584,
+     1.234201,
+     1.235479,
+     1.231004,
+     1.23127,
+     1.21805
+    ],
+    "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 32, \"warps\": 4}": [
+     1.440758,
+     1.429984,
+     1.411809,
+     1.410337,
+     1.408149,
+     1.417433,
+     1.417079,
+     1.380239
+    ],
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 8}": [
+     1.511032,
+     1.47459,
+     1.474656,
+     1.466309,
+     1.469394,
+     1.464923,
+     1.470359,
+     1.442429
+    ],
+    "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 32, \"warps\": 8}": [
+     1.577541,
+     1.560507,
+     1.565258,
+     1.5589,
+     1.548293,
+     1.553982,
+     1.558998,
+     1.550531
+    ],
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 4}": [
+     1.495216,
+     1.488827,
+     1.481489,
+     1.474856,
+     1.481211,
+     1.46911,
+     1.480393,
+     1.470604
+    ],
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 8}": [
+     1.463327,
+     1.445988,
+     1.448488,
+     1.440154,
+     1.435659,
+     1.442947,
+     1.43874,
+     1.44948
+    ]
+   },
+   "selected": {
+    "kind": "rtiled",
+    "pad_k": false,
+    "slice_width": 32,
+    "warps": 4
+   }
+  }
+ },
+ "status": "SELECTED"
+}

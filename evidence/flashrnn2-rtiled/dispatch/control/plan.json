@@ -1,0 +1,116 @@
+{
+ "purpose": "Contract checks of the table-served one-call recurrence (flashrnn2.dispatch, development commit 63444a5): unit stage, then per shape the served configuration (packaged M6 + M7 table entry or default_config), bitwise equality with the backend called directly and with PreparedSequence, public chunked calls bitwise equal to one call, and fixture_math CELL_BUDGET E1 (sLSTM zero/mixed/warm). Shapes cover every dispatch path: single-CTA mma (D <= 128), Triton R tiling, TileLang cluster, TileLang grid; FP16 table and BF16/non-table defaults; two heads",
+ "lanes": [
+  [
+   {
+    "cell": "lstm",
+    "dtype": "float16",
+    "batch": 16,
+    "steps": 128,
+    "heads": 1,
+    "width": 64
+   },
+   {
+    "cell": "lstm",
+    "dtype": "float16",
+    "batch": 16,
+    "steps": 1024,
+    "heads": 1,
+    "width": 192
+   },
+   {
+    "cell": "lstm",
+    "dtype": "bfloat16",
+    "batch": 32,
+    "steps": 128,
+    "heads": 1,
+    "width": 256
+   }
+  ],
+  [
+   {
+    "cell": "slstm",
+    "dtype": "float16",
+    "batch": 32,
+    "steps": 128,
+    "heads": 1,
+    "width": 128
+   },
+   {
+    "cell": "lstm",
+    "dtype": "float16",
+    "batch": 16,
+    "steps": 1024,
+    "heads": 1,
+    "width": 512
+   },
+   {
+    "cell": "lstm",
+    "dtype": "float16",
+    "batch": 1,
+    "steps": 32,
+    "heads": 1,
+    "width": 384
+   }
+  ],
+  [
+   {
+    "cell": "slstm",
+    "dtype": "bfloat16",
+    "batch": 8,
+    "steps": 40,
+    "heads": 2,
+    "width": 128
+   },
+   {
+    "cell": "lstm",
+    "dtype": "float16",
+    "batch": 16,
+    "steps": 1024,
+    "heads": 1,
+    "width": 768
+   },
+   {
+    "cell": "lstm",
+    "dtype": "float16",
+    "batch": 48,
+    "steps": 64,
+    "heads": 1,
+    "width": 256
+   }
+  ],
+  [
+   {
+    "cell": "slstm",
+    "dtype": "float16",
+    "batch": 32,
+    "steps": 128,
+    "heads": 1,
+    "width": 256
+   },
+   {
+    "cell": "slstm",
+    "dtype": "float16",
+    "batch": 64,
+    "steps": 1024,
+    "heads": 1,
+    "width": 768
+   },
+   {
+    "cell": "slstm",
+    "dtype": "bfloat16",
+    "batch": 16,
+    "steps": 64,
+    "heads": 1,
+    "width": 768
+   }
+  ]
+ ],
+ "minutes": 120,
+ "node_reason": "One H100 node (4 H100): one lane per GPU, three shapes each",
+ "not_claimed": [
+  "timing (the dispatched path runs the already-timed kernels)",
+  "backward",
+  "multi-GPU"
+ ]
+}

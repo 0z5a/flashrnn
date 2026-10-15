@@ -1,0 +1,124 @@
+{
+ "started": 1792018215.8929224,
+ "plan": {
+  "purpose": "High-concurrency round 0: decomposition of classifier serving (C requests of T tokens arriving together) for the two baselines s0 (sequential B0 groups, the existing harness) and s0p (all C in one call per layer), plus s0p_cfg; per-stage GPU time, GPU-busy fraction, recurrence SM footprint, recurrence microbench and row-independence checks",
+  "protocol": "phase A: tools/hc_bench.py per (cell, D) on four lanes (first task alone), C in {64, 256, 1024}, T = 128, B0 = 32, 7 interleaved repetitions per strategy, FP64 oracle on the first 32 requests, CUDA-event stage spans, profiler device busy time; recurrence microbench at B in {32, 128, 512, 1024}; rows bitwise independent of batch composition. phase B: C = 1024 timing alone on one lane per (cell, D)",
+  "steps": 128,
+  "group": 32,
+  "concurrency": "64,256,1024",
+  "reps": 7,
+  "task_timeout_s": 3000,
+  "minutes": 160,
+  "tasks": [
+   {
+    "cell": "lstm",
+    "width": 768
+   },
+   {
+    "cell": "slstm",
+    "width": 768
+   },
+   {
+    "cell": "lstm",
+    "width": 256
+   },
+   {
+    "cell": "slstm",
+    "width": 256
+   }
+  ],
+  "node_reason": "One H100 node (4 H100): one (cell, D) per GPU lane, then the C = 1024 timing alone on one lane",
+  "not_claimed": [
+   "paired timing (this round decomposes; later rounds pair)",
+   "multi-node",
+   "model quality"
+  ]
+ },
+ "phases": {
+  "phaseA_first": {
+   "out": "<cluster storage>",
+   "gpu": "0",
+   "started": 1792018216.3112874,
+   "exit": 0,
+   "finished": 1792018298.9574614,
+   "joined": true,
+   "done": true
+  },
+  "phaseA": {
+   "records": [
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792018298.9771333,
+     "exit": 0,
+     "finished": 1792018365.3970656,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792018298.9773786,
+     "exit": 0,
+     "finished": 1792018390.2386959,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792018298.9775958,
+     "exit": 0,
+     "finished": 1792018391.791811,
+     "joined": true,
+     "done": true
+    }
+   ],
+   "finished": 1792018391.7925575
+  },
+  "phaseB": {
+   "records": [
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792018391.7946165,
+     "exit": 0,
+     "finished": 1792018399.4714756,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792018399.4723454,
+     "exit": 0,
+     "finished": 1792018405.6994107,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792018405.7002778,
+     "exit": 0,
+     "finished": 1792018410.4232998,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792018410.424187,
+     "exit": 0,
+     "finished": 1792018415.1463406,
+     "joined": true,
+     "done": true
+    }
+   ],
+   "finished": 1792018415.1464336
+  }
+ },
+ "scientific_pass": false,
+ "finished": 1792018415.5260868,
+ "status": "ALL_TASKS_COMPLETED"
+}

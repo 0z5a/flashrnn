@@ -1,0 +1,267 @@
+{
+ "started": 1791996257.0633621,
+ "plan": {
+  "purpose": "M0 feasibility + E1 numerics for R-tiled LSTM/sLSTM forward (D up to 768) on one H100 node; exploratory timing only",
+  "workers": [
+   {
+    "gpu": 0,
+    "cells": "lstm",
+    "widths": "64,96,128,192"
+   },
+   {
+    "gpu": 1,
+    "cells": "lstm",
+    "widths": "256,384,512,768"
+   },
+   {
+    "gpu": 2,
+    "cells": "slstm",
+    "widths": "64,96,128,192"
+   },
+   {
+    "gpu": 3,
+    "cells": "slstm",
+    "widths": "256,384,512,768"
+   }
+  ],
+  "node_reason": "One H100 node (4 H100): four independent single-GPU workers split by cell and width; no cross-GPU or multi-node requirement",
+  "not_claimed": [
+   "E2E PASS",
+   "paired speedup",
+   "v1 CUDA fused comparison (E3, M4)"
+  ],
+  "lane_minutes": 140,
+  "isolation": "one subprocess per (GPU lane, head width); CUDA_VISIBLE_DEVICES bound to GPU UUID",
+  "case_plan": {
+   "configs": "control/configs.json (frozen from login-compile-sweep rows with status COMPILED and fits_smem)",
+   "stages": [
+    "canary grid-vs-launch (grid stages skipped if FAIL)",
+    "resources: launch each frozen config",
+    "protocol: grid vs launch bitwise, serial groups, chunks, hidden/last, FP32 oracle error, single-CTA diff (D<=128); shapes (1,33,1),(3,17,2),(33,40,2); fp16+bf16; sLSTM zero/nonzero",
+    "e1: fixture_math.make_fixture FP64 oracle under CELL_BUDGET; shapes (3,17,h2),(16,128,h1); fp16+bf16; sLSTM zero/mixed/warm; single-CTA arm for D<=128",
+    "stress: widest 4-warp config per (cell,width), (16,256,1),(64,128,4),(128,64,8), 50 repeats",
+    "explore: LSTM FP16 grid/launch/single-CTA timing (16,256),(64,256), exploratory only"
+   ]
+  },
+  "predecessor": {
+   "name": "58",
+   "result": "all canaries ERROR: Triton launcher build used CC=nvc (module) which rejects -Wno-psabi; no GPU kernel executed; archive m0.tar.gz verified",
+   "repair": "runtime.sh exports CC=/usr/bin/gcc CXX=/usr/bin/g++ after activation; login dry-run builds cuda_utils and the _rtiled launcher; worker aborts on canary exception"
+  }
+ },
+ "runs": [
+  {
+   "gpu": 0,
+   "cells": "lstm",
+   "width": 64,
+   "started": 1791996257.439165,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791996353.0576422,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 2,
+   "cells": "slstm",
+   "width": 64,
+   "started": 1791996257.4401577,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791996370.0863218,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 1,
+   "cells": "lstm",
+   "width": 256,
+   "started": 1791996257.439835,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791996372.840932,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 3,
+   "cells": "slstm",
+   "width": 256,
+   "started": 1791996257.4406612,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791996391.07093,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 1,
+   "cells": "lstm",
+   "width": 384,
+   "started": 1791996372.8431685,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791996603.934406,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 0,
+   "cells": "lstm",
+   "width": 96,
+   "started": 1791996353.0600152,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791996642.2491157,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 3,
+   "cells": "slstm",
+   "width": 384,
+   "started": 1791996391.0750604,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791996650.5117803,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 1,
+   "cells": "lstm",
+   "width": 512,
+   "started": 1791996603.94672,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791996698.7096653,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 2,
+   "cells": "slstm",
+   "width": 96,
+   "started": 1791996370.0892656,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791996708.9098227,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 3,
+   "cells": "slstm",
+   "width": 512,
+   "started": 1791996650.5150728,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791996758.796361,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 0,
+   "cells": "lstm",
+   "width": 128,
+   "started": 1791996642.2529697,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791996785.8981252,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 2,
+   "cells": "slstm",
+   "width": 128,
+   "started": 1791996708.920297,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791996878.2512872,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 1,
+   "cells": "lstm",
+   "width": 768,
+   "started": 1791996698.713343,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791996903.812841,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 3,
+   "cells": "slstm",
+   "width": 768,
+   "started": 1791996758.8005693,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791996992.9596088,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 0,
+   "cells": "lstm",
+   "width": 192,
+   "started": 1791996785.90003,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791997059.564365,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 2,
+   "cells": "slstm",
+   "width": 192,
+   "started": 1791996878.2553341,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791997190.8277197,
+   "done": true,
+   "status": "EXITED"
+  }
+ ],
+ "scientific_pass": false,
+ "finished": 1791997191.1853492,
+ "canaries": {
+  "gpu0/d128/canary.json": "PASS",
+  "gpu0/d192/canary.json": "PASS",
+  "gpu0/d64/canary.json": "PASS",
+  "gpu0/d96/canary.json": "PASS",
+  "gpu1/d256/canary.json": "PASS",
+  "gpu1/d384/canary.json": "PASS",
+  "gpu1/d512/canary.json": "PASS",
+  "gpu1/d768/canary.json": "PASS",
+  "gpu2/d128/canary.json": "PASS",
+  "gpu2/d192/canary.json": "PASS",
+  "gpu2/d64/canary.json": "PASS",
+  "gpu2/d96/canary.json": "PASS",
+  "gpu3/d256/canary.json": "PASS",
+  "gpu3/d384/canary.json": "PASS",
+  "gpu3/d512/canary.json": "PASS",
+  "gpu3/d768/canary.json": "PASS"
+ },
+ "status": "ALL_WIDTHS_COMPLETED_GRID_CANARY_PASS"
+}

@@ -1,0 +1,329 @@
+{
+ "identity": {
+  "gpu": "NVIDIA H100",
+  "capability": [
+   9,
+   0
+  ],
+  "triton": "3.6.0",
+  "tilelang": "0.1.15"
+ },
+ "comparisons": [
+  {
+   "name": "hc2-lstm-d256-c256-t128-graph-vs-eager",
+   "experiment": "HC_GRAPH_VS_EAGER",
+   "cell": "lstm",
+   "width": 256,
+   "batch": 256,
+   "concurrency": 256,
+   "steps": 128,
+   "lane": 0,
+   "baseline": {
+    "strategy": "s0p",
+    "group": 256,
+    "config": {
+     "family": "tilelang",
+     "batch_tile": 16,
+     "warps": 4,
+     "weight_operand": "b",
+     "slice_width": 16,
+     "sync": "cluster",
+     "pad_k": false
+    }
+   },
+   "candidate": {
+    "strategy": "s0p",
+    "group": 256,
+    "config": {
+     "family": "tilelang",
+     "batch_tile": 16,
+     "warps": 4,
+     "weight_operand": "b",
+     "slice_width": 16,
+     "sync": "cluster",
+     "pad_k": false
+    },
+    "graph": true
+   },
+   "baseline_label": "tl_cluster_s16_bm16",
+   "candidate_label": "tl_cluster_s16_bm16+graph"
+  },
+  {
+   "name": "hc2-lstm-d256-c1024-t128-graph-vs-eager",
+   "experiment": "HC_GRAPH_VS_EAGER",
+   "cell": "lstm",
+   "width": 256,
+   "batch": 1024,
+   "concurrency": 1024,
+   "steps": 128,
+   "lane": 1,
+   "baseline": {
+    "strategy": "s0p",
+    "group": 1024,
+    "config": {
+     "family": "mma_rtiled",
+     "batch_tile": 16,
+     "warps": 8,
+     "weight_operand": "b",
+     "slice_width": 64,
+     "sync": "grid",
+     "pad_k": false
+    }
+   },
+   "candidate": {
+    "strategy": "s0p",
+    "group": 1024,
+    "config": {
+     "family": "mma_rtiled",
+     "batch_tile": 16,
+     "warps": 8,
+     "weight_operand": "b",
+     "slice_width": 64,
+     "sync": "grid",
+     "pad_k": false
+    },
+    "graph": true
+   },
+   "baseline_label": "s0p_default",
+   "candidate_label": "s0p_default+graph"
+  },
+  {
+   "name": "hc2-slstm-d256-c256-t128-graph-vs-eager",
+   "experiment": "HC_GRAPH_VS_EAGER",
+   "cell": "slstm",
+   "width": 256,
+   "batch": 256,
+   "concurrency": 256,
+   "steps": 128,
+   "lane": 2,
+   "baseline": {
+    "strategy": "s0p",
+    "group": 256,
+    "config": {
+     "family": "tilelang",
+     "batch_tile": 16,
+     "warps": 4,
+     "weight_operand": "b",
+     "slice_width": 16,
+     "sync": "cluster",
+     "pad_k": false
+    }
+   },
+   "candidate": {
+    "strategy": "s0p",
+    "group": 256,
+    "config": {
+     "family": "tilelang",
+     "batch_tile": 16,
+     "warps": 4,
+     "weight_operand": "b",
+     "slice_width": 16,
+     "sync": "cluster",
+     "pad_k": false
+    },
+    "graph": true
+   },
+   "baseline_label": "tl_cluster_s16_bm16",
+   "candidate_label": "tl_cluster_s16_bm16+graph"
+  },
+  {
+   "name": "hc2-slstm-d256-c1024-t128-graph-vs-eager",
+   "experiment": "HC_GRAPH_VS_EAGER",
+   "cell": "slstm",
+   "width": 256,
+   "batch": 1024,
+   "concurrency": 1024,
+   "steps": 128,
+   "lane": 3,
+   "baseline": {
+    "strategy": "s0p",
+    "group": 1024,
+    "config": {
+     "family": "mma_rtiled",
+     "batch_tile": 16,
+     "warps": 4,
+     "weight_operand": "b",
+     "slice_width": 64,
+     "sync": "grid",
+     "pad_k": false
+    }
+   },
+   "candidate": {
+    "strategy": "s0p",
+    "group": 1024,
+    "config": {
+     "family": "mma_rtiled",
+     "batch_tile": 16,
+     "warps": 4,
+     "weight_operand": "b",
+     "slice_width": 64,
+     "sync": "grid",
+     "pad_k": false
+    },
+    "graph": true
+   },
+   "baseline_label": "tri_s64_w4",
+   "candidate_label": "tri_s64_w4+graph"
+  },
+  {
+   "name": "hc2-lstm-d768-c256-t128-graph-vs-eager",
+   "experiment": "HC_GRAPH_VS_EAGER",
+   "cell": "lstm",
+   "width": 768,
+   "batch": 256,
+   "concurrency": 256,
+   "steps": 128,
+   "lane": 0,
+   "baseline": {
+    "strategy": "s0p",
+    "group": 256,
+    "config": {
+     "family": "tilelang",
+     "batch_tile": 32,
+     "warps": 4,
+     "weight_operand": "b",
+     "slice_width": 16,
+     "sync": "grid",
+     "pad_k": false
+    }
+   },
+   "candidate": {
+    "strategy": "s0p",
+    "group": 256,
+    "config": {
+     "family": "tilelang",
+     "batch_tile": 32,
+     "warps": 4,
+     "weight_operand": "b",
+     "slice_width": 16,
+     "sync": "grid",
+     "pad_k": false
+    },
+    "graph": true
+   },
+   "baseline_label": "tl_grid_s16_bm32",
+   "candidate_label": "tl_grid_s16_bm32+graph"
+  },
+  {
+   "name": "hc2-lstm-d768-c1024-t128-graph-vs-eager",
+   "experiment": "HC_GRAPH_VS_EAGER",
+   "cell": "lstm",
+   "width": 768,
+   "batch": 1024,
+   "concurrency": 1024,
+   "steps": 128,
+   "lane": 1,
+   "baseline": {
+    "strategy": "s0p",
+    "group": 1024,
+    "config": {
+     "family": "mma_rtiled",
+     "batch_tile": 16,
+     "warps": 4,
+     "weight_operand": "b",
+     "slice_width": 32,
+     "sync": "grid",
+     "pad_k": false
+    }
+   },
+   "candidate": {
+    "strategy": "s0p",
+    "group": 1024,
+    "config": {
+     "family": "mma_rtiled",
+     "batch_tile": 16,
+     "warps": 4,
+     "weight_operand": "b",
+     "slice_width": 32,
+     "sync": "grid",
+     "pad_k": false
+    },
+    "graph": true
+   },
+   "baseline_label": "tri_s32_w4",
+   "candidate_label": "tri_s32_w4+graph"
+  },
+  {
+   "name": "hc2-slstm-d768-c256-t128-graph-vs-eager",
+   "experiment": "HC_GRAPH_VS_EAGER",
+   "cell": "slstm",
+   "width": 768,
+   "batch": 256,
+   "concurrency": 256,
+   "steps": 128,
+   "lane": 2,
+   "baseline": {
+    "strategy": "s0p",
+    "group": 256,
+    "config": {
+     "family": "tilelang",
+     "batch_tile": 64,
+     "warps": 4,
+     "weight_operand": "b",
+     "slice_width": 16,
+     "sync": "grid",
+     "pad_k": false
+    }
+   },
+   "candidate": {
+    "strategy": "s0p",
+    "group": 256,
+    "config": {
+     "family": "tilelang",
+     "batch_tile": 64,
+     "warps": 4,
+     "weight_operand": "b",
+     "slice_width": 16,
+     "sync": "grid",
+     "pad_k": false
+    },
+    "graph": true
+   },
+   "baseline_label": "tl_grid_s16_bm64",
+   "candidate_label": "tl_grid_s16_bm64+graph"
+  },
+  {
+   "name": "hc2-slstm-d768-c1024-t128-graph-vs-eager",
+   "experiment": "HC_GRAPH_VS_EAGER",
+   "cell": "slstm",
+   "width": 768,
+   "batch": 1024,
+   "concurrency": 1024,
+   "steps": 128,
+   "lane": 3,
+   "baseline": {
+    "strategy": "s0p",
+    "group": 1024,
+    "config": {
+     "family": "mma_rtiled",
+     "batch_tile": 16,
+     "warps": 4,
+     "weight_operand": "b",
+     "slice_width": 32,
+     "sync": "grid",
+     "pad_k": false
+    }
+   },
+   "candidate": {
+    "strategy": "s0p",
+    "group": 1024,
+    "config": {
+     "family": "mma_rtiled",
+     "batch_tile": 16,
+     "warps": 4,
+     "weight_operand": "b",
+     "slice_width": 32,
+     "sync": "grid",
+     "pad_k": false
+    },
+    "graph": true
+   },
+   "baseline_label": "tri_s32_w4",
+   "candidate_label": "tri_s32_w4+graph"
+  }
+ ],
+ "unavailable": [],
+ "frozen": 1792022829.0374122,
+ "selection": "round-1 frozen table (run HC1 v2)",
+ "timing_split": 1
+}

@@ -1,0 +1,426 @@
+{
+ "cell": "lstm",
+ "width": 256,
+ "steps": 128,
+ "group": 32,
+ "sms": 132,
+ "identity": {
+  "gpu": "NVIDIA H100",
+  "capability": [
+   9,
+   0
+  ],
+  "triton": "3.6.0",
+  "tilelang": "0.1.15"
+ },
+ "cases": [
+  {
+   "concurrency": 1024,
+   "configs": {
+    "s0": {
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 16,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "cluster",
+      "pad_k": false
+     },
+     "footprint": {
+      "k": 16,
+      "groups": 2,
+      "resident_groups_upper": 2,
+      "ctas_upper": 32
+     }
+    },
+    "s0p": {
+     "config": {
+      "family": "mma_rtiled",
+      "batch_tile": 16,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 64,
+      "sync": "grid",
+      "pad_k": false
+     },
+     "footprint": {
+      "k": 4,
+      "groups": 64,
+      "resident_groups": 33,
+      "ctas": 132
+     }
+    },
+    "s0p_cfg": {
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 16,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "cluster",
+      "pad_k": false
+     },
+     "footprint": {
+      "k": 16,
+      "groups": 64,
+      "resident_groups_upper": 8,
+      "ctas_upper": 128
+     }
+    }
+   },
+   "oracle": {
+    "s0": {
+     "pass_": true,
+     "max_abs": 2.1717052093112033e-05,
+     "worst_normalized": 0.001354723173542432,
+     "failed_elements": 0
+    },
+    "s0p": {
+     "pass_": true,
+     "max_abs": 2.1717052093112033e-05,
+     "worst_normalized": 0.001354723173542432,
+     "failed_elements": 0
+    },
+    "s0p_cfg": {
+     "pass_": true,
+     "max_abs": 2.1717052093112033e-05,
+     "worst_normalized": 0.001354723173542432,
+     "failed_elements": 0
+    }
+   },
+   "runs": {
+    "s0": [
+     {
+      "makespan_ms": 44.529632,
+      "p50_ms": 23.354128,
+      "p90_ms": 40.450316
+     },
+     {
+      "makespan_ms": 43.631597,
+      "p50_ms": 22.531685000000003,
+      "p90_ms": 39.543638
+     },
+     {
+      "makespan_ms": 43.376249,
+      "p50_ms": 22.4183145,
+      "p90_ms": 39.321962
+     },
+     {
+      "makespan_ms": 43.38992,
+      "p50_ms": 22.414432,
+      "p90_ms": 39.331154
+     },
+     {
+      "makespan_ms": 43.367825,
+      "p50_ms": 22.4063035,
+      "p90_ms": 39.309192
+     },
+     {
+      "makespan_ms": 43.399809,
+      "p50_ms": 22.406389,
+      "p90_ms": 39.32609
+     },
+     {
+      "makespan_ms": 43.388643,
+      "p50_ms": 22.423207,
+      "p90_ms": 39.323723
+     }
+    ],
+    "s0p": [
+     {
+      "makespan_ms": 6.219337,
+      "p50_ms": 6.205164,
+      "p90_ms": 6.205164
+     },
+     {
+      "makespan_ms": 6.218093,
+      "p50_ms": 6.212592,
+      "p90_ms": 6.212592
+     },
+     {
+      "makespan_ms": 6.171285,
+      "p50_ms": 6.156465,
+      "p90_ms": 6.156465
+     },
+     {
+      "makespan_ms": 6.199113,
+      "p50_ms": 6.18612,
+      "p90_ms": 6.18612
+     },
+     {
+      "makespan_ms": 6.213407,
+      "p50_ms": 6.208678,
+      "p90_ms": 6.208678
+     },
+     {
+      "makespan_ms": 6.200177,
+      "p50_ms": 6.187097,
+      "p90_ms": 6.187097
+     },
+     {
+      "makespan_ms": 6.189386,
+      "p50_ms": 6.176704,
+      "p90_ms": 6.176704
+     }
+    ],
+    "s0p_cfg": [
+     {
+      "makespan_ms": 6.515064,
+      "p50_ms": 6.500778,
+      "p90_ms": 6.500778
+     },
+     {
+      "makespan_ms": 6.434207,
+      "p50_ms": 6.429583,
+      "p90_ms": 6.429583
+     },
+     {
+      "makespan_ms": 6.501904,
+      "p50_ms": 6.489108,
+      "p90_ms": 6.489108
+     },
+     {
+      "makespan_ms": 6.414588,
+      "p50_ms": 6.410238,
+      "p90_ms": 6.410238
+     },
+     {
+      "makespan_ms": 6.402532,
+      "p50_ms": 6.398331,
+      "p90_ms": 6.398331
+     },
+     {
+      "makespan_ms": 6.445998,
+      "p50_ms": 6.433993,
+      "p90_ms": 6.433993
+     },
+     {
+      "makespan_ms": 6.442534,
+      "p50_ms": 6.437845,
+      "p90_ms": 6.437845
+     }
+    ]
+   },
+   "summary": {
+    "s0": {
+     "makespan_ms": 43.38992,
+     "p50_ms": 22.4183145,
+     "p90_ms": 39.32609,
+     "tokens_per_s": 3020793.7696128506
+    },
+    "s0p": {
+     "makespan_ms": 6.200177,
+     "p50_ms": 6.187097,
+     "p90_ms": 6.187097,
+     "tokens_per_s": 21140041.647198137
+    },
+    "s0p_cfg": {
+     "makespan_ms": 6.442534,
+     "p50_ms": 6.433993,
+     "p90_ms": 6.433993,
+     "tokens_per_s": 20344789.79854821
+    }
+   },
+   "stages": {
+    "s0": {
+     "wall_ms": 45.572418,
+     "spans": {
+      "embed": 1.1375679969787598,
+      "proj": 2.837312006391585,
+      "recur": 40.219520062208176,
+      "readout": 0.23385600140318274,
+      "d2h": 0.8037439994513988,
+      "between_groups": 0.2544959979131818
+     }
+    },
+    "s0p": {
+     "wall_ms": 6.976207,
+     "spans": {
+      "embed": 0.4231039881706238,
+      "proj": 1.091616004705429,
+      "recur": 4.911264061927795,
+      "readout": 0.008895999751985073,
+      "d2h": 0.48265600204467773
+     }
+    },
+    "s0p_cfg": {
+     "wall_ms": 6.722076,
+     "spans": {
+      "embed": 0.3203200101852417,
+      "proj": 0.9921600222587585,
+      "recur": 5.23852813243866,
+      "readout": 0.008927999995648861,
+      "d2h": 0.1189119964838028
+     }
+    }
+   },
+   "profile": {
+    "s0": {
+     "profiled_wall_ms": 48.939757,
+     "device_busy_ms": 40.55766100000005,
+     "device_events": 1024,
+     "busy_fraction": 0.8287262439819645,
+     "top": [
+      {
+       "name": "main_kernel",
+       "ms": 37.448,
+       "count": 128
+      },
+      {
+       "name": "sm90_xmma_gemm_f16f16_f16f32_f32_tn_n_tilesize128x128x64_warpgroupsize1x1x1_execute_segment_k_off_kernel__51_cublas",
+       "ms": 1.255,
+       "count": 128
+      },
+      {
+       "name": "void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}:",
+       "ms": 0.72,
+       "count": 256
+      },
+      {
+       "name": "void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<c10::Half>, at::detail::Array<char*, 1> >(int,",
+       "ms": 0.246,
+       "count": 128
+      },
+      {
+       "name": "void at::native::index_elementwise_kernel<128, 4, at::native::gpu_index_kernel<at::native::index_kernel_impl<at::native:",
+       "ms": 0.237,
+       "count": 32
+      },
+      {
+       "name": "void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<bool>, at::detail::Array<char*, 1> >(int, at::",
+       "ms": 0.233,
+       "count": 128
+      },
+      {
+       "name": "memset",
+       "ms": 0.201,
+       "count": 128
+      },
+      {
+       "name": "memcpy",
+       "ms": 0.178,
+       "count": 64
+      },
+      {
+       "name": "sm80_xmma_gemm_f16f16_f16f32_f32_nn_n_tilesize32x32x64_stage6_warpsize2x2x1_tensor16x8x16_execute_kernel__51_cublas",
+       "ms": 0.139,
+       "count": 32
+      }
+     ]
+    },
+    "s0p": {
+     "profiled_wall_ms": 8.035445,
+     "device_busy_ms": 6.067677,
+     "device_events": 32,
+     "busy_fraction": 0.7551139980424233,
+     "top": [
+      {
+       "name": "_rtiled",
+       "ms": 4.855,
+       "count": 4
+      },
+      {
+       "name": "sm90_xmma_gemm_f16f16_f16f32_f32_tn_n_tilesize128x128x64_warpgroupsize1x1x1_execute_segment_k_off_kernel__51_cublas",
+       "ms": 0.997,
+       "count": 4
+      },
+      {
+       "name": "void at::native::index_elementwise_kernel<128, 4, at::native::gpu_index_kernel<at::native::index_kernel_impl<at::native:",
+       "ms": 0.13,
+       "count": 1
+      },
+      {
+       "name": "memcpy",
+       "ms": 0.045,
+       "count": 2
+      },
+      {
+       "name": "void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<int>, at::detail::Array<char*, 1> >(int, at::n",
+       "ms": 0.015,
+       "count": 8
+      },
+      {
+       "name": "void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<bool>, at::detail::Array<char*, 1> >(int, at::",
+       "ms": 0.007,
+       "count": 4
+      },
+      {
+       "name": "void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<c10::Half>, at::detail::Array<char*, 1> >(int,",
+       "ms": 0.007,
+       "count": 4
+      },
+      {
+       "name": "memset",
+       "ms": 0.006,
+       "count": 4
+      },
+      {
+       "name": "void cutlass::Kernel<cutlass_80_tensorop_f16_s16816gemm_relu_f16_128x64_64x4_nn_align8>(cutlass_80_tensorop_f16_s16816ge",
+       "ms": 0.006,
+       "count": 1
+      }
+     ]
+    },
+    "s0p_cfg": {
+     "profiled_wall_ms": 8.286765,
+     "device_busy_ms": 6.297632999999999,
+     "device_events": 32,
+     "busy_fraction": 0.7599627840297147,
+     "top": [
+      {
+       "name": "main_kernel",
+       "ms": 5.087,
+       "count": 4
+      },
+      {
+       "name": "sm90_xmma_gemm_f16f16_f16f32_f32_tn_n_tilesize128x128x64_warpgroupsize1x1x1_execute_segment_k_off_kernel__51_cublas",
+       "ms": 0.988,
+       "count": 4
+      },
+      {
+       "name": "void at::native::index_elementwise_kernel<128, 4, at::native::gpu_index_kernel<at::native::index_kernel_impl<at::native:",
+       "ms": 0.131,
+       "count": 1
+      },
+      {
+       "name": "memcpy",
+       "ms": 0.045,
+       "count": 2
+      },
+      {
+       "name": "void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}:",
+       "ms": 0.022,
+       "count": 8
+      },
+      {
+       "name": "void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<bool>, at::detail::Array<char*, 1> >(int, at::",
+       "ms": 0.007,
+       "count": 4
+      },
+      {
+       "name": "void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<c10::Half>, at::detail::Array<char*, 1> >(int,",
+       "ms": 0.007,
+       "count": 4
+      },
+      {
+       "name": "memset",
+       "ms": 0.006,
+       "count": 4
+      },
+      {
+       "name": "void cutlass::Kernel<cutlass_80_tensorop_f16_s16816gemm_relu_f16_128x64_64x4_nn_align8>(cutlass_80_tensorop_f16_s16816ge",
+       "ms": 0.006,
+       "count": 1
+      }
+     ]
+    }
+   }
+  }
+ ],
+ "started": 1792018408.0991988,
+ "micro_configs": {},
+ "microbench": [],
+ "row_independence": {},
+ "finished": 1792018409.9566934
+}

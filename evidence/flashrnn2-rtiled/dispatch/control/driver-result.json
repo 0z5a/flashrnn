@@ -1,0 +1,188 @@
+{
+ "started": 1792046692.571499,
+ "plan": {
+  "purpose": "Contract checks of the table-served one-call recurrence (flashrnn2.dispatch, development commit 63444a5): unit stage, then per shape the served configuration (packaged M6 + M7 table entry or default_config), bitwise equality with the backend called directly and with PreparedSequence, public chunked calls bitwise equal to one call, and fixture_math CELL_BUDGET E1 (sLSTM zero/mixed/warm). Shapes cover every dispatch path: single-CTA mma (D <= 128), Triton R tiling, TileLang cluster, TileLang grid; FP16 table and BF16/non-table defaults; two heads",
+  "lanes": [
+   [
+    {
+     "cell": "lstm",
+     "dtype": "float16",
+     "batch": 16,
+     "steps": 128,
+     "heads": 1,
+     "width": 64
+    },
+    {
+     "cell": "lstm",
+     "dtype": "float16",
+     "batch": 16,
+     "steps": 1024,
+     "heads": 1,
+     "width": 192
+    },
+    {
+     "cell": "lstm",
+     "dtype": "bfloat16",
+     "batch": 32,
+     "steps": 128,
+     "heads": 1,
+     "width": 256
+    }
+   ],
+   [
+    {
+     "cell": "slstm",
+     "dtype": "float16",
+     "batch": 32,
+     "steps": 128,
+     "heads": 1,
+     "width": 128
+    },
+    {
+     "cell": "lstm",
+     "dtype": "float16",
+     "batch": 16,
+     "steps": 1024,
+     "heads": 1,
+     "width": 512
+    },
+    {
+     "cell": "lstm",
+     "dtype": "float16",
+     "batch": 1,
+     "steps": 32,
+     "heads": 1,
+     "width": 384
+    }
+   ],
+   [
+    {
+     "cell": "slstm",
+     "dtype": "bfloat16",
+     "batch": 8,
+     "steps": 40,
+     "heads": 2,
+     "width": 128
+    },
+    {
+     "cell": "lstm",
+     "dtype": "float16",
+     "batch": 16,
+     "steps": 1024,
+     "heads": 1,
+     "width": 768
+    },
+    {
+     "cell": "lstm",
+     "dtype": "float16",
+     "batch": 48,
+     "steps": 64,
+     "heads": 1,
+     "width": 256
+    }
+   ],
+   [
+    {
+     "cell": "slstm",
+     "dtype": "float16",
+     "batch": 32,
+     "steps": 128,
+     "heads": 1,
+     "width": 256
+    },
+    {
+     "cell": "slstm",
+     "dtype": "float16",
+     "batch": 64,
+     "steps": 1024,
+     "heads": 1,
+     "width": 768
+    },
+    {
+     "cell": "slstm",
+     "dtype": "bfloat16",
+     "batch": 16,
+     "steps": 64,
+     "heads": 1,
+     "width": 768
+    }
+   ]
+  ],
+  "minutes": 120,
+  "node_reason": "One H100 node (4 H100): one lane per GPU, three shapes each",
+  "not_claimed": [
+   "timing (the dispatched path runs the already-timed kernels)",
+   "backward",
+   "multi-GPU"
+  ]
+ },
+ "phases": {
+  "contract": {
+   "records": [
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792046693.005937,
+     "exit": 0,
+     "finished": 1792046760.279779,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792046693.0061188,
+     "exit": 0,
+     "finished": 1792046772.4442995,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792046693.0066102,
+     "exit": 0,
+     "finished": 1792046777.303693,
+     "joined": true,
+     "done": true
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792046693.006804,
+     "exit": 0,
+     "finished": 1792046820.5723438,
+     "joined": true,
+     "done": true
+    }
+   ],
+   "finished": 1792046820.574202
+  }
+ },
+ "scientific_pass": false,
+ "gates": {
+  "lane0": {
+   "unit": "PASS",
+   "contract0": "PASS",
+   "contract1": "PASS",
+   "contract2": "PASS"
+  },
+  "lane1": {
+   "contract0": "PASS",
+   "contract1": "PASS",
+   "contract2": "PASS"
+  },
+  "lane2": {
+   "contract0": "PASS",
+   "contract1": "PASS",
+   "contract2": "PASS"
+  },
+  "lane3": {
+   "contract0": "PASS",
+   "contract1": "PASS",
+   "contract2": "PASS"
+  }
+ },
+ "finished": 1792046820.9641166,
+ "status": "ALL_PASS"
+}

@@ -1,0 +1,244 @@
+{
+ "started": 1791995054.881522,
+ "plan": {
+  "purpose": "M0 feasibility + E1 numerics for R-tiled LSTM/sLSTM forward (D up to 768) on one H100 node; exploratory timing only",
+  "workers": [
+   {
+    "gpu": 0,
+    "cells": "lstm",
+    "widths": "64,96,128,192"
+   },
+   {
+    "gpu": 1,
+    "cells": "lstm",
+    "widths": "256,384,512,768"
+   },
+   {
+    "gpu": 2,
+    "cells": "slstm",
+    "widths": "64,96,128,192"
+   },
+   {
+    "gpu": 3,
+    "cells": "slstm",
+    "widths": "256,384,512,768"
+   }
+  ],
+  "node_reason": "One H100 node (4 H100): four independent single-GPU workers split by cell and width; no cross-GPU or multi-node requirement",
+  "not_claimed": [
+   "E2E PASS",
+   "paired speedup",
+   "v1 CUDA fused comparison (E3, M4)"
+  ],
+  "lane_minutes": 140,
+  "isolation": "one subprocess per (GPU lane, head width); CUDA_VISIBLE_DEVICES bound to GPU UUID",
+  "case_plan": {
+   "configs": "control/configs.json (frozen from login-compile-sweep rows with status COMPILED and fits_smem)",
+   "stages": [
+    "canary grid-vs-launch (grid stages skipped if FAIL)",
+    "resources: launch each frozen config",
+    "protocol: grid vs launch bitwise, serial groups, chunks, hidden/last, FP32 oracle error, single-CTA diff (D<=128); shapes (1,33,1),(3,17,2),(33,40,2); fp16+bf16; sLSTM zero/nonzero",
+    "e1: fixture_math.make_fixture FP64 oracle under CELL_BUDGET; shapes (3,17,h2),(16,128,h1); fp16+bf16; sLSTM zero/mixed/warm; single-CTA arm for D<=128",
+    "stress: widest 4-warp config per (cell,width), (16,256,1),(64,128,4),(128,64,8), 50 repeats",
+    "explore: LSTM FP16 grid/launch/single-CTA timing (16,256),(64,256), exploratory only"
+   ]
+  }
+ },
+ "runs": [
+  {
+   "gpu": 0,
+   "cells": "lstm",
+   "width": 64,
+   "started": 1791995055.2610989,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791995065.6940384,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 1,
+   "cells": "lstm",
+   "width": 256,
+   "started": 1791995055.2631097,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791995065.7461627,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 2,
+   "cells": "slstm",
+   "width": 64,
+   "started": 1791995055.2622485,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791995065.8456948,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 3,
+   "cells": "slstm",
+   "width": 256,
+   "started": 1791995055.2686803,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791995066.452707,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 0,
+   "cells": "lstm",
+   "width": 96,
+   "started": 1791995065.714681,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791995072.341433,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 2,
+   "cells": "slstm",
+   "width": 96,
+   "started": 1791995065.8529716,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791995072.8815246,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 1,
+   "cells": "lstm",
+   "width": 384,
+   "started": 1791995065.751605,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791995073.0285637,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 3,
+   "cells": "slstm",
+   "width": 384,
+   "started": 1791995066.455739,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791995076.7378683,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 0,
+   "cells": "lstm",
+   "width": 128,
+   "started": 1791995072.3427823,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791995077.9150898,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 2,
+   "cells": "slstm",
+   "width": 128,
+   "started": 1791995072.8907049,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791995079.0641499,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 1,
+   "cells": "lstm",
+   "width": 512,
+   "started": 1791995073.0317864,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791995079.908735,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 0,
+   "cells": "lstm",
+   "width": 192,
+   "started": 1791995077.916484,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791995081.688228,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 2,
+   "cells": "slstm",
+   "width": 192,
+   "started": 1791995079.06545,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791995084.0391116,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 3,
+   "cells": "slstm",
+   "width": 512,
+   "started": 1791995076.7395785,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791995085.6200836,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 1,
+   "cells": "lstm",
+   "width": 768,
+   "started": 1791995079.909951,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791995086.78741,
+   "done": true,
+   "status": "EXITED"
+  },
+  {
+   "gpu": 3,
+   "cells": "slstm",
+   "width": 768,
+   "started": 1791995085.621333,
+   "exit": 0,
+   "timed_out": false,
+   "joined": true,
+   "finished": 1791995099.1105862,
+   "done": true,
+   "status": "EXITED"
+  }
+ ],
+ "scientific_pass": false,
+ "finished": 1791995099.4499762,
+ "status": "ALL_WIDTHS_COMPLETED"
+}

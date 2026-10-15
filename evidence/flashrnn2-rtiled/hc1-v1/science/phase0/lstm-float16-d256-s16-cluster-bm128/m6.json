@@ -1,0 +1,301 @@
+{
+ "cell": "lstm",
+ "dtype": "float16",
+ "width": 256,
+ "slice_width": 16,
+ "sync": "cluster",
+ "bm": 128,
+ "identity": {
+  "gpu": "NVIDIA H100",
+  "capability": [
+   9,
+   0
+  ],
+  "triton": "3.6.0",
+  "tilelang": "0.1.15"
+ },
+ "source": {
+  "flashrnn/flashrnn2/tilelang_cluster.py": "dddc2296e3e969d45d37e281f89a8b4e3f05e989092f039b06fc60dce5797c1d",
+  "flashrnn/flashrnn2/prepared.py": "e93642b12964cac0ae57701e5c762e2ec67a6291d8c576f757b397265c3a6bc5",
+  "flashrnn/flashrnn2/execution_policy.py": "c04fcf12694795a9d567fe579f8343379e5424650f58e1c97267d440d98bd354",
+  "flashrnn/flashrnn2/triton_rtiled.py": "5e822255adcd00c00c19c5aa217dfff268634e3b4e3c8ccb4ba5cc76b97eed12",
+  "tools/rtiled_m6_tilelang.py": "c39f55d5ae44c3f3fd742c5ac2710c442c7dfc5c9476aa9b5e7a53c0e7d0ade1",
+  "fixture_math.py": "c5f11bd98a4091f9a7e910a6e9ecc6fc5cfea6845ca3089238a1169fac892c81"
+ },
+ "started": 1792019615.7679548,
+ "gates": {
+  "e1": "FAIL",
+  "protocol": "FAIL",
+  "stress": "FAIL",
+  "vs_bm16": "FAIL"
+ },
+ "e1": [
+  {
+   "case": "m6-lstm-float16-b3-t17-d256-h2-warm",
+   "checks": {
+    "history": {
+     "pass_": false,
+     "max_abs": 0.008343146551508899,
+     "failed_elements": 3001,
+     "worst_normalized": 3.7540948048709795,
+     "bitwise": false
+    },
+    "carry": {
+     "pass_": false,
+     "max_abs": 0.005577979906599556,
+     "failed_elements": 138,
+     "worst_normalized": 2.0260506158006715,
+     "bitwise": false
+    },
+    "hidden": {
+     "pass_": false,
+     "max_abs": 0.004096168798652566,
+     "failed_elements": 208,
+     "worst_normalized": 1.9375607058236022,
+     "bitwise": false
+    },
+    "last": {
+     "pass_": false,
+     "max_abs": 0.0034249014191059315,
+     "failed_elements": 3,
+     "worst_normalized": 1.2538771700626716,
+     "bitwise": false
+    }
+   },
+   "status": "NUMERICAL_FAIL"
+  },
+  {
+   "case": "m6-lstm-float16-b16-t128-d256-h1-warm",
+   "checks": {
+    "history": {
+     "pass_": false,
+     "max_abs": 0.008698626786923597,
+     "failed_elements": 52710,
+     "worst_normalized": 3.324644602928879,
+     "bitwise": false
+    },
+    "carry": {
+     "pass_": false,
+     "max_abs": 0.006289938408577972,
+     "failed_elements": 477,
+     "worst_normalized": 2.674383804415922,
+     "bitwise": false
+    },
+    "hidden": {
+     "pass_": false,
+     "max_abs": 0.00422569771402808,
+     "failed_elements": 2126,
+     "worst_normalized": 1.975343907251523,
+     "bitwise": false
+    },
+    "last": {
+     "pass_": false,
+     "max_abs": 0.0030109594877840117,
+     "failed_elements": 9,
+     "worst_normalized": 1.2909768490284887,
+     "bitwise": false
+    }
+   },
+   "status": "NUMERICAL_FAIL"
+  }
+ ],
+ "protocol": [
+  {
+   "batch": 1,
+   "steps": 33,
+   "heads": 1,
+   "normalizer": "nonzero",
+   "chunks": [
+    1,
+    3,
+    13,
+    16
+   ],
+   "checks": {
+    "per_step_launches_bitwise": false,
+    "prepared_ragged_chunks_bitwise": false,
+    "public_chunked_calls_bitwise": false,
+    "hidden_last_equal_full_bitwise": false,
+    "repeat_20_bitwise": false,
+    "side_stream_bitwise": false,
+    "graph_replay_bitwise": false,
+    "graph_tracks_bound_initial": false
+   },
+   "vs_triton": {
+    "slice_width": 64,
+    "warps": 8,
+    "history_max_abs": 0.3045114278793335,
+    "carry_max_abs": 0.20918715000152588,
+    "bitwise": false
+   },
+   "status": "FAIL"
+  },
+  {
+   "batch": 3,
+   "steps": 17,
+   "heads": 2,
+   "normalizer": "nonzero",
+   "chunks": [
+    1,
+    3,
+    13
+   ],
+   "checks": {
+    "per_step_launches_bitwise": false,
+    "prepared_ragged_chunks_bitwise": false,
+    "public_chunked_calls_bitwise": false,
+    "hidden_last_equal_full_bitwise": false,
+    "repeat_20_bitwise": false,
+    "side_stream_bitwise": false,
+    "graph_replay_bitwise": false,
+    "graph_tracks_bound_initial": false
+   },
+   "vs_triton": {
+    "slice_width": 64,
+    "warps": 8,
+    "history_max_abs": 0.35083818435668945,
+    "carry_max_abs": 0.2714345157146454,
+    "bitwise": false
+   },
+   "status": "FAIL"
+  },
+  {
+   "batch": 33,
+   "steps": 40,
+   "heads": 2,
+   "normalizer": "nonzero",
+   "chunks": [
+    1,
+    3,
+    13,
+    23
+   ],
+   "checks": {
+    "per_step_launches_bitwise": false,
+    "prepared_ragged_chunks_bitwise": false,
+    "public_chunked_calls_bitwise": false,
+    "hidden_last_equal_full_bitwise": false,
+    "repeat_20_bitwise": false,
+    "side_stream_bitwise": false,
+    "graph_replay_bitwise": false,
+    "graph_tracks_bound_initial": false
+   },
+   "vs_triton": {
+    "slice_width": 64,
+    "warps": 8,
+    "history_max_abs": 0.41121819615364075,
+    "carry_max_abs": 0.3445049822330475,
+    "bitwise": false
+   },
+   "status": "FAIL"
+  }
+ ],
+ "stress": [
+  {
+   "batch": 64,
+   "steps": 128,
+   "heads": 4,
+   "ctas": 64,
+   "repeats": 50,
+   "bitwise": false,
+   "status": "FAIL"
+  },
+  {
+   "batch": 128,
+   "steps": 64,
+   "heads": 8,
+   "ctas": 128,
+   "repeats": 50,
+   "bitwise": false,
+   "status": "FAIL"
+  }
+ ],
+ "vs_bm16": [
+  {
+   "batch": 3,
+   "steps": 17,
+   "heads": 2,
+   "checks": {
+    "full_fp32": {
+     "bitwise": false,
+     "output_max_abs": 0.34289446473121643,
+     "carry_max_abs": 0.27347713708877563
+    },
+    "full_input": {
+     "bitwise": false,
+     "output_max_abs": 0.38775634765625,
+     "carry_max_abs": 0.2524994909763336
+    },
+    "hidden_input": {
+     "bitwise": false,
+     "output_max_abs": 0.227294921875,
+     "carry_max_abs": 0.24163731932640076
+    },
+    "last_input": {
+     "bitwise": false,
+     "output_max_abs": 0.14404296875,
+     "carry_max_abs": 0.23487868905067444
+    }
+   },
+   "status": "FAIL"
+  },
+  {
+   "batch": 33,
+   "steps": 40,
+   "heads": 2,
+   "checks": {
+    "full_fp32": {
+     "bitwise": false,
+     "output_max_abs": 0.44502848386764526,
+     "carry_max_abs": 0.3158186078071594
+    },
+    "full_input": {
+     "bitwise": false,
+     "output_max_abs": NaN,
+     "carry_max_abs": NaN
+    },
+    "hidden_input": {
+     "bitwise": false,
+     "output_max_abs": NaN,
+     "carry_max_abs": NaN
+    },
+    "last_input": {
+     "bitwise": false,
+     "output_max_abs": NaN,
+     "carry_max_abs": NaN
+    }
+   },
+   "status": "FAIL"
+  },
+  {
+   "batch": 200,
+   "steps": 64,
+   "heads": 2,
+   "checks": {
+    "full_fp32": {
+     "bitwise": false,
+     "output_max_abs": 0.6645433902740479,
+     "carry_max_abs": 0.4378732442855835
+    },
+    "full_input": {
+     "bitwise": false,
+     "output_max_abs": 0.66455078125,
+     "carry_max_abs": 0.4378732442855835
+    },
+    "hidden_input": {
+     "bitwise": false,
+     "output_max_abs": 0.4111328125,
+     "carry_max_abs": 0.4378732442855835
+    },
+    "last_input": {
+     "bitwise": false,
+     "output_max_abs": 0.2684173583984375,
+     "carry_max_abs": 0.4378732442855835
+    }
+   },
+   "status": "FAIL"
+  }
+ ],
+ "status": "FAIL",
+ "finished": 1792019770.925949
+}
