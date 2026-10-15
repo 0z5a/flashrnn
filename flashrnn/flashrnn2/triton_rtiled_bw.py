@@ -355,28 +355,46 @@ def preactivations(wx, recurrent, bias, initial, history, tf32=False):
     """FP32 gate preactivations Wx_t + R round(h_{t-1}) + b from the forward's FP32 state history.
 
     The hidden operand is rounded to the input dtype as in the forward MMA; products of two input-dtype values are
-    exact in FP32, so only the summation order differs from the forward kernel.
+    exact in FP32 (and in TF32), so only the summation order differs from the forward kernel. One head is a single
+    [B*T, D] x [D, 4D] GEMM written straight into the [B, T, 4, 1, D] layout.
     """
     dtype = wx.dtype
-    h_prev = torch.cat((initial[0].to(torch.float32), history[0][:, :-1]), dim=1).to(dtype)  # [B, T, H, D]
+    batch, steps, gates, heads, width = wx.shape
+    h_prev = torch.empty((batch, steps, heads, width), device=wx.device, dtype=dtype)
+    h_prev[:, :1] = initial[0]  # rounded to the input dtype on assignment, as in the forward MMA operand
+    h_prev[:, 1:] = history[0][:, :-1]
     previous = torch.backends.cuda.matmul.allow_tf32
-    torch.backends.cuda.matmul.allow_tf32 = tf32  # FP16/BF16 operands are exact in TF32; only the order differs
+    torch.backends.cuda.matmul.allow_tf32 = tf32
     try:
-        ry = torch.einsum("btnp,gnop->btgno", h_prev.float(), recurrent.float())
+        if heads == 1:
+            pre = torch.addmm(bias.float().reshape(1, gates * width), h_prev.reshape(batch * steps, width).float(),
+                              recurrent.reshape(gates * width, width).float().t())
+            pre = pre.view(batch, steps, gates, 1, width)
+            pre += wx
+        else:
+            ry = torch.einsum("btnp,gnop->btgno", h_prev.float(), recurrent.float())
+            pre = (wx.float() + ry + bias.float()).contiguous()
     finally:
         torch.backends.cuda.matmul.allow_tf32 = previous
-    return (wx.float() + ry + bias.float()).contiguous(), h_prev
+    return pre, h_prev
 
 
 def weight_gradients(dg, h_prev, tf32=False):
-    """dR[g,n,o,p] = sum_{b,t} dG[b,t,g,n,o] round(h_{t-1})[b,t,n,p] and dbias, FP32, no TF32, no atomics."""
+    """dR[g,n,o,p] = sum_{b,t} dG[b,t,g,n,o] round(h_{t-1})[b,t,n,p] and dbias, FP32, no atomics."""
+    batch, steps, gates, heads, width = dg.shape
     previous = torch.backends.cuda.matmul.allow_tf32
     torch.backends.cuda.matmul.allow_tf32 = tf32  # TF32 rounds the FP32 dG operand
     try:
-        d_recurrent = torch.einsum("btgno,btnp->gnop", dg, h_prev.float())
+        if heads == 1:
+            flat = dg.view(batch * steps, gates * width)
+            d_recurrent = (flat.t() @ h_prev.reshape(batch * steps, width).float()).view(gates, 1, width, width)
+            d_bias = flat.sum(dim=0).view(gates, 1, width)
+        else:
+            d_recurrent = torch.einsum("btgno,btnp->gnop", dg, h_prev.float())
+            d_bias = dg.sum(dim=(0, 1))
     finally:
         torch.backends.cuda.matmul.allow_tf32 = previous
-    return d_recurrent, dg.sum(dim=(0, 1))
+    return d_recurrent, d_bias
 
 
 def backward(
