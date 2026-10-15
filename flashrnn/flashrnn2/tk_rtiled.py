@@ -21,7 +21,8 @@ _LIB = None
 
 def build(cache_dir=None, nvcc=None, tk_root=None):
     tk_root = Path(tk_root or os.environ["FRNN_TK_ROOT"])
-    nvcc = nvcc or os.path.join(os.environ.get("FRNN_TK_CUDA_HOME", "/apps/ACC/CUDA/12.8"), "bin", "nvcc")
+    cuda_home = os.environ.get("FRNN_TK_CUDA_HOME", os.environ.get("CUDA_HOME", "/usr/local/cuda"))
+    nvcc = nvcc or os.path.join(cuda_home, "bin", "nvcc")
     digest = hashlib.sha256(SOURCE.read_bytes() + str(tk_root).encode()).hexdigest()[:16]
     cache = Path(cache_dir or os.environ.get("FRNN_TK_CACHE", Path.home() / ".cache/frnn_tk"))
     cache.mkdir(parents=True, exist_ok=True)

@@ -33,7 +33,8 @@ from flashrnn.flashrnn2.state_contract import begin_sequence
 
 MODEL_BUDGET = dict(atol=0.015, rtol=0.03, max_abs=0.03)
 LAYERS, VOCAB = 4, 512
-V1_BASE = Path("/gpfs/scratch/ehpc390/tueb043681/paper-baselines-20261013-v1")
+# Pinned FlashRNN1 baseline (source manifest, pinned package, build helpers); needed only by the v1 arms.
+V1_BASE = Path(os.environ["FRNN_V1_BASE"]) if "FRNN_V1_BASE" in os.environ else None
 SOURCES = ["tools/rtiled_m4.py", "flashrnn/flashrnn2/triton_rtiled.py", "flashrnn/flashrnn2/triton_persistent.py",
            "flashrnn/flashrnn2/tilelang_rtiled.py", "flashrnn/flashrnn2/reference.py",
            "flashrnn/flashrnn2/tk_rtiled.cu", "flashrnn/flashrnn2/tk_rtiled.py",
@@ -151,6 +152,8 @@ _V1 = {}
 def v1_module():
     if "flashrnn" in _V1:
         return _V1
+    if V1_BASE is None:
+        raise RuntimeError("set FRNN_V1_BASE to the pinned FlashRNN1 baseline directory")
     manifest = json.loads((V1_BASE / "pinned-source-manifest.json").read_text())
     for name, digest in manifest["files"].items():
         assert sha(V1_BASE / name) == digest, name
