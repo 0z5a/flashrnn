@@ -49,6 +49,7 @@
 
 constexpr int NCOUNT = 2 * MAX_ROUNDS;
 constexpr int THREADS = 512;
+constexpr int WARPS = THREADS / 32;
 constexpr unsigned long long TIMEOUT_NS = 5000000000ull;
 
 __device__ __forceinline__ uint64_t gtime() { uint64_t t; asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t)); return t; }
@@ -66,13 +67,29 @@ struct Args {
   uint32_t* flags;             // local [NCOUNT] same-node arrival counters (registered / symmetric)
   const uint64_t* base;        // [2][NCOUNT]: snapshot of flags (row 0) and network signals (row 1) at launch
   unsigned long long* timing;  // [3]: compute, publish, wait (ns sums)
-  int* err;
+  int* err;                    // first step (1-based) whose wait timed out
+  int check;                   // 1: after every step compare the first and last word of every block
+  unsigned long long* mismatch;
 };
 
 __device__ __forceinline__ void write_own(const Args& a, uint32_t* buf, int step) {
   size_t words = a.slice / 4;
   for (size_t i = threadIdx.x; i < words; i += blockDim.x) buf[(size_t)a.rank * words + i] = pattern(a.rank, step, (int)i);
 }
+
+// Per-step check (qualification passes only): every block of step `step` is present when the step's waits return.
+// Race-free: a peer can be at most one step ahead and then writes the other parity.
+__device__ __forceinline__ void check_step(const Args& a, const uint32_t* buf, int step) {
+  if (!a.check) return;
+  size_t words = a.slice / 4;
+  for (int b = threadIdx.x; b < a.P; b += blockDim.x) {
+    const volatile uint32_t* blk = buf + (size_t)b * words;
+    unsigned long long bad = (blk[0] != pattern(b, step, 0)) + (blk[words - 1] != pattern(b, step, (int)words - 1));
+    if (bad) atomicAdd(a.mismatch, bad);
+  }
+}
+
+__device__ __forceinline__ void named_barrier(int id, int threads) { asm volatile("bar.sync %0, %1;" :: "r"(id), "r"(threads) : "memory"); }
 
 #ifndef BACKEND_SHMEM
 // ---- GIN backend -------------------------------------------------------------------------------------------------
@@ -101,26 +118,37 @@ __global__ void __launch_bounds__(THREADS) step_kernel_gin(Args a, Table tb, ncc
     for (int r = 0; r < tb.nround; ++r) {
       const Round& rd = tb.round[r];
       int ci = par * MAX_ROUNDS + r;
-      for (int i = 0; i < rd.nsend; ++i) {
+      // Same-node sends run in parallel, each on its own group of warps 0..WARPS-2 (NVLink stores to the peer's
+      // window, then a system-scope flag add); network puts are posted one after another by lane 0 of the last warp.
+      int nlocal = 0;
+      for (int i = 0; i < rd.nsend; ++i) nlocal += rd.send[i].peer / a.L == a.node;
+      int gw = nlocal ? (WARPS - 1) / nlocal : 0, warp = threadIdx.x / 32;
+      for (int i = 0, li = 0; i < rd.nsend; ++i) {
         const Send& s = rd.send[i];
         size_t off = ((size_t)par * a.P + s.block) * a.slice;
         size_t bytes = (size_t)s.nblocks * a.slice;
         if (s.peer / a.L == a.node) {
-          uint4* dst = (uint4*)ncclGetLsaPointer(rwin, off, s.peer - a.lsa0);
-          const uint4* src = (const uint4*)((const char*)a.recv + off);
-          for (size_t w = threadIdx.x; w < bytes / 16; w += blockDim.x) dst[w] = src[w];
-          __threadfence_system();
-          __syncthreads();
-          if (threadIdx.x == 0) {
-            uint32_t* f = (uint32_t*)ncclGetLsaPointer(fwin, ci * sizeof(uint32_t), s.peer - a.lsa0);
-            atomicAdd_system(f, 1u);
+          int g = li++;
+          if (warp >= g * gw && warp < (g + 1) * gw) {
+            int gt = threadIdx.x - g * gw * 32;
+            uint4* dst = (uint4*)ncclGetLsaPointer(rwin, off, s.peer - a.lsa0);
+            const uint4* src = (const uint4*)((const char*)a.recv + off);
+            for (size_t w = gt; w < bytes / 16; w += gw * 32) dst[w] = src[w];
+            __threadfence_system();
+            named_barrier(1 + g, gw * 32);
+            if (gt == 0) {
+              __threadfence_system();
+              uint32_t* f = (uint32_t*)ncclGetLsaPointer(fwin, ci * sizeof(uint32_t), s.peer - a.lsa0);
+              atomicAdd_system(f, 1u);
+            }
           }
-        } else if (threadIdx.x == 0) {
+        } else if (threadIdx.x == THREADS - 32) {
           ncclGin gin{dc, 0};
           gin.put(ncclTeamWorld(dc), s.peer, rwin, off, rwin, off, bytes, ncclGin_WeakSignalInc{(ncclGinSignal_t)ci});
         }
       }
-      if (r == 0) { __syncthreads(); tw0 = gtime(); }
+      __syncthreads();
+      if (r == 0) tw0 = gtime();
       if (threadIdx.x == 0) {
         uint64_t k = (uint64_t)(step / 2 + 1);
         uint32_t want_l = (uint32_t)(base[ci] + k * rd.arrive_local);
@@ -136,7 +164,8 @@ __global__ void __launch_bounds__(THREADS) step_kernel_gin(Args a, Table tb, ncc
       }
       __syncthreads();
     }
-    if (a.has_gin && threadIdx.x == 0) { ncclGin gin{dc, 0}; gin.flush(ncclCoopThread()); }
+    check_step(a, buf, step);
+    if (a.has_gin && threadIdx.x == THREADS - 32) { ncclGin gin{dc, 0}; gin.flush(ncclCoopThread()); }
     __syncthreads();
     uint64_t t2 = gtime();
     tc += t1 - t0; tp += tw0 - t1; tw += t2 - tw0;
@@ -173,12 +202,14 @@ __global__ void __launch_bounds__(THREADS) step_kernel_shmem(Args a, Table tb, u
     for (int r = 0; r < tb.nround; ++r) {
       const Round& rd = tb.round[r];
       int ci = par * MAX_ROUNDS + r;
-      for (int i = 0; i < rd.nsend; ++i) {
+      // One warp per send (NVLink copy for same-node peers, a network put otherwise), all sends in parallel.
+      for (int i = threadIdx.x / 32; i < rd.nsend; i += WARPS) {
         const Send& s = rd.send[i];
         uint32_t* p = a.recv + ((size_t)par * a.P + s.block) * words;
-        nvshmemx_putmem_signal_nbi_block(p, p, (size_t)s.nblocks * a.slice, sig + ci, 1, NVSHMEM_SIGNAL_ADD, s.peer);
+        nvshmemx_putmem_signal_nbi_warp(p, p, (size_t)s.nblocks * a.slice, sig + ci, 1, NVSHMEM_SIGNAL_ADD, s.peer);
       }
-      if (r == 0) { __syncthreads(); tw0 = gtime(); }
+      __syncthreads();
+      if (r == 0) tw0 = gtime();
       if (threadIdx.x == 0) {
         uint64_t want = base[ci] + (uint64_t)(step / 2 + 1) * (rd.arrive_local + rd.arrive_remote);
         uint64_t ts = gtime();
@@ -187,7 +218,8 @@ __global__ void __launch_bounds__(THREADS) step_kernel_shmem(Args a, Table tb, u
       }
       __syncthreads();
     }
-    if (threadIdx.x == 0) nvshmem_quiet();
+    check_step(a, buf, step);
+    if (threadIdx.x % 32 == 0) nvshmem_quiet();   // every issuing warp completes its own puts
     __syncthreads();
     uint64_t t2 = gtime();
     tc += t1 - t0; tp += tw0 - t1; tw += t2 - tw0;
@@ -218,11 +250,12 @@ int main(int argc, char** argv) {
   std::vector<std::string> sched_list = split(arg(argc, argv, "--schedules", "flat"));
   std::vector<size_t> slice_list; for (auto& s : split(arg(argc, argv, "--slice-bytes", "8192"))) slice_list.push_back(std::stoull(s));
   int P = atoi(arg(argc, argv, "--ranks", "0")); if (P <= 0 || P > wsize) P = wsize;
-  int stride = atoi(arg(argc, argv, "--stride", "1"));
+  int stride_default = atoi(arg(argc, argv, "--stride", "1"));
   int steps = atoi(arg(argc, argv, "--steps", "256"));
   long long gamma_ns = atoll(arg(argc, argv, "--gamma-ns", "3000"));
   int reps = atoi(arg(argc, argv, "--reps", "5"));
   int graph = atoi(arg(argc, argv, "--graph", "0"));
+  int check = atoi(arg(argc, argv, "--check", "0"));
   const char* tag = arg(argc, argv, "--tag", "");
   for (size_t s : slice_list) if (s % 16 || s == 0) { if (!wrank) fprintf(stderr, "slice must be a multiple of 16\n"); MPI_Abort(MPI_COMM_WORLD, 5); }
 
@@ -236,7 +269,8 @@ int main(int argc, char** argv) {
   size_t max_slice = *std::max_element(slice_list.begin(), slice_list.end());
   size_t buf_bytes = 2 * (size_t)P * max_slice;
   uint32_t* recv = nullptr; uint32_t* flags = nullptr;
-  unsigned long long* timing; int* err; uint64_t* base;
+  unsigned long long* timing; unsigned long long* mismatch; int* err; uint64_t* base;
+  CUDACHECK(cudaMalloc(&mismatch, sizeof(unsigned long long)));
   CUDACHECK(cudaMalloc(&timing, 3 * sizeof(unsigned long long)));
   CUDACHECK(cudaMalloc(&err, sizeof(int)));
   CUDACHECK(cudaMalloc(&base, 2 * NCOUNT * sizeof(uint64_t)));
@@ -264,12 +298,16 @@ int main(int argc, char** argv) {
     NCCLCHECK(ncclCommQueryProperties(nc, &props));
     ncclTeam_t lsa = ncclTeamLsa(nc);
     lsa0 = wrank - lsa.rank;
+    int active_local = std::min(L, P - t.node * L);   // the last node may hold fewer active ranks (P = 7 on 4 + 4)
     has_gin = t.nodes > 1;
     if (wrank == 0)
       printf("{\"event\":\"init\",\"backend\":\"gin\",\"P\":%d,\"L\":%d,\"nodes\":%d,\"deviceApiSupport\":%d,\"ginType\":%d,"
              "\"lsaSize\":%d,\"lsaRank\":%d}\n", P, L, t.nodes, (int)props.deviceApiSupport, (int)props.ginType, lsa.nRanks, lsa.rank);
     fflush(stdout);
-    if (lsa.nRanks != L) { fprintf(stderr, "rank %d: LSA team %d != node size %d\n", wrank, lsa.nRanks, L); MPI_Abort(MPI_COMM_WORLD, 6); }
+    if (lsa.nRanks != active_local || lsa0 != t.node * L) {   // LSA ranks must be this node's contiguous block
+      fprintf(stderr, "rank %d: LSA team %d ranks from %d, expected %d from %d\n", wrank, lsa.nRanks, lsa0, active_local, t.node * L);
+      MPI_Abort(MPI_COMM_WORLD, 6);
+    }
     ncclDevCommRequirements_t reqs = NCCL_DEV_COMM_REQUIREMENTS_INITIALIZER;
     if (has_gin) {
       reqs.ginContextCount = 1; reqs.ginSignalCount = NCOUNT;
@@ -290,7 +328,10 @@ int main(int argc, char** argv) {
   cudaEvent_t e0, e1; CUDACHECK(cudaEventCreate(&e0)); CUDACHECK(cudaEventCreate(&e1));
 
   for (size_t slice : slice_list) {
-    for (const std::string& sched : sched_list) {
+    for (const std::string& spec : sched_list) {
+      // "name" or "name:param" (stride for flat / cyclic, fan-out k for fanout)
+      std::string sched = spec.substr(0, spec.find(':'));
+      int stride = spec.find(':') == std::string::npos ? stride_default : atoi(spec.c_str() + spec.find(':') + 1);
       Table tb = build(sched, stride, t, wrank);
       if (tb.nround < 0) {
         if (wrank == 0) printf("{\"event\":\"skip\",\"schedule\":\"%s\",\"stride\":%d,\"P\":%d,\"L\":%d}\n", sched.c_str(), stride, P, L);
@@ -299,14 +340,16 @@ int main(int argc, char** argv) {
       bool complete = schedule_complete(sched, stride, t);
       arrivals(sched, stride, t, tb);
       std::vector<double> per_step, ph_c, ph_p, ph_w;
-      int bad = 0;
+      int bad = 0; unsigned long long step_mismatch = 0;
       int T0 = std::max(4, steps / 4);
       for (int rep = 0; rep < reps; ++rep) {
         double ms[2];
         for (int pass = 0; pass < 2; ++pass) {
           int T = pass == 0 ? T0 : steps;
-          Args a{wrank, P, T, lsa0, slice, (uint64_t)gamma_ns, L, t.node, has_gin, recv, flags, base, timing, err};
+          Args a{wrank, P, T, lsa0, slice, (uint64_t)gamma_ns, L, t.node, has_gin, recv, flags, base, timing, err,
+                 check && complete, mismatch};
           CUDACHECK(cudaMemset(err, 0, sizeof(int)));
+          CUDACHECK(cudaMemset(mismatch, 0, sizeof(unsigned long long)));
           CUDACHECK(cudaDeviceSynchronize());
           MPI_Barrier(comm);   // every arrival of the previous launch has landed everywhere
 #ifdef BACKEND_SHMEM
@@ -357,6 +400,7 @@ int main(int argc, char** argv) {
           CUDACHECK(cudaStreamSynchronize(st));
           CUDACHECK(cudaEventElapsedTime(&m, e0, e1));
           int e = 0; CUDACHECK(cudaMemcpy(&e, err, sizeof(int), cudaMemcpyDeviceToHost)); if (e) bad = e;
+          unsigned long long mm = 0; CUDACHECK(cudaMemcpy(&mm, mismatch, sizeof(mm), cudaMemcpyDeviceToHost)); step_mismatch += mm;
           double md = m, mx; MPI_Allreduce(&md, &mx, 1, MPI_DOUBLE, MPI_MAX, comm);
           ms[pass] = mx;
           if (pass == 1 && backend != "host") {
@@ -376,6 +420,7 @@ int main(int argc, char** argv) {
       for (int b = 0; b < P; ++b) for (size_t i = 0; i < words; ++i) wrong += hb[(size_t)b * words + i] != pattern(b, last, (int)i);
       long wrong_all; MPI_Allreduce(&wrong, &wrong_all, 1, MPI_LONG, MPI_SUM, comm);
       int bad_all; MPI_Allreduce(&bad, &bad_all, 1, MPI_INT, MPI_MAX, comm);
+      unsigned long long mm_all; MPI_Allreduce(&step_mismatch, &mm_all, 1, MPI_UNSIGNED_LONG_LONG, MPI_SUM, comm);
       if (wrank == 0) {
         auto med = [](std::vector<double> v) { if (v.empty()) return -1.0; std::sort(v.begin(), v.end()); return v[v.size() / 2]; };
         int al = 0, ar = 0; for (int r = 0; r < tb.nround; ++r) { al += tb.round[r].arrive_local; ar += tb.round[r].arrive_remote; }
@@ -385,8 +430,8 @@ int main(int argc, char** argv) {
                tag, backend.c_str(), graph, sched.c_str(), stride, P, L, t.nodes, slice, steps, gamma_ns, tb.nround, al, ar,
                complete ? "true" : "false", med(per_step));
         for (size_t i = 0; i < per_step.size(); ++i) printf("%s%.4f", i ? "," : "", per_step[i]);
-        printf("],\"phase_compute_us\":%.4f,\"phase_publish_us\":%.4f,\"phase_wait_us\":%.4f,\"wrong_words\":%ld,\"timeout_step\":%d}\n",
-               med(ph_c), med(ph_p), med(ph_w), wrong_all, bad_all);
+        printf("],\"phase_compute_us\":%.4f,\"phase_publish_us\":%.4f,\"phase_wait_us\":%.4f,\"wrong_words\":%ld,\"timeout_step\":%d,"
+               "\"check\":%d,\"step_mismatch\":%llu}\n", med(ph_c), med(ph_p), med(ph_w), wrong_all, bad_all, check, mm_all);
         fflush(stdout);
       }
       MPI_Barrier(comm);

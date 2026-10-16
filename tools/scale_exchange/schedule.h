@@ -57,6 +57,19 @@ static inline Table build(const std::string& sched, int stride, const Topo& t, i
     for (int n = 0; n < t.nodes; ++n) if (n != node) add(0, n * t.L + local, rank, 1);
     for (int j = 0; j < t.L; ++j) if (j != local)
       for (int n = 0; n < t.nodes; ++n) add(1, node * t.L + j, n * t.L + local, 1);
+  } else if (sched == "repeat") {
+    // Microbenchmark: R = stride rounds, each sending the own block to rank + 1 (an all-gather only for P = 2);
+    // the per-step time against R separates the per-step overhead from the per-round cost.
+    if (stride < 1) { tb.nround = -1; return tb; }
+    tb.nround = stride;
+    for (int k = 0; k < stride && k < MAX_ROUNDS; ++k) add(k, (rank + 1) % P, rank, 1);
+  } else if (sched == "fanout") {
+    // Microbenchmark, not an all-gather: own block to k = stride ranks of the next node, one round (identifies the
+    // per-put injection gap of one NIC).
+    if (P % t.L || t.nodes < 2 || stride < 1 || stride > t.L) { tb.nround = -1; return tb; }
+    tb.nround = 1;
+    int local = rank % t.L, nn = (rank / t.L + 1) % t.nodes;
+    for (int j = 0; j < stride; ++j) add(0, nn * t.L + (local + j) % t.L, rank, 1);
   } else { fprintf(stderr, "unknown schedule %s\n", sched.c_str()); exit(4); }
   if (overflow || tb.nround > MAX_ROUNDS) tb.nround = -1;
   return tb;

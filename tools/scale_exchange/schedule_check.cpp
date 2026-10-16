@@ -27,7 +27,7 @@ int main(int argc, char** argv) {
     if (!strcmp(argv[i], "--json") && i + 1 < argc) json = argv[++i];
     else PMAX = atoi(argv[i]);
   }
-  const char* scheds[] = {"flat", "cyclic", "ring", "doubling", "hier"};
+  const char* scheds[] = {"flat", "cyclic", "ring", "doubling", "hier", "fanout", "repeat"};
   long cases = 0, failures = 0;
   std::map<std::string, long> per_check;
   FILE* out = json ? fopen(json, "w") : nullptr;
@@ -42,7 +42,8 @@ int main(int argc, char** argv) {
       if (L > P) continue;
       for (const char* sched : scheds) {
         bool strided = !strcmp(sched, "flat") || !strcmp(sched, "cyclic");
-        for (int st = 1; st <= (strided ? P - 1 : 1); ++st) {
+        bool fan = !strcmp(sched, "fanout"), rpt = !strcmp(sched, "repeat");
+        for (int st = 1; st <= (strided ? P - 1 : fan ? L : rpt ? 8 : 1); ++st) {
           Topo t0 = make_topo(P, L, 0);
           Table tb0 = build(sched, st, t0, 0);
           bool applies = tb0.nround >= 0;
@@ -53,13 +54,15 @@ int main(int argc, char** argv) {
           if (!strcmp(sched, "hier")) expect = P % L == 0 && P / L >= 2 && (P / L - 1) * L <= MAX_SENDS;
           if (!strcmp(sched, "cyclic") || !strcmp(sched, "ring")) expect = expect && P - 1 <= MAX_ROUNDS;
           if (!strcmp(sched, "flat")) expect = expect && P - 1 <= MAX_SENDS;
+          if (fan) expect = P % L == 0 && P / L >= 2;
+          if (rpt) expect = st <= MAX_ROUNDS;
           if (applies != expect) { fail("applicability", sched, P, L, st); continue; }
           if (strided && prime(P) && !applies && P - 1 <= MAX_ROUNDS && P - 1 <= MAX_SENDS) fail("prime_all_strides", sched, P, L, st);
           if (!applies) continue;
           ++cases;
-          if (!schedule_complete(sched, st, t0)) fail("complete", sched, P, L, st);
+          if (schedule_complete(sched, st, t0) != (!(fan || rpt) || P == 2)) fail("complete", sched, P, L, st);   // micro schedules: all-gathers only for P = 2
           int q = 0; while ((1 << q) < P) ++q;
-          int want_rounds = !strcmp(sched, "flat") ? 1 : !strcmp(sched, "doubling") ? q : !strcmp(sched, "hier") ? 2 : P - 1;
+          int want_rounds = rpt ? st : !strcmp(sched, "flat") || fan ? 1 : !strcmp(sched, "doubling") ? q : !strcmp(sched, "hier") ? 2 : P - 1;
           if (tb0.nround != want_rounds) fail("rounds", sched, P, L, st);
           std::vector<Table> tabs; for (int r = 0; r < P; ++r) tabs.push_back(build(sched, st, make_topo(P, L, r), r));
           Load ld{tb0.nround, 0, 0, 0, 0, 0, 0};
@@ -79,7 +82,7 @@ int main(int argc, char** argv) {
               }
               ld.net_msgs = std::max(ld.net_msgs, nm); ld.net_blocks = std::max(ld.net_blocks, nb);
               ld.net_msgs_total += nm; ld.net_blocks_total += nb;
-              if (!strcmp(sched, "cyclic") || !strcmp(sched, "ring"))
+              if (!strcmp(sched, "cyclic") || !strcmp(sched, "ring") || rpt)
                 if (rd.nsend != 1) fail("permutation_send", sched, P, L, st);
               if (!strcmp(sched, "doubling")) {
                 if (rd.nsend != 1) fail("matching", sched, P, L, st);
@@ -91,7 +94,7 @@ int main(int argc, char** argv) {
             }
             for (auto& kv : nv_msgs) ld.nv_msgs = std::max(ld.nv_msgs, kv.second);
             for (auto& kv : nv_blocks) ld.nv_blocks = std::max(ld.nv_blocks, kv.second);
-            if (!strcmp(sched, "cyclic") || !strcmp(sched, "ring"))
+            if (!strcmp(sched, "cyclic") || !strcmp(sched, "ring") || rpt)
               for (int r = 0; r < P; ++r) if (recv[r] != 1) fail("permutation_recv", sched, P, L, st);
           }
           if (!strcmp(sched, "cyclic") && ((long)pairs.size() != (long)P * (P - 1) || pair_msgs != (long)P * (P - 1)))

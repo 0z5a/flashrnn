@@ -144,3 +144,55 @@ corrected model that addresses them is labelled post hoc.
   every D whose slices fit is also a one-node size; a two-node run of it is a topology test, not a necessity test.
   The two-node necessity case (D = 4096: about 1024 CTAs of 131 KB) needs a K split per CTA, a per-step partial-sum
   reduction across the K-part CTAs and a second barrier; that term goes into the phase B model.
+
+## 7. Phase B pre-registration (written 2026-10-16 21:30 CEST, before any phase B run and before phase A results)
+
+**What runs.** `tools/scale_exchange/exchange_bench.cu`: one MPI rank per GPU, one persistent CTA of 512 threads per
+rank. Each step: spin γ ns (stands in for the recurrence compute), write the own slice of h (m/P bytes, a
+pattern f(rank, step, i)), run the schedule's rounds, wait for each round's arrivals, next step. Same-node sends
+run in parallel on disjoint warp groups (15 warps split evenly over the round's same-node sends); network sends
+are posted one after another by one thread (GIN) or one warp per send (NVSHMEM). Arrival counters are kept per
+(step parity, round). Three transports: NCCL 2.32.3 device API (LSA stores within a node, GIN put + signal across
+nodes), NVSHMEM 3.9 (`putmem_signal_nbi_warp`; IBRC, plus IBGDA if the node has its prerequisites), and the
+host-driven baseline (spin kernel + `ncclAllGather` per step, plain and as one CUDA graph). This is an exchange
+skeleton: it measures X_P(m) of section 2 for one aggregated per-GPU message; it is not the recurrence. The real
+kernel would first gather its CTAs' slices behind the intra-GPU barrier (α_l2) and then send them.
+
+**Schedules.** The host tables in `schedule.h`, checked exhaustively on the CPU by `schedule_check` for P ≤ 64,
+L ∈ {1, 2, 4, 8} (12606 cases, 0 failures): completeness, round counts, permutation rounds (cyclic, ring), exact
+cover (cyclic), perfect matchings (doubling), the coprime-stride rule, and the per-round NIC/NVLink loads. On two
+nodes of four (P = 8) the network carries 32 blocks per step under flat and doubling, 14 under ring, and 8 under
+hier, which is the lower bound P·(N−1) (every block must reach the other node once).
+
+**Model (per backend, parameters fitted only from micro cases of the same job).**
+* Micro cases: `repeat:R` (R ∈ {1, 2, 4, 8} rounds to one peer) at P = 2 within a node and across nodes, over
+  slices 16 B–1 MB; `flat` at P = 3 and P = 4 within a node (2 and 3 parallel same-node sends) over the same
+  sweep; `fanout:k` (k ∈ {1..4} puts to the other node in one round) at P = 8 for slices 16 B and 8 KB.
+* Fit: per_step(R, s) = o + R·(α_c + β_c·s) by least squares for c ∈ {nv, net}; β_nv(n) for n parallel
+  same-node sends from the P = n + 1 within-node flat sweep (n = 1 from repeat); the per-put gap
+  g = slope_k(per_step) − β_net·s, averaged over the two fanout slices.
+* Prediction for a schedule (rounds k, ranks i, from the same tables the kernel runs):
+  round_k = max_i max(α_nv + β_nv(n_k,i)·b_local,k,i , α_net + (r_k,i − 1)·g + β_net·B_net,k,i), where b_local is
+  the largest same-node send, n the number of same-node sends, r the number of network sends and B_net their total
+  bytes (terms absent when there is no such send); X = Σ_k round_k; per_step = o + γ + X.
+* Hier written out (P = n·N, slice b = m/P): round 0 = α_net + (N − 2)·g + β_net·(N − 1)·b; round 1 =
+  α_nv + β_nv(n − 1)·N·b. Flat on two nodes of four: one round = max(α_nv + β_nv(3)·b, α_net + 3·g + β_net·4·b).
+
+**Checks.**
+* B1 correctness (qualification passes, `--check 1`): every case has 0 wrong words at the last step, 0 per-step
+  mismatches (first and last word of every block, every step) and no timeout. A backend that fails its two-rank
+  cross-node smoke or B1 is excluded from B2–B5 and reported as a negative result.
+* B2 model: every comparison case (γ = 0; P = 8: flat s = 1, 3, cyclic s = 1, 3, ring, doubling, hier;
+  P = 7: flat s = 1, 3, cyclic s = 1, 2, 3, ring; slices 1, 4, 8, 16, 64 KB and 9376 / 18736 B for P = 7) is
+  within ±20% of the prediction, and for every pair of schedules at the same (backend, P, slice) that the model
+  separates by more than 10%, the predicted faster one is measured faster.
+* B3 topology claim: at P = 8 on two nodes, for the claim slices (8 KB and 16 KB: m/P for D = 2048 and 4096 with a
+  16-row tile in FP16), the best of hier / doubling beats the faster flat stride by a measured ratio ≥ 1.1, with
+  the model predicting ≥ 1.0. At P = 7 the same test for the best coprime cyclic stride against flat.
+* B4 against the trivial collective: the best device-initiated schedule beats the host-driven `ncclAllGather`
+  (graph version) at the claim slices by a measured ratio ≥ 1.1.
+* B5 additivity: for γ ∈ {2, 5} µs, per_step(γ) is within max(10%, 1 µs) of γ + per_step(0) (hier and flat, 8 and
+  16 KB) — the condition for composing X with the measured compute.
+* Composition (reported, labelled composed, not a check): T_C(D, P = 8) = γ(D/P) + α_l2 + X_8(m/P) against phase
+  A's measured T_A(D). γ(D/P) at K = D = 4096 is not measured (that needs the K-split kernel of section 6); it is
+  scaled from phase A's measured per-step compute and the scaling is stated with the number.
