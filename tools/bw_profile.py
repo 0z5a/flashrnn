@@ -55,6 +55,9 @@ def main():
     p.add_argument("--out", required=True)
     p.add_argument("--case", required=True)
     p.add_argument("--tilelang", action="store_true")
+    p.add_argument("--slices", default="", help="comma list restricting the backward slice widths")
+    p.add_argument("--kinds", default="", help="comma list restricting the backward variants (base, fast, fast_tf32, "
+                                               "splitg, fuse1, fuse2, fuse2_splitg)")
     a = p.parse_args()
     torch.backends.cuda.matmul.allow_tf32 = False
     case = dict(json.loads(a.case), init="warm")
@@ -96,6 +99,11 @@ def main():
                 for f in (1, 2):
                     variants[f"s{s}w{warps}_fuse{f}"] = dict(variants[f"s{s}w{warps}_fast_tf32"], fuse_pre=f)
                 variants[f"s{s}w{warps}_fuse2_splitg"] = dict(variants[f"s{s}w{warps}_fuse2"], split_gates=True)
+    if a.slices:
+        variants = {n: v for n, v in variants.items() if n.split("w")[0][1:] in a.slices.split(",")}
+    if a.kinds:
+        keep = set(a.kinds.split(","))
+        variants = {n: v for n, v in variants.items() if n.split("_", 1)[1] in keep}
     reference = {}
     for name, opts in variants.items():
         try:
