@@ -333,3 +333,10 @@ environment B = 16 is still behind (the Triton R-tiled forward is the slower hal
 won at B = 16 for every width, and was not slower at B = 64 for D = 192/256/384, so `training.backward_defaults`
 uses SPLITG for every batch size there and for B <= 16 at D = 512/768 (slice 16; four warps at D = 192/256, eight
 above). This replaces the fused default at D = 256; the fused kernel stays available (`fuse_pre`).
+
+**Training forward.** With the Triton forward the B = 16 training step stays behind FlashRNN1 (0.88-1.04x); the
+TileLang forward is 0.16-0.6 ms faster per call at B = 16, T = 256 (D = 384 LSTM: 0.98 vs 1.14 ms; D = 768: 0.93 vs
+1.52 ms) and is what makes the step faster. `training.recurrence` without a `config` therefore runs a shape that is
+not in the packaged tables on the TileLang configuration the gate-batched batch selected (cluster S16 at D = 192/256,
+cluster S32 at D = 384/512, grid S16 at D = 768; H = 1), when TileLang is installed and the runtime matches the
+tables' measured identity; otherwise it keeps the table default (Triton). Table entries still win where they exist.

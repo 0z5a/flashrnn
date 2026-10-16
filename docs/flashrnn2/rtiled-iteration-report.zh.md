@@ -298,4 +298,4 @@ D = 256 的 TileLang grid 路径此前没有筛选过多行 batch tile 和两个
 * **公开接口接入（已完成）。** `flashrnn2.dispatch` 让一次性调用也按表选后端（身份不符时退回默认配置；分块续跑须沿用整次调用选出的配置）。运行 dispatch check 的契约检查 12/12 形状 + 单元检查全部通过：选中配置正确，与后端直调、与 PreparedSequence、与公开分块续跑均逐位一致，E1 最差 0.31% 预算。详见 `docs/flashrnn2/dispatch.md`。
 * D ≤ 128 保持单 CTA；如需再探索，应在预分配的 PreparedSequence 路径上单独配对计时。
 * 与原作者确认目标 D、B、T 网格，并回复原作者、更新 PR。
-* B = 16 训练步已在 TileLang 前向下修好（按门分工的 dh 归约）。每步剩下的大头是跨 SM 屏障（1.2–1.4 µs）；Triton 前向环境里 B = 16 仍落后，那里该改的是前向。
+* B = 16 训练步已在 TileLang 前向下修好（按门分工的 dh 归约）。Triton 前向环境里 B = 16 仍落后（0.88–1.04×），所以 `training.recurrence` 不给 `config` 时，对查表之外的形状改用这一轮选出的 TileLang 前向（D = 192/256 cluster S16，D = 384/512 cluster S32，D = 768 grid S16；H = 1；要求装了 TileLang 且运行环境与查表的测量身份一致），否则仍用 Triton。每步剩下的大头是跨 SM 屏障（1.2–1.4 µs）。
