@@ -31,7 +31,7 @@ def compile_one(cell, dtype, width, s, warps, fuse=False):
                S="constexpr", K1="constexpr", K2="constexpr", SPIN="constexpr", VERIFY="constexpr",
                FAST="constexpr", DS_C="constexpr", DS_N="constexpr", FUSE="constexpr")
     const = dict(H=1, D=width, SLSTM=cell == "slstm", BM=16, S=s, K1=k1, K2=k2, SPIN=SPIN_LIMIT, VERIFY=0,
-                 FAST=int(fuse), DS_C=1 - int(fuse), DS_N=1 - int(fuse), FUSE=int(fuse))
+                 FAST=int(fuse > 0), DS_C=int(fuse == 0), DS_N=int(fuse == 0), FUSE=int(fuse))
     if fuse:
         sig["PRE"] = f"*{t}"  # Wx in the input dtype
     src = triton.compiler.ASTSource(fn=_rtiled_bw, signature=sig, constexprs=const)
@@ -62,7 +62,7 @@ def main():
     p.add_argument("--slices", default="16,32,64")
     p.add_argument("--warps", default="4,8")
     p.add_argument("--dtypes", default="float16,bfloat16")
-    p.add_argument("--fuse", action="store_true")
+    p.add_argument("--fuse", type=int, default=0, choices=(0, 1, 2))
     a = p.parse_args()
     rows = []
     for cell in ("lstm", "slstm"):
