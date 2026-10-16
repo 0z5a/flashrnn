@@ -412,13 +412,14 @@ int main(int argc, char** argv) {
         }
         per_step.push_back((ms[1] - ms[0]) * 1000.0 / (steps - T0));
       }
-      // Verification: the buffer of the last step holds every rank's pattern.
+      // Verification: the buffer of the last step holds every rank's pattern (all-gather schedules only).
       size_t words = slice / 4; int last = steps - 1;
       std::vector<uint32_t> hb((size_t)P * words);
       CUDACHECK(cudaMemcpy(hb.data(), recv + (size_t)(last & 1) * P * words, hb.size() * 4, cudaMemcpyDeviceToHost));
       long wrong = 0;
       for (int b = 0; b < P; ++b) for (size_t i = 0; i < words; ++i) wrong += hb[(size_t)b * words + i] != pattern(b, last, (int)i);
       long wrong_all; MPI_Allreduce(&wrong, &wrong_all, 1, MPI_LONG, MPI_SUM, comm);
+      if (!complete) wrong_all = -1;   // micro schedules (fanout, repeat at P > 2) do not deliver every block
       int bad_all; MPI_Allreduce(&bad, &bad_all, 1, MPI_INT, MPI_MAX, comm);
       unsigned long long mm_all; MPI_Allreduce(&step_mismatch, &mm_all, 1, MPI_UNSIGNED_LONG_LONG, MPI_SUM, comm);
       if (wrank == 0) {

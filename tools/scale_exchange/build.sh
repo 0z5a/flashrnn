@@ -18,4 +18,15 @@ $NVCC -O3 -std=c++17 $ARCH -lineinfo -rdc=true -DBACKEND_SHMEM -I"$DEPS/nvshmem/
   "$HERE/exchange_bench.cu" -o "$OUT/exchange_shmem" \
   -L"$DEPS/nvshmem/lib" -lnvshmem_host -lnvshmem_device -lcuda -Xlinker -rpath -Xlinker "$DEPS/nvshmem/lib" \
   $MPI_LIB -Xcompiler -pthread
+g++ -O2 -std=c++17 -DSCHED_MAX_ROUNDS=64 -DSCHED_MAX_SENDS=64 "$HERE/schedule_check.cpp" -o "$OUT/schedule_check"
+# Build stamp: which sources produced which binaries.
+{
+  echo '{"sources": {'
+  first=1; for f in exchange_bench.cu schedule.h schedule_check.cpp build.sh; do
+    [ $first = 1 ] || echo ','; first=0; printf '"%s": "%s"' "$f" "$(sha256sum "$HERE/$f" | cut -d' ' -f1)"; done
+  echo '}, "binaries": {'
+  first=1; for f in exchange_gin exchange_shmem schedule_check; do
+    [ $first = 1 ] || echo ','; first=0; printf '"%s": "%s"' "$f" "$(sha256sum "$OUT/$f" | cut -d' ' -f1)"; done
+  echo '}, "cuda": "'"$CUDA"'", "mpi": "'"$MPI"'", "built": "'"$(date -Is)"'"}'
+} > "$OUT/build-stamp.json"
 ls -la "$OUT"

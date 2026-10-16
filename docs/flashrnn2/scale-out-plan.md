@@ -196,3 +196,14 @@ hier, which is the lower bound P·(N−1) (every block must reach the other node
 * Composition (reported, labelled composed, not a check): T_C(D, P = 8) = γ(D/P) + α_l2 + X_8(m/P) against phase
   A's measured T_A(D). γ(D/P) at K = D = 4096 is not measured (that needs the K-split kernel of section 6); it is
   scaled from phase A's measured per-step compute and the scaling is stated with the number.
+
+**Amendment (2026-10-16 21:50 CEST, after phase B was submitted as job "scale phase B", before any phase B
+result).** The general round formula above charges same-node traffic by the largest single send; the schedule
+table sends the N blocks of hier round 1 as N separate (non-contiguous) sends per peer, so the general formula and
+the explicit hier row disagreed. The analysis charges same-node traffic per peer link: n = number of distinct
+same-node peers in the round, b_local = bytes to the busiest same-node peer, cost α_nv + β_nv(n)·b_local (n capped
+at 3, the largest measured fan-out). This makes the general formula equal to the explicit hier row
+(α_nv + β_nv(n − 1)·N·b). `tools/scale_exchange/analyze_b.py` implements the fits and checks B1–B5 as written; its
+port of `schedule.h` is cross-checked against the `schedule_check` loads the batch preflight writes (1148
+schedules, 0 mismatches on the login build), and it was exercised on a synthetic batch generated from known
+parameters (parameters recovered within the injected 3% noise; all checks evaluated).
