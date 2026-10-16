@@ -1,0 +1,53 @@
+{
+  "comparison": {
+    "name": "fuse-mod-slstm-float16-d384-b16-t256-frnn2-vs-v1",
+    "experiment": "TRAIN_STEP_FRNN2_VS_V1",
+    "level": "train_step",
+    "cell": "slstm",
+    "dtype": "float16",
+    "width": 384,
+    "batch": 16,
+    "concurrency": 16,
+    "steps": 256,
+    "lane": 3,
+    "tilelang": false,
+    "baseline": {
+      "kind": "v1"
+    },
+    "candidate": {
+      "fast": true,
+      "forward": {
+        "family": "mma_rtiled",
+        "slice_width": 32,
+        "sync": "grid",
+        "warps": 4
+      },
+      "kind": "frnn2",
+      "slice_width": 16,
+      "tf32": true,
+      "warps": 4
+    }
+  },
+  "start": 3,
+  "split": 1,
+  "identity": {
+    "gpu": "NVIDIA H100",
+    "torch": "2.4.0a0+gite3b9b71",
+    "triton": "3.6.0",
+    "capability": [
+      9,
+      0
+    ]
+  },
+  "table_sha256": "a4fc9df8fe032f76e6b5badd4b56014e49106bd31f1ff4bc65bccdee62b2f1a8",
+  "pid": 1542348,
+  "host": "as02r5b08",
+  "gpu_uuid": "GPU-14942434-9ebf-add0-aa9c-6d504568132e",
+  "started": 1792143574.4054089,
+  "blocks": 20,
+  "order": "ABBA even blocks, BAAB odd blocks",
+  "arm_unit": "CUDA-event time per training step (forward + backward) over back-to-back calls",
+  "status": "PASS",
+  "finished": 1792143593.2059433,
+  "calls_per_measurement": 11
+}

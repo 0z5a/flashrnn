@@ -15,6 +15,20 @@ import torch
 # to the base kernel) and TF32 for the preactivation/dR GEMMs (gradient error unchanged: FP16 3.2e-4, BF16 2.4e-3
 # relative Frobenius against the FP64 oracle); eight warps, the qualified slice width per D.
 BW_DEFAULTS = {"slice_width": None, "num_warps": 8, "fast": True, "tf32": True}
+# Fused preactivation recompute (FUSE=2, gate-interleaved MMA) as the default only where the pre-registered rule of the
+# fused batch held: fused faster than unfused at B = 16 (TileLang forward, lower 95% bound >= 1 for LSTM and sLSTM)
+# and not slower at B = 64 -- only D = 256. The timed configuration (slice 16, four warps) is the default there.
+FUSED_DEFAULTS = {256: {"fuse_pre": 2, "slice_width": 16, "num_warps": 4}}
+
+
+def backward_defaults(width, user=None):
+    """Backward options for head dimension ``width``: package defaults, the fused defaults, then the caller's."""
+    user = dict(user or {})
+    options = dict(BW_DEFAULTS, **FUSED_DEFAULTS.get(width, {}))
+    options.update(user)
+    if not options.get("fast") and "fuse_pre" not in user:
+        options["fuse_pre"] = 0  # the fused kernel is a variant of the fast kernel
+    return options
 
 
 def backward_slice_width(width):
@@ -83,5 +97,5 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, output_mode="hidden
         raise ValueError("snapshot dtype must be input dtype or FP32")
     if sequence_context is not None and sequence_context.step_offset > 0:
         raise ValueError("a continuation chunk cannot be differentiated; run the whole logical call")
-    options = dict(BW_DEFAULTS, **(backward_options or {}))
+    options = backward_defaults(wx.shape[-1], backward_options)
     return _Recurrence.apply(wx, recurrent, bias, initial, cell, output_mode, snapshot_dtype, config, options)

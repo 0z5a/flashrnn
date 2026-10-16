@@ -1,0 +1,35 @@
+unload bsc/1.0 (PATH, MANPATH)
+unload UCX/1.15.0 (PATH, LD_LIBRARY_PATH, LIBRARY_PATH, C_INCLUDE_PATH,
+CPLUS_INCLUDE_PATH) 
+remove mkl/2023.2.0 (LD_LIBRARY_PATH)
+remove impi/2021.10.0 (PATH, MANPATH, LD_LIBRARY_PATH)
+load GCC/11.4.0 (PATH, LD_LIBRARY_PATH, LIBRARY_PATH, C_INCLUDE_PATH,
+CPLUS_INCLUDE_PATH, CC, FC, F90, F77, CXX, OMPI_FC, OMPI_F90, OMPI_F77,
+OMPI_CC, OMPI_CXX) 
+load impi/2021.11 (PATH, MANPATH, LD_LIBRARY_PATH)
+load mkl/2024.0 (LD_LIBRARY_PATH)
+ ------------------------------------------------------------------------------------------ 
+|                                     WARNING                                              |
+|                                                                                          |
+| NVPCX uses its own implementation of MPI that does not offer srun support.               |
+| Programs compiled with NVPCX must use 'mpirun --bind-to none' instead of 'srun'.         |
+| Remember to also add 'export SLURM_CPU_BIND=none' in your job scripts.                   |
+ ------------------------------------------------------------------------------------------ 
+load OPENBLAS/0.3.27 (LD_LIBRARY_PATH, LIBRARY_PATH, PKG_CONFIG_PATH)
+load CUDNN/9.0.0/cuda11 (LD_LIBRARY_PATH, LIBRARY_PATH, C_INCLUDE_PATH,
+CPLUS_INCLUDE_PATH, CUDNN_LIB_DIR, CUDNN_LIBRARY, CUDNN_INCLUDE_DIR) 
+load TENSORRT/10.0.0/cuda11 (PATH, LD_LIBRARY_PATH, LIBRARY_PATH,
+C_INCLUDE_PATH, CPLUS_INCLUDE_PATH) 
+load HDF5/1.14.1-2 (PATH, LD_LIBRARY_PATH, LIBRARY_PATH, C_INCLUDE_PATH,
+CPLUS_INCLUDE_PATH, HDF5_DIR, HDF5_ROOT) 
+load PYTHON/3.11.5 (PATH, MANPATH, LD_LIBRARY_PATH, LIBRARY_PATH,
+PKG_CONFIG_PATH, C_INCLUDE_PATH, CPLUS_INCLUDE_PATH, PYTHONHOME, PYTHONPATH) 
+load NCCL/2.19.4 (LD_LIBRARY_PATH, LIBRARY_PATH, C_INCLUDE_PATH,
+CPLUS_INCLUDE_PATH) 
+[11:24:37] : Warning: [ThreadSync] Hoisting sync out of an if whose condition is not safe for an in-if sync. This is not a fix: both ends of the conflict are inside the branch, so the hoisted barrier no longer separates them and the race remains. Constraining the condition -- a T.assume on the parameters it reads -- keeps the barrier in place instead. Condition: tx == 0
+[11:24:42] : Warning: [ThreadSync] Hoisting sync out of an if whose condition is not safe for an in-if sync. This is not a fix: both ends of the conflict are inside the branch, so the hoisted barrier no longer separates them and the race remains. Constraining the condition -- a T.assume on the parameters it reads -- keeps the barrier in place instead. Condition: tx == 0
+2026-10-16 11:24:36  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:137): TileLang begins to compile kernel `main` with `out_idx=None`
+2026-10-16 11:24:40  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:145): TileLang completes to compile kernel `main`
+2026-10-16 11:24:41  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:137): TileLang begins to compile kernel `main` with `out_idx=None`
+2026-10-16 11:24:44  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:145): TileLang completes to compile kernel `main`
+{"case": {"cell": "lstm", "dtype": "float16", "width": 384, "batch": 16, "steps": 64, "init": "warm"}, "fwd": {"triton_default": {"full": 0.3550400137901306, "hidden": 0.3380799889564514}, "triton_s32w4": {"full": 0.2884480059146881, "hidden": 0.27875199913978577}, "tilelang": {"full": 0.27001601457595825, "hidden": 0.26342400908470154}}, "step": {"triton_default+s16w4_fast": 1.0041919946670532, "triton_default+s16w4_fast_tf32": 0.9817280173301697, "triton_default+s16w4_fuse2": 0.9986240267753601, "triton_default+s32w4_fast": 1.000831961631775, "triton_default+s32w8_base": 1.0298559665679932, "triton_s32w4+s16w4_fast": 0.9260799884796143, "triton_s32w4+s16w4_fast_tf32": 0.9216319918632507, "triton_s32w4+s16w4_fuse2": 0.9303680062294006, "triton_s32w4+s32w4_fast": 0.9438719749450684, "triton_s32w4+s32w8_base": 0.9599679708480835, "tilelang+s16w4_fast": 0.807968020439148, "tilelang+s16w4_fast_tf32": 0.8077759742736816, "tilelang+s16w4_fuse2": 0.8283200263977051, "tilelang+s32w4_fast": 0.8299840092658997, "tilelang+s32w8_base": 0.8585919737815857}, "v1": [0.3346880078315735, 0.8964160084724426], "errors": []}
