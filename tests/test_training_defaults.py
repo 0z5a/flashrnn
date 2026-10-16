@@ -34,5 +34,55 @@ class BackwardDefaults(unittest.TestCase):
         self.assertEqual((o["split_gates"], o["fuse_pre"]), (False, 0))
 
 
+class _Policy:
+    """Stand-in for an ExecutionPolicy: one table entry, or none."""
+
+    def __init__(self, table):
+        self.table = table
+
+    def select(self, cell, dtype, batch, steps, heads, width, identity=None):
+        from flashrnn.flashrnn2.execution_policy import KernelConfig, shape_key
+        key = shape_key(cell, dtype, batch, steps, heads, width)
+        return self.table.get(key) or KernelConfig(family="mma", batch_tile=16, warps=4)
+
+
+@unittest.skipIf(training is None, "needs torch")
+class TrainingForward(unittest.TestCase):
+    def setUp(self):
+        import torch
+        from flashrnn.flashrnn2.execution_policy import KernelConfig, shape_key
+        self.torch, self.KernelConfig = torch, KernelConfig
+        self.entry = KernelConfig(family="mma_rtiled", warps=4, slice_width=32, sync="grid")
+        self.policy = _Policy({shape_key("lstm", "float16", 32, 64, 1, 384): self.entry})
+        from flashrnn.flashrnn2 import dispatch
+        self.dispatch, self.identity = dispatch, dispatch.runtime_identity
+        dispatch.runtime_identity = lambda: {}  # no GPU needed: the stand-in policy ignores the identity
+        self.installed = training._tilelang_installed
+        training._tilelang_installed = lambda: True
+
+    def tearDown(self):
+        training._tilelang_installed = self.installed
+        self.dispatch.runtime_identity = self.identity
+
+    def test_table_entry_wins(self):
+        cfg, src = training.training_forward("lstm", self.torch.float16, 32, 64, 1, 384, policy=self.policy)
+        self.assertEqual((cfg, src), (self.entry, "table"))
+
+    def test_tilelang_outside_the_table(self):
+        for width, (sync, s) in training.TILELANG_TRAINING_FORWARD.items():
+            cfg, src = training.training_forward("slstm", self.torch.float16, 16, 256, 1, width, policy=self.policy)
+            self.assertEqual((src, cfg.family, cfg.sync, cfg.slice_width), ("tilelang", "tilelang", sync, s))
+
+    def test_default_when_not_measured_or_not_installed(self):
+        cases = [(_Policy({}), 384, 1, True),          # runtime identity differs from the tables'
+                 (self.policy, 320, 1, True),          # width not measured
+                 (self.policy, 384, 2, True),          # H > 1 not measured
+                 (self.policy, 384, 1, False)]         # TileLang not installed
+        for policy, width, heads, installed in cases:
+            training._tilelang_installed = lambda installed=installed: installed
+            cfg, src = training.training_forward("lstm", self.torch.float16, 16, 256, heads, width, policy=policy)
+            self.assertEqual(src, "default")
+
+
 if __name__ == "__main__":
     unittest.main()
