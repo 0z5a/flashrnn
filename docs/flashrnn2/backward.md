@@ -210,7 +210,7 @@ were not in the 168-case qualification, so they are not the default.
 | TileLang | slstm | 512 | 16 | 0.647 | 0.892 [0.891, 0.892] | 3.231 | TileLang cluster S32 | 32 / 4 |
 | TileLang | slstm | 768 | 16 | 0.665 | 0.975 [0.974, 0.976] | 3.806 | TileLang grid S16 | 32 / 4 |
 
-## Fused preactivation recompute (job 47369272; job 47365377 stopped on a storage quota)
+## Fused preactivation recompute (job 47369272)
 
 **Change.** `backward(..., fuse_pre=1|2)` (needs `fast`) drops the separate preactivation GEMM: each CTA also holds
 the row slice R[:, p, :] in shared memory and recomputes Wx_t + R round(h_{t-1}) + b for the next step between the
