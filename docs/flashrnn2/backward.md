@@ -275,4 +275,6 @@ over warps or a wider output tile per CTA is the next candidate. Not attempted h
 **Storage incident.** Job 47365377 stopped after 6 minutes in the FlashRNN1 prebuild with EDQUOT: the group scratch
 quota was at its hard limit while `df` still showed free bytes (the 4.4 GB in the quota report is the 'in doubt'
 column). Partial outputs were archived. Job 47369272 ran the same sealed source and plan from home storage, with an
-admission check that parses the quota headroom and writes a 50 MB probe.
+admission check that parses the quota headroom and writes a 50 MB probe. The plan's admission text cites the
+qualification of the unfused candidates under a run id that is not one of this work's runs (a typo); the runs meant
+are the backward qualification and the B = 16 fix confirmation above.
