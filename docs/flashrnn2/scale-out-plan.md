@@ -207,3 +207,46 @@ at 3, the largest measured fan-out). This makes the general formula equal to the
 port of `schedule.h` is cross-checked against the `schedule_check` loads the batch preflight writes (1148
 schedules, 0 mismatches on the login build), and it was exercised on a synthetic batch generated from known
 parameters (parameters recovered within the injected 3% noise; all checks evaluated).
+
+## 8. Results (2026-10-16 22:30 CEST)
+
+### 8.1 Pre-registered verdicts
+
+| check | verdict |
+| --- | --- |
+| A check 1 qualification | FAIL: 2/40 not compared (P = 1 reference cannot exist where splitting is necessary: D = 4096, D = 2048 S = 8); bitwise vs the single-GPU R-tiled kernel false everywhere (bitwise vs P = 1 true everywhere, FP64 ≈ 5e-5); sLSTM stream at P = 1 FP64 error 0.22 (real bug); one exchange timeout on the first config (devices 0/1) |
+| A check 2 model | FAIL 2/40 within ±20%, orderings 12/20 — the micro-benchmark measured pair 0–1 at 25 µs–9 ms for every size (other pairs ≈ 2.4 µs, 21 GB/s), which inflated every multi-GPU prediction to 200–800 µs; cause not yet diagnosed |
+| A check 3 crossover | 0 accepted (predicted ratios invalid by the same micro fault) |
+| A heads | no data: harness read CUDA events before synchronizing; an sLSTM case also hit an illegal memory access |
+| B1 | FAIL for every device backend: every P = 7 launch failed at init (NCCL builds no LSA team for 4 + 3 ranks; NVSHMEM requires equal PEs per node). B2–B5 not evaluated |
+
+### 8.2 Post hoc (not pre-registered; explains the failures, does not overturn them)
+
+* **Phase B restricted to P = 8** (`analyze_b.py --post-hoc-p8-only`, evidence in `scale-out-evidence/`):
+  qualification 120/120 cases, 0 wrong words, 0 per-step mismatches, 0 timeouts on all three device backends.
+  * GIN (GDAKI, GPU-initiated, no CPU proxy): α_nv 5.2 µs, α_net 10.3 µs, per-put gap 3.8 µs, o 6.2 µs. Model 30/35
+    within ±20%, orderings 75/75; the five misses are all ring (measured 0.70–0.75 of prediction — hypothesis: ring runs
+    as an asynchronous pipeline, the model sums synchronous rounds). Hier beats the best flat stride by 1.18× (8 KB) and
+    1.13× (16 KB), predicted 1.23× / 1.20×. Additivity 8/8. But the best device schedule (25.1 µs at 8 KB) is slower
+    than the host-driven `ncclAllGather` captured in a CUDA graph (21.7 µs): B4 fails.
+  * NVSHMEM IBRC: o_net 36 µs (proxy-driven), hier slower than flat. NVSHMEM IBGDA (initialised, used for device-side
+    APIs): 0/35 within the model, 1.5–3.5× slower than predicted. One warp per send gives β_nv ≈ 3 GB/s, so NVSHMEM's
+    hier loss is an artifact of this skeleton (6 same-node sends in hier round 1), not a topology result.
+  * Coprime cyclic at P = 8, s = 3 is 2–3× slower than flat on every backend: with one NIC per GPU the per-round α
+    dominates; the conflict-free property does not buy anything at these message sizes.
+* **Phase A measured per-step times (LSTM; sLSTM stream excluded until its bug is fixed):** single GPU streaming R
+  17.1 µs (D = 1024) and 35.2 µs (D = 2048, R = 33.5 MB is L2-resident, so this is not an HBM-bound baseline);
+  R split over 2 GPUs and kept in shared memory with ring exchange 12.0 µs and 17.5 µs (S = 8) — 1.42× and 2.0×.
+  Within one node at P = 4 recursive doubling (15.5 µs) beats direct (17.4) and ring (18.3).
+* **Not verified:** the inequality against an HBM-bound single-GPU stream. `1:4096 stream` cannot run (stream mode
+  still needs one CTA per column slice). Composed estimate only: 4·D²·b / 1.47 TB/s (measured copy bandwidth) ≈ 91 µs
+  plus γ at D = 4096, against X_8 ≈ 22–25 µs plus γ(D/P), with γ at K = 4096 not measured.
+
+### 8.3 Repairs needed before a rerun
+1. A single-GPU stream kernel that loops over column groups at D = 4096 (the HBM-bound baseline the claim needs).
+2. Diagnose micro pair 0–1 (slow at every size, and the first-config timeout on the same pair).
+3. Fix the sLSTM stream correctness bug (FP64 error 0.22 at P = 1).
+4. Heads: synchronize before reading events; find the first faulting sLSTM heads case with CUDA_LAUNCH_BLOCKING.
+5. Qualification reference where P = 1 cannot exist: FP64 plus cross-P/cross-schedule bitwise agreement.
+6. Prime P: not placeable unevenly on nodes of four with either library; a single-node P = 3 case shows the
+   coprime property on hardware cheaply.

@@ -203,10 +203,15 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("batch", type=Path)
     ap.add_argument("--out", type=Path)
+    ap.add_argument("--post-hoc-p8-only", action="store_true",
+                    help="POST HOC (not pre-registered): drop the P = 7 launches, which no library could place "
+                         "unevenly over two nodes, from every check")
     a = ap.parse_args()
     plan = json.loads((a.batch / "control" / "plan.json").read_text())
     driver = json.loads((a.batch / "control" / "driver-result.json").read_text())
     rows = []
+    if a.post_hoc_p8_only:
+        plan["launches"] = [s for s in plan["launches"] if "--ranks" not in s["argv"]]
     for spec in plan["launches"]:
         f = a.batch / "science" / spec["name"] / "stdout"
         if not f.exists():
@@ -220,7 +225,7 @@ def main():
                 if r.get("event") == "case":
                     r["launch"], r["backend"] = spec["name"], spec["backend"]
                     rows.append(r)
-    rec = dict(batch=str(a.batch), driver_status=driver.get("status"), gates=driver.get("gates"),
+    rec = dict(batch=str(a.batch), post_hoc_p8_only=a.post_hoc_p8_only, driver_status=driver.get("status"), gates=driver.get("gates"),
                launches={x["name"]: dict(status=x.get("status"), exit=x.get("exit"), cases=x.get("cases"),
                                          correct=x.get("correct_cases")) for x in driver.get("launches", [])})
     loads_file = next((a.batch / "science" / "preflight").glob("schedule-loads.json"), None) \
@@ -279,7 +284,7 @@ def main():
         t = {(r["P"], r["slice_bytes"], r["schedule"], r["stride"]): r["per_step_us"]
              for r in by_backend[b] if r["tag"] in ("cmp8", "cmp7") and r["gamma_ns"] == 0}
         res = []
-        for P, slices, topo in ((8, CLAIM8, ("hier", "doubling")), (7, CLAIM7, ("cyclic",))):
+        for P, slices, topo in ((8, CLAIM8, ("hier", "doubling")), (7, CLAIM7, ("cyclic",)))[:1 if a.post_hoc_p8_only else 2]:
             for s in slices:
                 flat = {k: v for k, v in t.items() if k[0] == P and k[1] == s and k[2] == "flat"}
                 cand = {k: v for k, v in t.items() if k[0] == P and k[1] == s and k[2] in topo}
@@ -297,7 +302,7 @@ def main():
                                 accepted=m >= 1.1 and (pr or 0) >= 1.0))
         b3[b] = dict(rows=res, pass_=all(x.get("accepted") for x in res))
         res4 = []
-        for P, slices in ((8, CLAIM8), (7, CLAIM7)):
+        for P, slices in ((8, CLAIM8), (7, CLAIM7))[:1 if a.post_hoc_p8_only else 2]:
             for s in slices:
                 dev = {k: v for k, v in t.items() if k[0] == P and k[1] == s}
                 if not dev or (P, s) not in host:
