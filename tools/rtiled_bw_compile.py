@@ -21,15 +21,19 @@ from flashrnn.flashrnn2.triton_rtiled_bw import _rtiled_bw
 H100_SMEM_OPTIN = 232448
 
 
-def compile_one(cell, dtype, width, s, warps):
+def compile_one(cell, dtype, width, s, warps, fuse=False):
     t = {"float16": "fp16", "bfloat16": "bf16"}[dtype]
     k1, k2 = k_parts(width)
     sig = dict(PRE="*fp32", STATES="*fp32", INITIAL="*fp32", DSTATES="*fp32", DFINAL="*fp32", R=f"*{t}",
                DG="*fp32", DINIT="*fp32", CARRY="*fp32", XBUF=f"*{t}", SYNC="*i32", ERR="*i32",
                B="i32", T="i32", T_START="i32", NSTEPS="i32", FROM_FINAL="i32", TAIL="i32", GROUPS="i32",
                SLOTS="i32", PERSISTENT="i32", H="constexpr", D="constexpr", SLSTM="constexpr", BM="constexpr",
-               S="constexpr", K1="constexpr", K2="constexpr", SPIN="constexpr", VERIFY="constexpr")
-    const = dict(H=1, D=width, SLSTM=cell == "slstm", BM=16, S=s, K1=k1, K2=k2, SPIN=SPIN_LIMIT, VERIFY=0)
+               S="constexpr", K1="constexpr", K2="constexpr", SPIN="constexpr", VERIFY="constexpr",
+               FAST="constexpr", DS_C="constexpr", DS_N="constexpr", FUSE="constexpr")
+    const = dict(H=1, D=width, SLSTM=cell == "slstm", BM=16, S=s, K1=k1, K2=k2, SPIN=SPIN_LIMIT, VERIFY=0,
+                 FAST=int(fuse), DS_C=1 - int(fuse), DS_N=1 - int(fuse), FUSE=int(fuse))
+    if fuse:
+        sig["PRE"] = f"*{t}"  # Wx in the input dtype
     src = triton.compiler.ASTSource(fn=_rtiled_bw, signature=sig, constexprs=const)
     k = triton.compile(src, target=GPUTarget("cuda", 90, 32),
                        options=dict(num_warps=warps, enable_fp_fusion=False, launch_cooperative_grid=True))
@@ -42,7 +46,7 @@ def compile_one(cell, dtype, width, s, warps):
                            capture_output=True, text=True)
     regs = re.search(r"Used (\d+) registers", r.stderr)
     spill = re.search(r"(\d+) bytes spill stores, (\d+) bytes spill loads", r.stderr)
-    return dict(cell=cell, dtype=dtype, width=width, slice_width=s, warps=warps, k_parts=[k1, k2],
+    return dict(cell=cell, dtype=dtype, width=width, slice_width=s, warps=warps, fuse=fuse, k_parts=[k1, k2],
                 splits=triton.cdiv(width, s), shared_bytes=k.metadata.shared,
                 fits_smem=k.metadata.shared <= H100_SMEM_OPTIN, ptxas_ok=r.returncode == 0,
                 registers=int(regs.group(1)) if regs else None,
@@ -58,6 +62,7 @@ def main():
     p.add_argument("--slices", default="16,32,64")
     p.add_argument("--warps", default="4,8")
     p.add_argument("--dtypes", default="float16,bfloat16")
+    p.add_argument("--fuse", action="store_true")
     a = p.parse_args()
     rows = []
     for cell in ("lstm", "slstm"):
@@ -69,7 +74,7 @@ def main():
                     for warps in map(int, a.warps.split(",")):
                         t0 = time.time()
                         try:
-                            row = compile_one(cell, dtype, width, s, warps)
+                            row = compile_one(cell, dtype, width, s, warps, a.fuse)
                         except Exception as error:  # noqa: BLE001
                             row = dict(cell=cell, dtype=dtype, width=width, slice_width=s, warps=warps,
                                        error=str(error)[-600:])

@@ -50,7 +50,9 @@ def main():
                        K1="constexpr", K2="constexpr", OUTPUT_MODE="constexpr", SPIN="constexpr")
             const = dict(H=1, D=width, SLSTM=cell == "slstm", BM=16, S=s, K1=k1, K2=k2, OUTPUT_MODE=mode,
                          SPIN=new.SPIN_LIMIT)
-            a_ptx = ptx(old._rtiled, sig, const, 8)
+            old_v = "VERIFY" in old._rtiled.arg_names  # baseline may already carry the (off) instrumentation
+            a_ptx = ptx(old._rtiled, dict(sig, VERIFY="constexpr") if old_v else sig,
+                        dict(const, VERIFY=0) if old_v else const, 8)
             sig_v = dict(sig, VERIFY="constexpr")
             c_ptx = ptx(new._rtiled, sig_v, dict(const, VERIFY=0), 8)
             on = ptx(new._rtiled, sig_v, dict(const, VERIFY=3), 8)
@@ -69,17 +71,24 @@ def main():
                        BM="constexpr", S="constexpr", K1="constexpr", K2="constexpr", SPIN="constexpr")
             const = dict(H=1, D=width, SLSTM=cell == "slstm", BM=16, S=s, K1=k1, K2=k2, SPIN=new.SPIN_LIMIT)
             old_names = old_bw._rtiled_bw.arg_names
-            old_sig = dict(sig, **({"VERIFY": "constexpr"} if "VERIFY" in old_names else {}))
-            old_const = dict(const, **({"VERIFY": 0} if "VERIFY" in old_names else {}))
+            extra = {k: v for k, v in (("VERIFY", 0), ("FAST", 0), ("DS_C", 1), ("DS_N", 1)) if k in old_names}
+            old_sig = dict(sig, **{k: "constexpr" for k in extra})
+            old_const = dict(const, **extra)
             a_ptx = ptx(old_bw._rtiled_bw, old_sig, old_const, 8)
-            sig_v = dict(sig, VERIFY="constexpr", FAST="constexpr", DS_C="constexpr", DS_N="constexpr")
-            c_ptx = ptx(new_bw._rtiled_bw, sig_v, dict(const, VERIFY=0, FAST=0, DS_C=1, DS_N=1), 8)
-            on = ptx(new_bw._rtiled_bw, sig_v, dict(const, VERIFY=3, FAST=0, DS_C=1, DS_N=1), 8)
-            fast = ptx(new_bw._rtiled_bw, sig_v, dict(const, VERIFY=0, FAST=1, DS_C=0, DS_N=0), 8)
+            sig_v = dict(sig, VERIFY="constexpr", FAST="constexpr", DS_C="constexpr", DS_N="constexpr", FUSE="constexpr")
+            c_ptx = ptx(new_bw._rtiled_bw, sig_v, dict(const, VERIFY=0, FAST=0, DS_C=1, DS_N=1, FUSE=0), 8)
+            on = ptx(new_bw._rtiled_bw, sig_v, dict(const, VERIFY=3, FAST=0, DS_C=1, DS_N=1, FUSE=0), 8)
+            fast = ptx(new_bw._rtiled_bw, sig_v, dict(const, VERIFY=0, FAST=1, DS_C=0, DS_N=0, FUSE=0), 8)
+            if "FAST" in old_names:  # the fast variant of the baseline must also be unchanged
+                old_fast = ptx(old_bw._rtiled_bw, dict(old_sig), dict(old_const, FAST=1, DS_C=0, DS_N=0), 8)
+                rows_fast_equal = old_fast == fast
+            else:
+                rows_fast_equal = None
             rows.append(dict(kernel="backward", cell=cell, width=width, slice_width=s,
                              explicit_zero_equal=a_ptx == c_ptx, verify_on_differs=on != a_ptx,
-                             fast_compiles_and_differs=fast != a_ptx))
-    status = "PASS" if all(r["explicit_zero_equal"] and r["verify_on_differs"] for r in rows) \
+                             fast_compiles_and_differs=fast != a_ptx, fast_equal_to_baseline_fast=rows_fast_equal))
+    status = "PASS" if all(r["explicit_zero_equal"] and r["verify_on_differs"]
+                           and r.get("fast_equal_to_baseline_fast") is not False for r in rows) \
         else "FAIL"
     Path(a.out).mkdir(parents=True, exist_ok=True)
     (Path(a.out) / "verify-ptx.json").write_text(json.dumps(dict(rows=rows, status=status), indent=1))
