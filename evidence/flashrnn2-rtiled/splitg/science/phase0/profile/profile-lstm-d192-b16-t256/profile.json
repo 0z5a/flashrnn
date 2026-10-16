@@ -1,0 +1,305 @@
+{
+ "case": {
+  "cell": "lstm",
+  "dtype": "float16",
+  "width": 192,
+  "batch": 16,
+  "steps": 256,
+  "init": "warm"
+ },
+ "tilelang_env": true,
+ "started": 1792166240.6071854,
+ "fwd": {
+  "triton_default": {
+   "full": 1.008895993232727,
+   "hidden": 0.8600000143051147
+  },
+  "triton_s32w4": {
+   "full": 0.8092160224914551,
+   "hidden": 0.7925440073013306
+  },
+  "tilelang": {
+   "full": 0.5884799957275391,
+   "hidden": 0.5820159912109375
+  }
+ },
+ "bw_phases": {
+  "s16w4_fast_tf32": {
+   "ms": {
+    "preactivation": 0.11260800063610077,
+    "kernel": 1.268447995185852,
+    "weight_gradients": 0.04483199864625931
+   },
+   "total": 1.399359941482544,
+   "vs_base": null
+  },
+  "s16w4_splitg": {
+   "ms": {
+    "preactivation": 0.11081600189208984,
+    "kernel": 0.9235519766807556,
+    "weight_gradients": 0.04396799951791763
+   },
+   "total": 1.0488640069961548,
+   "vs_base": null
+  },
+  "s16w4_fuse2": {
+   "ms": {
+    "preactivation": 0.06169600039720535,
+    "kernel": 1.4687039852142334,
+    "weight_gradients": 0.043807998299598694
+   },
+   "total": 1.5569599866867065,
+   "vs_base": null
+  },
+  "s16w4_fuse2_splitg": {
+   "ms": {
+    "preactivation": 0.05859199911355972,
+    "kernel": 1.102944016456604,
+    "weight_gradients": 0.0435199998319149
+   },
+   "total": 1.192352056503296,
+   "vs_base": null
+  },
+  "s16w8_fast_tf32": {
+   "ms": {
+    "preactivation": 0.11004800349473953,
+    "kernel": 1.4166719913482666,
+    "weight_gradients": 0.04435199871659279
+   },
+   "total": 1.5523200035095215,
+   "vs_base": null
+  },
+  "s16w8_splitg": {
+   "ms": {
+    "preactivation": 0.11059200018644333,
+    "kernel": 0.9578880071640015,
+    "weight_gradients": 0.044415999203920364
+   },
+   "total": 1.0987199544906616,
+   "vs_base": null
+  },
+  "s16w8_fuse2": {
+   "ms": {
+    "preactivation": 0.06409599632024765,
+    "kernel": 1.6216000318527222,
+    "weight_gradients": 0.04374400153756142
+   },
+   "total": 1.7142720222473145,
+   "vs_base": null
+  },
+  "s16w8_fuse2_splitg": {
+   "ms": {
+    "preactivation": 0.05987200140953064,
+    "kernel": 1.156864047050476,
+    "weight_gradients": 0.04358400031924248
+   },
+   "total": 1.2496000528335571,
+   "vs_base": null
+  }
+ },
+ "step": {
+  "triton_default+s16w4_fast_tf32": 2.7578558921813965,
+  "triton_default+s16w4_splitg": 2.401247978210449,
+  "triton_default+s16w4_fuse2_splitg": 2.5056960582733154,
+  "triton_default+s32w8_base": 2.855839967727661,
+  "triton_s32w4+s16w4_fast_tf32": 2.5551040172576904,
+  "triton_s32w4+s16w4_splitg": 2.200831890106201,
+  "triton_s32w4+s16w4_fuse2_splitg": 2.3034560680389404,
+  "triton_s32w4+s32w8_base": 2.689728021621704,
+  "tilelang+s16w4_fast_tf32": 2.038719892501831,
+  "tilelang+s16w4_splitg": 1.6992640495300293,
+  "tilelang+s16w4_fuse2_splitg": 1.8070080280303955,
+  "tilelang+s32w8_base": 2.1854400634765625
+ },
+ "errors": {},
+ "phases": {
+  "s16w4_fast_tf32": {
+   "names": [
+    "dh",
+    "pointwise",
+    "publish",
+    "barrier"
+   ],
+   "mean_ns": [
+    2093.09375,
+    820.0833333333334,
+    541.71875,
+    1142.65625
+   ],
+   "max_ns": [
+    2336.375,
+    821.875,
+    567.75,
+    1245.0
+   ],
+   "kernel_ms": 1.362496018409729,
+   "steps": 256,
+   "unprofiled_kernel_ms": 1.268447995185852
+  },
+  "s16w4_splitg": {
+   "names": [
+    "dh",
+    "pointwise",
+    "publish",
+    "barrier"
+   ],
+   "mean_ns": [
+    1268.7604166666667,
+    335.4375,
+    527.1041666666666,
+    1180.875
+   ],
+   "max_ns": [
+    1300.875,
+    341.875,
+    548.375,
+    1206.625
+   ],
+   "kernel_ms": 0.9873279929161072,
+   "steps": 256,
+   "unprofiled_kernel_ms": 0.9235519766807556
+  },
+  "s16w4_fuse2": {
+   "names": [
+    "dh",
+    "pointwise",
+    "publish",
+    "barrier"
+   ],
+   "mean_ns": [
+    2062.5,
+    791.6458333333334,
+    2002.09375,
+    554.5208333333334
+   ],
+   "max_ns": [
+    2305.375,
+    793.25,
+    2053.75,
+    639.75
+   ],
+   "kernel_ms": 1.5563839673995972,
+   "steps": 256,
+   "unprofiled_kernel_ms": 1.4687039852142334
+  },
+  "s16w4_fuse2_splitg": {
+   "names": [
+    "dh",
+    "pointwise",
+    "publish",
+    "barrier"
+   ],
+   "mean_ns": [
+    1289.8229166666667,
+    367.2916666666667,
+    1999.8229166666667,
+    345.6354166666667
+   ],
+   "max_ns": [
+    1333.5,
+    372.25,
+    2032.75,
+    418.375
+   ],
+   "kernel_ms": 1.169983983039856,
+   "steps": 256,
+   "unprofiled_kernel_ms": 1.102944016456604
+  },
+  "s16w8_fast_tf32": {
+   "names": [
+    "dh",
+    "pointwise",
+    "publish",
+    "barrier"
+   ],
+   "mean_ns": [
+    2517.5416666666665,
+    1049.3333333333333,
+    439.8020833333333,
+    1163.9479166666667
+   ],
+   "max_ns": [
+    2622.875,
+    1050.875,
+    449.5,
+    1217.125
+   ],
+   "kernel_ms": 1.5151679515838623,
+   "steps": 256,
+   "unprofiled_kernel_ms": 1.4166719913482666
+  },
+  "s16w8_splitg": {
+   "names": [
+    "dh",
+    "pointwise",
+    "publish",
+    "barrier"
+   ],
+   "mean_ns": [
+    1588.2395833333333,
+    229.45833333333334,
+    463.3541666666667,
+    1222.1458333333333
+   ],
+   "max_ns": [
+    1604.25,
+    235.5,
+    490.625,
+    1241.375
+   ],
+   "kernel_ms": 1.043936014175415,
+   "steps": 256,
+   "unprofiled_kernel_ms": 0.9578880071640015
+  },
+  "s16w8_fuse2": {
+   "names": [
+    "dh",
+    "pointwise",
+    "publish",
+    "barrier"
+   ],
+   "mean_ns": [
+    2527.8125,
+    1000.0104166666666,
+    1990.3020833333333,
+    413.9583333333333
+   ],
+   "max_ns": [
+    2639.25,
+    1002.125,
+    2048.125,
+    482.875
+   ],
+   "kernel_ms": 1.695072054862976,
+   "steps": 256,
+   "unprofiled_kernel_ms": 1.6216000318527222
+  },
+  "s16w8_fuse2_splitg": {
+   "names": [
+    "dh",
+    "pointwise",
+    "publish",
+    "barrier"
+   ],
+   "mean_ns": [
+    1597.8333333333333,
+    231.07291666666666,
+    2019.8020833333333,
+    374.1041666666667
+   ],
+   "max_ns": [
+    1648.25,
+    233.375,
+    2060.25,
+    446.5
+   ],
+   "kernel_ms": 1.2349120378494263,
+   "steps": 256,
+   "unprofiled_kernel_ms": 1.156864047050476
+  }
+ },
+ "v1_fwd": 0.8752959966659546,
+ "v1_step": 2.1670401096343994,
+ "v1_status": "AVAILABLE",
+ "finished": 1792166301.8819726
+}

@@ -1,0 +1,244 @@
+{
+ "case": {
+  "cell": "lstm",
+  "dtype": "float16",
+  "width": 768,
+  "batch": 16,
+  "steps": 256,
+  "init": "warm"
+ },
+ "tilelang_env": true,
+ "started": 1792166314.581051,
+ "fwd": {
+  "triton_default": {
+   "full": 1.8412480354309082,
+   "hidden": 1.743839979171753
+  },
+  "triton_s32w4": {
+   "full": 1.52128005027771,
+   "hidden": 1.4711999893188477
+  },
+  "tilelang": {
+   "full": 0.927839994430542,
+   "hidden": 0.9009919762611389
+  }
+ },
+ "bw_phases": {
+  "s16w4_fast_tf32": {
+   "ms": {
+    "preactivation": 0.3354879915714264,
+    "kernel": 2.091264009475708,
+    "weight_gradients": 0.21718400716781616
+   },
+   "total": 2.638751983642578,
+   "vs_base": null
+  },
+  "s16w4_splitg": {
+   "ms": {
+    "preactivation": 0.333407998085022,
+    "kernel": 2.286303997039795,
+    "weight_gradients": 0.2160000056028366
+   },
+   "total": 2.828768014907837,
+   "vs_base": null
+  },
+  "s16w4_fuse2": {
+   "ms": {
+    "preactivation": 0.06796800345182419,
+    "kernel": 2.5785601139068604,
+    "weight_gradients": 0.21743999421596527
+   },
+   "total": 2.825376033782959,
+   "vs_base": null
+  },
+  "s16w8_fast_tf32": {
+   "ms": {
+    "preactivation": 0.33139199018478394,
+    "kernel": 2.9802238941192627,
+    "weight_gradients": 0.2178560048341751
+   },
+   "total": 3.5284159183502197,
+   "vs_base": null
+  },
+  "s16w8_splitg": {
+   "ms": {
+    "preactivation": 0.33273598551750183,
+    "kernel": 1.5380480289459229,
+    "weight_gradients": 0.21756799519062042
+   },
+   "total": 2.090751886367798,
+   "vs_base": null
+  },
+  "s16w8_fuse2": {
+   "ms": {
+    "preactivation": 0.06956800073385239,
+    "kernel": 3.511392116546631,
+    "weight_gradients": 0.2181120067834854
+   },
+   "total": 3.7840640544891357,
+   "vs_base": null
+  }
+ },
+ "step": {
+  "triton_default+s16w4_fast_tf32": 4.709792137145996,
+  "triton_default+s16w4_fuse2": 4.8133440017700195,
+  "triton_default+s16w8_splitg": 4.058752059936523,
+  "triton_default+s32w8_base": 5.144927978515625,
+  "triton_s32w4+s16w4_fast_tf32": 4.36300802230835,
+  "triton_s32w4+s16w4_fuse2": 4.467199802398682,
+  "triton_s32w4+s16w8_splitg": 3.768415927886963,
+  "triton_s32w4+s32w8_base": 4.715167999267578,
+  "tilelang+s16w4_fast_tf32": 3.6956160068511963,
+  "tilelang+s16w4_fuse2": 3.8392961025238037,
+  "tilelang+s16w8_splitg": 3.153343915939331,
+  "tilelang+s32w8_base": 4.1031999588012695
+ },
+ "errors": {
+  "bw_s16w4_fuse2_splitg": "^^^^^\n  File \"<cluster storage>\", line 738, in backward\n    kernel = _rtiled_bw[(splits, slots)](\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<cluster storage>\", line 370, in <lambda>\n    return lambda *args, **kwargs: self.run(grid=grid, warmup=False, *args, **kwargs)\n                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<cluster storage>\", line 743, in run\n    launch_metadata = kernel.launch_metadata(grid, stream, *bound_args.values())\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<cluster storage>\", line 482, in launch_metadata\n    self._init_handles()\n  File \"<cluster storage>\", line 456, in _init_handles\n    raise_(OutOfResources(self.metadata.shared, max_shared, \"shared memory\"))\n  File \"<cluster storage>\", line 448, in raise_\n    raise err\ntriton.runtime.errors.OutOfResources: out of resource: shared memory, Required: 327680, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.\n",
+  "bw_s16w8_fuse2_splitg": "^^^^^\n  File \"<cluster storage>\", line 738, in backward\n    kernel = _rtiled_bw[(splits, slots)](\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<cluster storage>\", line 370, in <lambda>\n    return lambda *args, **kwargs: self.run(grid=grid, warmup=False, *args, **kwargs)\n                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<cluster storage>\", line 743, in run\n    launch_metadata = kernel.launch_metadata(grid, stream, *bound_args.values())\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<cluster storage>\", line 482, in launch_metadata\n    self._init_handles()\n  File \"<cluster storage>\", line 456, in _init_handles\n    raise_(OutOfResources(self.metadata.shared, max_shared, \"shared memory\"))\n  File \"<cluster storage>\", line 448, in raise_\n    raise err\ntriton.runtime.errors.OutOfResources: out of resource: shared memory, Required: 327680, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.\n"
+ },
+ "phases": {
+  "s16w4_fast_tf32": {
+   "names": [
+    "dh",
+    "pointwise",
+    "publish",
+    "barrier"
+   ],
+   "mean_ns": [
+    5166.479166666667,
+    799.6015625,
+    963.4791666666666,
+    1472.8541666666667
+   ],
+   "max_ns": [
+    5192.625,
+    803.0,
+    1038.0,
+    1572.125
+   ],
+   "kernel_ms": 2.222368001937866,
+   "steps": 256,
+   "unprofiled_kernel_ms": 2.091264009475708
+  },
+  "s16w4_splitg": {
+   "names": [
+    "dh",
+    "pointwise",
+    "publish",
+    "barrier"
+   ],
+   "mean_ns": [
+    4844.677083333333,
+    359.9921875,
+    1212.2604166666667,
+    1245.5208333333333
+   ],
+   "max_ns": [
+    4900.625,
+    367.125,
+    1241.75,
+    1349.125
+   ],
+   "kernel_ms": 2.0072638988494873,
+   "steps": 256,
+   "unprofiled_kernel_ms": 2.286303997039795
+  },
+  "s16w4_fuse2": {
+   "names": [
+    "dh",
+    "pointwise",
+    "publish",
+    "barrier"
+   ],
+   "mean_ns": [
+    5105.4296875,
+    839.8880208333334,
+    3384.0234375,
+    465.6223958333333
+   ],
+   "max_ns": [
+    5137.25,
+    867.0,
+    3447.5,
+    495.375
+   ],
+   "kernel_ms": 2.7108800411224365,
+   "steps": 256,
+   "unprofiled_kernel_ms": 2.5785601139068604
+  },
+  "s16w8_fast_tf32": {
+   "names": [
+    "dh",
+    "pointwise",
+    "publish",
+    "barrier"
+   ],
+   "mean_ns": [
+    8273.486979166666,
+    1019.4505208333334,
+    646.53125,
+    1362.203125
+   ],
+   "max_ns": [
+    8288.5,
+    1026.625,
+    671.625,
+    1388.5
+   ],
+   "kernel_ms": 2.9794559478759766,
+   "steps": 256,
+   "unprofiled_kernel_ms": 2.9802238941192627
+  },
+  "s16w8_splitg": {
+   "names": [
+    "dh",
+    "pointwise",
+    "publish",
+    "barrier"
+   ],
+   "mean_ns": [
+    3629.203125,
+    235.9609375,
+    641.2890625,
+    1387.265625
+   ],
+   "max_ns": [
+    3657.125,
+    239.375,
+    663.375,
+    1412.625
+   ],
+   "kernel_ms": 1.5537279844284058,
+   "steps": 256,
+   "unprofiled_kernel_ms": 1.5380480289459229
+  },
+  "s16w8_fuse2": {
+   "names": [
+    "dh",
+    "pointwise",
+    "publish",
+    "barrier"
+   ],
+   "mean_ns": [
+    8446.619791666666,
+    1013.8255208333334,
+    3293.5625,
+    393.8984375
+   ],
+   "max_ns": [
+    8505.875,
+    1020.75,
+    3328.75,
+    421.625
+   ],
+   "kernel_ms": 3.5788159370422363,
+   "steps": 256,
+   "unprofiled_kernel_ms": 3.511392116546631
+  }
+ },
+ "v1_fwd": 1.3309439420700073,
+ "v1_step": 3.71126389503479,
+ "v1_status": "AVAILABLE",
+ "finished": 1792166406.8286285
+}

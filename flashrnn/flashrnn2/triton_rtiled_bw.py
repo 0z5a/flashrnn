@@ -29,6 +29,13 @@ from .triton_rtiled import (SPIN_LIMIT, V_BROKEN_ARRIVE_FIRST, V_BROKEN_NO_BARRI
 
 
 @triton.jit
+def _now():
+    """PROF: global nanosecond timer, read after a block barrier so that every warp has finished the phase."""
+    tl.debug_barrier()
+    return tl.inline_asm_elementwise("mov.u64 $0, %globaltimer;", "=l", [], dtype=tl.int64, is_pure=False, pack=1)
+
+
+@triton.jit
 def _dg_dot(SRC, rows, cols, mask, w, acc, ROUND: tl.constexpr):
     g = tl.load(SRC + rows[:, None] + cols[None, :], mask, 0, cache_modifier=".cg")
     if ROUND:
@@ -37,26 +44,53 @@ def _dg_dot(SRC, rows, cols, mask, w, acc, ROUND: tl.constexpr):
 
 
 @triton.jit
-def _dh_from_dg(SRC, src_row, row_mask, w_i1, w_f1, w_z1, w_o1, w_i2, w_f2, w_z2, w_o2, gate_stride,
-                K1: tl.constexpr, K2: tl.constexpr, D: tl.constexpr, ROUND: tl.constexpr, BM: tl.constexpr,
-                S: tl.constexpr):
-    """sum_g dG_g[BM, D] @ R_g[D, S]; dG is read as FP32 and rounded here, or already in the input dtype.
-
-    One gate operand is loaded per MMA so that only one [BM, K] operand is live at a time."""
+def _dh_gate_batched(SRC, src_row, row_mask, wg1, wg2, gate_stride, K1: tl.constexpr, K2: tl.constexpr,
+                     D: tl.constexpr, ROUND: tl.constexpr):
+    """SPLITG: the four gates as one batched MMA [4, BM, K] x [4, K, S] -> [4, BM, S], summed over the gate axis, so
+    that the warps split the reduction by gate instead of repeating the same [BM, S] tile."""
+    g = tl.arange(0, 4)
     k1 = tl.arange(0, K1)
-    m1 = row_mask[:, None] & (k1[None, :] < D)
-    acc = tl.zeros((BM, S), tl.float32)
-    acc = _dg_dot(SRC, src_row, k1, m1, w_i1, acc, ROUND)
-    acc = _dg_dot(SRC, src_row + gate_stride, k1, m1, w_f1, acc, ROUND)
-    acc = _dg_dot(SRC, src_row + 2 * gate_stride, k1, m1, w_z1, acc, ROUND)
-    acc = _dg_dot(SRC, src_row + 3 * gate_stride, k1, m1, w_o1, acc, ROUND)
+    m1 = row_mask[None, :, None] & (k1[None, None, :] < D) & (g[:, None, None] < 4)
+    a = tl.load(SRC + src_row[None, :, None] + g[:, None, None] * gate_stride + k1[None, None, :], m1, 0,
+                cache_modifier=".cg")
+    if ROUND:
+        a = a.to(wg1.dtype)
+    acc = tl.dot(a, wg1)
     if K2 > 0:
         k2 = K1 + tl.arange(0, K2)
-        m2 = row_mask[:, None] & (k2[None, :] < D)
-        acc = _dg_dot(SRC, src_row, k2, m2, w_i2, acc, ROUND)
-        acc = _dg_dot(SRC, src_row + gate_stride, k2, m2, w_f2, acc, ROUND)
-        acc = _dg_dot(SRC, src_row + 2 * gate_stride, k2, m2, w_z2, acc, ROUND)
-        acc = _dg_dot(SRC, src_row + 3 * gate_stride, k2, m2, w_o2, acc, ROUND)
+        m2 = row_mask[None, :, None] & (k2[None, None, :] < D) & (g[:, None, None] < 4)
+        a = tl.load(SRC + src_row[None, :, None] + g[:, None, None] * gate_stride + k2[None, None, :], m2, 0,
+                    cache_modifier=".cg")
+        if ROUND:
+            a = a.to(wg2.dtype)
+        acc = tl.dot(a, wg2, acc)
+    return tl.sum(acc, 0)
+
+
+@triton.jit
+def _dh_from_dg(SRC, src_row, row_mask, w_i1, w_f1, w_z1, w_o1, w_i2, w_f2, w_z2, w_o2, gate_stride,
+                K1: tl.constexpr, K2: tl.constexpr, D: tl.constexpr, ROUND: tl.constexpr, BM: tl.constexpr,
+                S: tl.constexpr, SPLITG: tl.constexpr = 0, wg1=None, wg2=None):
+    """sum_g dG_g[BM, D] @ R_g[D, S]; dG is read as FP32 and rounded here, or already in the input dtype.
+
+    One gate operand is loaded per MMA so that only one [BM, K] operand is live at a time (SPLITG: _dh_gate_batched)."""
+    if SPLITG:
+        acc = _dh_gate_batched(SRC, src_row, row_mask, wg1, wg2, gate_stride, K1, K2, D, ROUND)
+    else:
+        k1 = tl.arange(0, K1)
+        m1 = row_mask[:, None] & (k1[None, :] < D)
+        acc = tl.zeros((BM, S), tl.float32)
+        acc = _dg_dot(SRC, src_row, k1, m1, w_i1, acc, ROUND)
+        acc = _dg_dot(SRC, src_row + gate_stride, k1, m1, w_f1, acc, ROUND)
+        acc = _dg_dot(SRC, src_row + 2 * gate_stride, k1, m1, w_z1, acc, ROUND)
+        acc = _dg_dot(SRC, src_row + 3 * gate_stride, k1, m1, w_o1, acc, ROUND)
+        if K2 > 0:
+            k2 = K1 + tl.arange(0, K2)
+            m2 = row_mask[:, None] & (k2[None, :] < D)
+            acc = _dg_dot(SRC, src_row, k2, m2, w_i2, acc, ROUND)
+            acc = _dg_dot(SRC, src_row + gate_stride, k2, m2, w_f2, acc, ROUND)
+            acc = _dg_dot(SRC, src_row + 2 * gate_stride, k2, m2, w_z2, acc, ROUND)
+            acc = _dg_dot(SRC, src_row + 3 * gate_stride, k2, m2, w_o2, acc, ROUND)
     return acc
 
 
@@ -192,6 +226,8 @@ def _rtiled_bw(
     DS_C: tl.constexpr = 1,
     DS_N: tl.constexpr = 1,
     FUSE: tl.constexpr = 0,
+    SPLITG: tl.constexpr = 0,
+    PROF: tl.constexpr = 0,
 ):
     # FAST (same values, same arithmetic): step t's c/n/m are step t+1's c_{t-1}/n_{t-1}/m_{t-1} (no reload), the
     # next step's pointwise inputs are loaded before this step's barrier, and the c/n history-gradient loads are
@@ -213,6 +249,15 @@ def _rtiled_bw(
     state_stride = B * hd
     history_stride = B * T * hd
     bars = split * 0
+    if PROF:
+        # PROF (persistent mode): per-CTA sums (ns) of the step phases, written behind ERR[32]:
+        # 0 dh reduction (exchange load + MMA), 1 pointwise + dG store, 2 publish + next-step inputs (and the fused
+        # recompute), 3 barrier (arrive/wait), 4 steps counted.
+        p_dh = tl.zeros((), tl.int64)
+        p_pw = tl.zeros((), tl.int64)
+        p_pub = tl.zeros((), tl.int64)
+        p_bar = tl.zeros((), tl.int64)
+        p_n = tl.zeros((), tl.int64)
     for group in range(slot, GROUPS, SLOTS):
         rows = (group // H) * BM + local
         head = group % H
@@ -223,19 +268,33 @@ def _rtiled_bw(
         k1 = tl.arange(0, K1)
         w1 = (head * D + k1[:, None]) * D + p[None, :]
         w1_mask = (k1[:, None] < D) & p_valid[None, :]
-        w_i1 = tl.load(R + w1, w1_mask, 0)
-        w_f1 = tl.load(R + hd * D + w1, w1_mask, 0)
-        w_z1 = tl.load(R + 2 * hd * D + w1, w1_mask, 0)
-        w_o1 = tl.load(R + 3 * hd * D + w1, w1_mask, 0)
-        w_i2, w_f2, w_z2, w_o2 = w_i1, w_f1, w_z1, w_o1
-        if K2 > 0:
-            k2 = K1 + tl.arange(0, K2)
-            w2 = (head * D + k2[:, None]) * D + p[None, :]
-            w2_mask = (k2[:, None] < D) & p_valid[None, :]
-            w_i2 = tl.load(R + w2, w2_mask, 0)
-            w_f2 = tl.load(R + hd * D + w2, w2_mask, 0)
-            w_z2 = tl.load(R + 2 * hd * D + w2, w2_mask, 0)
-            w_o2 = tl.load(R + 3 * hd * D + w2, w2_mask, 0)
+        if SPLITG:
+            # [4, K, S] tiles: R[g, head, k, p] for every gate, every output row k, this CTA's columns p.
+            g4 = tl.arange(0, 4)
+            wg1 = tl.load(R + g4[:, None, None] * hd * D + w1[None, :, :], (g4[:, None, None] < 4) & w1_mask[None, :, :], 0)
+            wg2 = wg1
+            if K2 > 0:
+                k2 = K1 + tl.arange(0, K2)
+                w2 = (head * D + k2[:, None]) * D + p[None, :]
+                w2_mask = (k2[:, None] < D) & p_valid[None, :]
+                wg2 = tl.load(R + g4[:, None, None] * hd * D + w2[None, :, :],
+                              (g4[:, None, None] < 4) & w2_mask[None, :, :], 0)
+            w_i1, w_f1, w_z1, w_o1, w_i2, w_f2, w_z2, w_o2 = w1, w1, w1, w1, w1, w1, w1, w1
+        else:
+            wg1, wg2 = w1, w1
+            w_i1 = tl.load(R + w1, w1_mask, 0)
+            w_f1 = tl.load(R + hd * D + w1, w1_mask, 0)
+            w_z1 = tl.load(R + 2 * hd * D + w1, w1_mask, 0)
+            w_o1 = tl.load(R + 3 * hd * D + w1, w1_mask, 0)
+            w_i2, w_f2, w_z2, w_o2 = w_i1, w_f1, w_z1, w_o1
+            if K2 > 0:
+                k2 = K1 + tl.arange(0, K2)
+                w2 = (head * D + k2[:, None]) * D + p[None, :]
+                w2_mask = (k2[:, None] < D) & p_valid[None, :]
+                w_i2 = tl.load(R + w2, w2_mask, 0)
+                w_f2 = tl.load(R + hd * D + w2, w2_mask, 0)
+                w_z2 = tl.load(R + 2 * hd * D + w2, w2_mask, 0)
+                w_o2 = tl.load(R + 3 * hd * D + w2, w2_mask, 0)
         if FUSE:
             # Tile [k, p] = R[g, head, p, k]: this CTA's output rows p, every input column k (forward layout).
             r1 = (head * D + p[None, :]) * D + k1[:, None]
@@ -301,6 +360,8 @@ def _rtiled_bw(
                 q_mt = tl.load(STATES + 3 * history_stride + here0, valid, 0)
         for index in range(NSTEPS):
             t = T_START - index
+            if PROF:
+                t_a = _now()
             if (index > 0) | (FROM_FINAL == 0):
                 # dh_t from the exchanged, rounded dG_{t+1} of every CTA of the group.
                 if PERSISTENT != 0:
@@ -314,13 +375,15 @@ def _rtiled_bw(
                     if VERIFY & V_CHECK:
                         _verify_dg(XBUF, src_row, DG, dg_row, row_valid, ERR + 1, hd, K1, K2, D)
                     dh_in = _dh_from_dg(XBUF, src_row, local < BM, w_i1, w_f1, w_z1, w_o1, w_i2, w_f2, w_z2, w_o2,
-                                        D, K1, K2, D, False, BM, S)
+                                        D, K1, K2, D, False, BM, S, SPLITG, wg1, wg2)
                     if VERIFY & V_CHECK:
                         _verify_dg(XBUF, src_row, DG, dg_row, row_valid, ERR + 2, hd, K1, K2, D)
                 else:
                     src_row = ((rows * T + t + 1) * 4 * H + head) * D
                     dh_in = _dh_from_dg(DG, src_row, row_valid, w_i1, w_f1, w_z1, w_o1, w_i2, w_f2, w_z2, w_o2,
-                                        hd, K1, K2, D, True, BM, S)
+                                        hd, K1, K2, D, True, BM, S, SPLITG, wg1, wg2)
+            if PROF:
+                t_b = _now()
             here = ((rows[:, None] * T + t) * H + head) * D + p[None, :]
             if FAST:
                 pre = ((rows[:, None] * T + t) * 4 * H + head) * D + p[None, :]
@@ -381,6 +444,9 @@ def _rtiled_bw(
             tl.store(DG + pre + hd, d_f, valid)
             tl.store(DG + pre + 2 * hd, d_z, valid)
             tl.store(DG + pre + 3 * hd, d_o, valid)
+            if PROF:
+                t_c = _now()
+                t_d = t_c
             if FUSE:
                 # Publish dG, arrive, compute the next step's inputs (incl. its gate preactivations), then wait.
                 if PERSISTENT != 0:
@@ -413,6 +479,8 @@ def _rtiled_bw(
                         PRE, HPREV, rows, row_valid, head, pre - 4 * hd, valid, t - 1, T, hd,
                         r_i1, r_f1, r_z1, r_o1, r_i2, r_f2, r_z2, r_o2, rc1, rc2, b_i, b_f, b_z, b_o,
                         H, D, S, BM, K1, K2, FUSE)
+                if PROF:
+                    t_d = _now()
                 if PERSISTENT != 0:
                     if VERIFY & V_BROKEN_NO_BARRIER:
                         pass
@@ -440,6 +508,8 @@ def _rtiled_bw(
                     tl.store(write + D, d_f.to(dtype), p_valid[None, :])
                     tl.store(write + 2 * D, d_z.to(dtype), p_valid[None, :])
                     tl.store(write + 3 * D, d_o.to(dtype), p_valid[None, :])
+                    if PROF:
+                        t_d = _now()
                     if VERIFY & V_BROKEN_ARRIVE_FIRST:
                         pass
                     elif VERIFY & V_BROKEN_NO_BARRIER:
@@ -447,6 +517,13 @@ def _rtiled_bw(
                     else:
                         bars += 1
                         _group_barrier(SYNC, slot, bars * splits, ERR, SPIN)
+            if PROF:
+                t_e = _now()
+                p_dh += t_b - t_a
+                p_pw += t_c - t_b
+                p_pub += t_d - t_c
+                p_bar += t_e - t_d
+                p_n += 1
         if TAIL != 0:
             if PERSISTENT != 0:
                 parity = (bars + 1) % 2
@@ -459,13 +536,13 @@ def _rtiled_bw(
                 if VERIFY & V_CHECK:
                     _verify_dg(XBUF, src_row, DG, dg_row, row_valid, ERR + 1, hd, K1, K2, D)
                 dh_in = _dh_from_dg(XBUF, src_row, local < BM, w_i1, w_f1, w_z1, w_o1, w_i2, w_f2, w_z2, w_o2,
-                                    D, K1, K2, D, False, BM, S)
+                                    D, K1, K2, D, False, BM, S, SPLITG, wg1, wg2)
                 if VERIFY & V_CHECK:
                     _verify_dg(XBUF, src_row, DG, dg_row, row_valid, ERR + 2, hd, K1, K2, D)
             else:
                 src_row = ((rows * T) * 4 * H + head) * D
                 dh_in = _dh_from_dg(DG, src_row, row_valid, w_i1, w_f1, w_z1, w_o1, w_i2, w_f2, w_z2, w_o2,
-                                    hd, K1, K2, D, True, BM, S)
+                                    hd, K1, K2, D, True, BM, S, SPLITG, wg1, wg2)
             tl.store(DINIT + unit, dh_in, valid)
             tl.store(DINIT + state_stride + unit, dc, valid)
             if SLSTM:
@@ -475,6 +552,13 @@ def _rtiled_bw(
             tl.store(CARRY + unit, dc, valid)
             if SLSTM:
                 tl.store(CARRY + state_stride + unit, dn, valid)
+    if PROF:
+        prof = ERR + 32 + (split + splits * slot) * 8
+        tl.atomic_add(prof, p_dh.to(tl.int32))
+        tl.atomic_add(prof + 1, p_pw.to(tl.int32))
+        tl.atomic_add(prof + 2, p_pub.to(tl.int32))
+        tl.atomic_add(prof + 3, p_bar.to(tl.int32))
+        tl.atomic_add(prof + 4, p_n.to(tl.int32))
 
 
 def rounded_hidden(wx, initial, history, out=None):
@@ -562,6 +646,8 @@ def backward(
     _verify: dict[str, object] | None = None,
     fast: bool = False,
     fuse_pre: bool | int = False,
+    split_gates: bool = False,
+    profile_steps: bool = False,
     history_grad_components: tuple[bool, ...] | None = None,
     tf32: bool = False,
 ):
@@ -574,7 +660,10 @@ def backward(
     zero. ``tf32`` runs the preactivation and dR GEMMs with TF32 (not bitwise identical). ``fuse_pre`` (with ``fast``)
     recomputes the gate preactivations inside the kernel between the barrier's arrive and wait instead of a separate
     GEMM (not bitwise identical to the GEMM path); 1 (or True) runs one MMA per gate, 2 one MMA over the four
-    gates interleaved.
+    gates interleaved. ``split_gates`` runs the dh reduction as one gate-batched MMA summed over the gates (the warps
+    split the reduction by gate); not bitwise identical to the per-gate accumulation. ``profile_steps`` (persistent
+    mode, with ``diagnostics``) times the step phases in the kernel (block barriers around timer reads perturb the
+    timing; compare with an unprofiled call) and returns them in ``diagnostics["phases_ns"]``.
     """
     if sync not in ("grid", "launch"):
         raise ValueError("sync must be grid or launch")
@@ -632,7 +721,10 @@ def backward(
     verify, seed = verify_bits(_verify)
     # Which history components can carry gradient (h, c, n); with ``fast`` the others are not read.
     ds = tuple(history_grad_components or (True, True, True)) + (True,) * 3
-    err = torch.zeros((4 if verify else 1,), device=device, dtype=torch.int32)
+    if profile_steps and (sync != "grid" or diagnostics is None):
+        raise ValueError("profile_steps needs the persistent (grid) mode and a diagnostics dict")
+    err = torch.zeros((32 + 8 * splits * slots if profile_steps else 4 if verify else 1,), device=device,
+                      dtype=torch.int32)
     if verify:
         err[3] = seed
     kernel = None
@@ -653,6 +745,8 @@ def backward(
             **(dict(VERIFY=verify) if verify else {}),
             **(dict(FAST=1, DS_C=int(ds[1]), DS_N=int(ds[2])) if fast else {}),
             **(dict(FUSE=fuse) if fuse else {}),
+            **(dict(SPLITG=1) if split_gates else {}),
+            **(dict(PROF=1) if profile_steps else {}),
         )
     if verify:
         counts = err.tolist()
@@ -675,6 +769,9 @@ def backward(
             synchronization="group_counter_barrier" if sync == "grid" else "kernel_boundary",
             sync_counts=sync_counts,
             expected_sync_counts=[splits * n if sync == "grid" else 0 for n in per_slot],
-            error_flag=err,
+            error_flag=err[:1] if profile_steps else err,
         )
+        if profile_steps:
+            sums = err[32:].view(splits * slots, 8)[:, :5].tolist()
+            diagnostics["phases_ns"] = dict(names=["dh", "pointwise", "publish", "barrier", "steps"], per_cta=sums)
     return dg, d_recurrent, d_bias, d_init
