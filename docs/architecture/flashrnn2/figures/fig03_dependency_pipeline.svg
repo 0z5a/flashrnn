@@ -1,0 +1,367 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" id="fig03_dependency_pipeline" width="1920" height="1980" viewBox="0 0 1920 1980" role="img" aria-labelledby="fig03_dependency_pipeline_accessible_title fig03_dependency_pipeline_accessible_desc" font-family="Arial">
+  <title id="fig03_dependency_pipeline_accessible_title">Dependency-aware execution: preserve recurrent order</title>
+  <desc id="fig03_dependency_pipeline_accessible_desc">Four logical lanes show MMA, input load, update with required stores, and cast/state-ready over three timesteps. Purple edges retain next-MMA and next-update dependencies. A separate dashed candidate strip shows issue, ready, consume and reuse without measured time units.</desc>
+  <defs>
+    <marker id="arrow_compute" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10 5 L 0 10 Z" fill="#3568A0" />
+    </marker>
+    <marker id="arrow_input" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10 5 L 0 10 Z" fill="#187E77" />
+    </marker>
+    <marker id="arrow_state" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10 5 L 0 10 Z" fill="#7556A6" />
+    </marker>
+    <marker id="arrow_feedback" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10 5 L 0 10 Z" fill="#7556A6" />
+    </marker>
+    <marker id="arrow_control" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10 5 L 0 10 Z" fill="#A66B1F" />
+    </marker>
+  </defs>
+  <rect id="background" x="0" y="0" width="1920" height="1980" fill="#FFFFFF" />
+  <g id="f3_actual" data-claim="I004 I005 I007" data-kind="scope" data-status="implemented">
+    <rect id="f3_actual_boundary" x="48" y="170" width="1824" height="920" rx="14" fill="#FFFFFF" stroke="#667085" stroke-width="2" stroke-dasharray="none" />
+    <text id="f3_actual_label" x="72" y="218" font-size="36" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="I004 I005 I007" data-role="panel">
+      <tspan x="72" y="218.0">(a) Current generic path: source dependencies</tspan>
+    </text>
+  </g>
+  <g id="f3_proposal" data-claim="P001 U002" data-kind="sync" data-status="proposed">
+    <rect id="f3_proposal_boundary" x="48" y="1200" width="1824" height="500" rx="14" fill="#FFFFFF" stroke="#A66B1F" stroke-width="2" stroke-dasharray="12 8" />
+    <text id="f3_proposal_label" x="72" y="1248" font-size="36" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="P001 U002" data-role="panel">
+      <tspan x="72" y="1248.0">(b) Independent input prefetch: PROPOSED overlap window</tspan>
+    </text>
+  </g>
+  <g id="f3_s0_a" data-claim="I005" data-kind="compute" data-status="implemented">
+    <path id="f3_s0_a_path" d="M 730 365 L 830 365 L 830 646 L 640 646 L 640 670" fill="none" stroke="#3568A0" stroke-width="2.5" stroke-dasharray="none" marker-end="url(#arrow_compute)" stroke-linejoin="round" />
+  </g>
+  <g id="f3_s0_u" data-claim="I004" data-kind="input" data-status="implemented">
+    <path id="f3_s0_u_path" d="M 635 630 L 635 648 L 640 648 L 640 670" fill="none" stroke="#187E77" stroke-width="2.5" stroke-dasharray="none" marker-end="url(#arrow_input)" stroke-linejoin="round" />
+  </g>
+  <g id="f3_s0_layout" data-claim="I005" data-kind="state" data-status="implemented">
+    <path id="f3_s0_layout_path" d="M 640 820 L 640 840 L 645 840 L 645 860" fill="none" stroke="#7556A6" stroke-width="2.5" stroke-dasharray="none" marker-end="url(#arrow_state)" stroke-linejoin="round" />
+  </g>
+  <g id="f3_s0_h_dep" data-claim="I004 I005" data-kind="feedback" data-status="implemented">
+    <path id="f3_s0_h_dep_path" d="M 810 930 L 850 930 L 850 365 L 900 365" fill="none" stroke="#7556A6" stroke-width="3.5" stroke-dasharray="none" marker-end="url(#arrow_feedback)" stroke-linejoin="round" />
+  </g>
+  <g id="f3_s0_other_dep" data-claim="I005" data-kind="feedback" data-status="implemented">
+    <path id="f3_s0_other_dep_path" d="M 810 980 L 864 980 L 864 838 L 1020 838 L 1020 820" fill="none" stroke="#7556A6" stroke-width="3.5" stroke-dasharray="none" marker-end="url(#arrow_feedback)" stroke-linejoin="round" />
+  </g>
+  <g id="f3_s1_a" data-claim="I005" data-kind="compute" data-status="implemented">
+    <path id="f3_s1_a_path" d="M 1210 365 L 1310 365 L 1310 646 L 1120 646 L 1120 670" fill="none" stroke="#3568A0" stroke-width="2.5" stroke-dasharray="none" marker-end="url(#arrow_compute)" stroke-linejoin="round" />
+  </g>
+  <g id="f3_s1_u" data-claim="I004" data-kind="input" data-status="implemented">
+    <path id="f3_s1_u_path" d="M 1115 630 L 1115 648 L 1120 648 L 1120 670" fill="none" stroke="#187E77" stroke-width="2.5" stroke-dasharray="none" marker-end="url(#arrow_input)" stroke-linejoin="round" />
+  </g>
+  <g id="f3_s1_layout" data-claim="I005" data-kind="state" data-status="implemented">
+    <path id="f3_s1_layout_path" d="M 1120 820 L 1120 840 L 1125 840 L 1125 860" fill="none" stroke="#7556A6" stroke-width="2.5" stroke-dasharray="none" marker-end="url(#arrow_state)" stroke-linejoin="round" />
+  </g>
+  <g id="f3_s1_h_dep" data-claim="I004 I005" data-kind="feedback" data-status="implemented">
+    <path id="f3_s1_h_dep_path" d="M 1290 930 L 1330 930 L 1330 365 L 1380 365" fill="none" stroke="#7556A6" stroke-width="3.5" stroke-dasharray="none" marker-end="url(#arrow_feedback)" stroke-linejoin="round" />
+  </g>
+  <g id="f3_s1_other_dep" data-claim="I005" data-kind="feedback" data-status="implemented">
+    <path id="f3_s1_other_dep_path" d="M 1290 980 L 1344 980 L 1344 838 L 1500 838 L 1500 820" fill="none" stroke="#7556A6" stroke-width="3.5" stroke-dasharray="none" marker-end="url(#arrow_feedback)" stroke-linejoin="round" />
+  </g>
+  <g id="f3_s2_a" data-claim="I005" data-kind="compute" data-status="implemented">
+    <path id="f3_s2_a_path" d="M 1690 365 L 1790 365 L 1790 646 L 1600 646 L 1600 670" fill="none" stroke="#3568A0" stroke-width="2.5" stroke-dasharray="none" marker-end="url(#arrow_compute)" stroke-linejoin="round" />
+  </g>
+  <g id="f3_s2_u" data-claim="I004" data-kind="input" data-status="implemented">
+    <path id="f3_s2_u_path" d="M 1595 630 L 1595 648 L 1600 648 L 1600 670" fill="none" stroke="#187E77" stroke-width="2.5" stroke-dasharray="none" marker-end="url(#arrow_input)" stroke-linejoin="round" />
+  </g>
+  <g id="f3_s2_layout" data-claim="I005" data-kind="state" data-status="implemented">
+    <path id="f3_s2_layout_path" d="M 1600 820 L 1600 840 L 1605 840 L 1605 860" fill="none" stroke="#7556A6" stroke-width="2.5" stroke-dasharray="none" marker-end="url(#arrow_state)" stroke-linejoin="round" />
+  </g>
+  <g id="f3_p_edge_1" data-claim="P001" data-kind="control" data-status="proposed">
+    <path id="f3_p_edge_1_path" d="M 416 1400 L 494 1400" fill="none" stroke="#A66B1F" stroke-width="2.5" stroke-dasharray="12 8" marker-end="url(#arrow_control)" stroke-linejoin="round" />
+  </g>
+  <g id="f3_p_edge_2" data-claim="P001" data-kind="control" data-status="proposed">
+    <path id="f3_p_edge_2_path" d="M 836 1400 L 914 1400" fill="none" stroke="#A66B1F" stroke-width="2.5" stroke-dasharray="12 8" marker-end="url(#arrow_control)" stroke-linejoin="round" />
+  </g>
+  <g id="f3_p_edge_3" data-claim="P001" data-kind="control" data-status="proposed">
+    <path id="f3_p_edge_3_path" d="M 1320 1400 L 1398 1400" fill="none" stroke="#A66B1F" stroke-width="2.5" stroke-dasharray="12 8" marker-end="url(#arrow_control)" stroke-linejoin="round" />
+  </g>
+  <g id="f3_p_state_dependency" data-claim="P001" data-kind="feedback" data-status="proposed">
+    <path id="f3_p_state_dependency_path" d="M 838 1585 L 872 1585 L 872 1494 L 1117 1494 L 1117 1480" fill="none" stroke="#7556A6" stroke-width="3.5" stroke-dasharray="12 8" marker-end="url(#arrow_feedback)" stroke-linejoin="round" />
+  </g>
+  <g id="f3_s0_mma" data-claim="I004 I005" data-kind="compute" data-status="implemented">
+    <rect id="f3_s0_mma_box" x="420" y="290" width="310" height="150" rx="12" fill="#EDF3FA" stroke="#3568A0" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f3_s0_mma_badge_box" x="432" y="300" width="88.8828125" height="38" rx="5" fill="#FFFFFF" />
+    <text id="f3_s0_mma_badge" x="443" y="329" font-size="28" text-anchor="start" fill="#3568A0" font-weight="bold" data-claim="I004 I005" data-role="badge">
+      <tspan x="443" y="329.0">IMPL</tspan>
+    </text>
+    <text id="f3_s0_mma_text" x="575.0" y="378.31" font-size="34" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I004 I005" data-role="label">
+      <tspan x="575.0" y="378.31">MMA_t</tspan>
+      <tspan x="575.0" y="420.81">FP32 A_t</tspan>
+    </text>
+  </g>
+  <g id="f3_s0_input" data-claim="I004" data-kind="input" data-status="implemented">
+    <rect id="f3_s0_input_box" x="460" y="480" width="350" height="150" rx="12" fill="#EAF5F2" stroke="#187E77" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f3_s0_input_badge_box" x="472" y="490" width="88.8828125" height="38" rx="5" fill="#FFFFFF" />
+    <text id="f3_s0_input_badge" x="483" y="519" font-size="28" text-anchor="start" fill="#187E77" font-weight="bold" data-claim="I004" data-role="badge">
+      <tspan x="483" y="519.0">IMPL</tspan>
+    </text>
+    <text id="f3_s0_input_text" x="635.0" y="568.31" font-size="34" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I004" data-role="label">
+      <tspan x="635.0" y="568.31">load U_t</tspan>
+      <tspan x="635.0" y="610.81">input ready</tspan>
+    </text>
+  </g>
+  <g id="f3_s0_update" data-claim="I005 I007" data-kind="compute" data-status="implemented">
+    <rect id="f3_s0_update_box" x="470" y="670" width="340" height="150" rx="12" fill="#EDF3FA" stroke="#3568A0" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f3_s0_update_badge_box" x="482" y="680" width="88.8828125" height="38" rx="5" fill="#FFFFFF" />
+    <text id="f3_s0_update_badge" x="493" y="709" font-size="28" text-anchor="start" fill="#3568A0" font-weight="bold" data-claim="I005 I007" data-role="badge">
+      <tspan x="493" y="709.0">IMPL</tspan>
+    </text>
+    <text id="f3_s0_update_text" x="640.0" y="758.31" font-size="34" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I005 I007" data-role="label">
+      <tspan x="640.0" y="758.31">update S_t</tspan>
+      <tspan x="640.0" y="800.81">store Y_t</tspan>
+    </text>
+  </g>
+  <g id="f3_s0_ready" data-claim="I005 U001" data-kind="state" data-status="implemented">
+    <rect id="f3_s0_ready_box" x="480" y="860" width="330" height="150" rx="12" fill="#F2EDF8" stroke="#7556A6" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f3_s0_ready_badge_box" x="492" y="870" width="88.8828125" height="38" rx="5" fill="#FFFFFF" />
+    <text id="f3_s0_ready_badge" x="503" y="899" font-size="28" text-anchor="start" fill="#7556A6" font-weight="bold" data-claim="I005 U001" data-role="badge">
+      <tspan x="503" y="899.0">IMPL</tspan>
+    </text>
+    <text id="f3_s0_ready_text" x="645.0" y="948.31" font-size="34" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I005 U001" data-role="label">
+      <tspan x="645.0" y="948.31">cast h_t</tspan>
+      <tspan x="645.0" y="990.81">state ready</tspan>
+    </text>
+  </g>
+  <g id="f3_s1_mma" data-claim="I004 I005" data-kind="compute" data-status="implemented">
+    <rect id="f3_s1_mma_box" x="900" y="290" width="310" height="150" rx="12" fill="#EDF3FA" stroke="#3568A0" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f3_s1_mma_badge_box" x="912" y="300" width="88.8828125" height="38" rx="5" fill="#FFFFFF" />
+    <text id="f3_s1_mma_badge" x="923" y="329" font-size="28" text-anchor="start" fill="#3568A0" font-weight="bold" data-claim="I004 I005" data-role="badge">
+      <tspan x="923" y="329.0">IMPL</tspan>
+    </text>
+    <text id="f3_s1_mma_text" x="1055.0" y="378.31" font-size="34" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I004 I005" data-role="label">
+      <tspan x="1055.0" y="378.31">MMA_t+1</tspan>
+      <tspan x="1055.0" y="420.81">FP32 A_t+1</tspan>
+    </text>
+  </g>
+  <g id="f3_s1_input" data-claim="I004" data-kind="input" data-status="implemented">
+    <rect id="f3_s1_input_box" x="940" y="480" width="350" height="150" rx="12" fill="#EAF5F2" stroke="#187E77" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f3_s1_input_badge_box" x="952" y="490" width="88.8828125" height="38" rx="5" fill="#FFFFFF" />
+    <text id="f3_s1_input_badge" x="963" y="519" font-size="28" text-anchor="start" fill="#187E77" font-weight="bold" data-claim="I004" data-role="badge">
+      <tspan x="963" y="519.0">IMPL</tspan>
+    </text>
+    <text id="f3_s1_input_text" x="1115.0" y="568.31" font-size="34" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I004" data-role="label">
+      <tspan x="1115.0" y="568.31">load U_t+1</tspan>
+      <tspan x="1115.0" y="610.81">input ready</tspan>
+    </text>
+  </g>
+  <g id="f3_s1_update" data-claim="I005 I007" data-kind="compute" data-status="implemented">
+    <rect id="f3_s1_update_box" x="950" y="670" width="340" height="150" rx="12" fill="#EDF3FA" stroke="#3568A0" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f3_s1_update_badge_box" x="962" y="680" width="88.8828125" height="38" rx="5" fill="#FFFFFF" />
+    <text id="f3_s1_update_badge" x="973" y="709" font-size="28" text-anchor="start" fill="#3568A0" font-weight="bold" data-claim="I005 I007" data-role="badge">
+      <tspan x="973" y="709.0">IMPL</tspan>
+    </text>
+    <text id="f3_s1_update_text" x="1120.0" y="758.31" font-size="34" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I005 I007" data-role="label">
+      <tspan x="1120.0" y="758.31">update S_t+1</tspan>
+      <tspan x="1120.0" y="800.81">store Y_t+1</tspan>
+    </text>
+  </g>
+  <g id="f3_s1_ready" data-claim="I005 U001" data-kind="state" data-status="implemented">
+    <rect id="f3_s1_ready_box" x="960" y="860" width="330" height="150" rx="12" fill="#F2EDF8" stroke="#7556A6" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f3_s1_ready_badge_box" x="972" y="870" width="88.8828125" height="38" rx="5" fill="#FFFFFF" />
+    <text id="f3_s1_ready_badge" x="983" y="899" font-size="28" text-anchor="start" fill="#7556A6" font-weight="bold" data-claim="I005 U001" data-role="badge">
+      <tspan x="983" y="899.0">IMPL</tspan>
+    </text>
+    <text id="f3_s1_ready_text" x="1125.0" y="948.31" font-size="34" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I005 U001" data-role="label">
+      <tspan x="1125.0" y="948.31">cast h_t+1</tspan>
+      <tspan x="1125.0" y="990.81">state ready</tspan>
+    </text>
+  </g>
+  <g id="f3_s2_mma" data-claim="I004 I005" data-kind="compute" data-status="implemented">
+    <rect id="f3_s2_mma_box" x="1380" y="290" width="310" height="150" rx="12" fill="#EDF3FA" stroke="#3568A0" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f3_s2_mma_badge_box" x="1392" y="300" width="88.8828125" height="38" rx="5" fill="#FFFFFF" />
+    <text id="f3_s2_mma_badge" x="1403" y="329" font-size="28" text-anchor="start" fill="#3568A0" font-weight="bold" data-claim="I004 I005" data-role="badge">
+      <tspan x="1403" y="329.0">IMPL</tspan>
+    </text>
+    <text id="f3_s2_mma_text" x="1535.0" y="378.31" font-size="34" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I004 I005" data-role="label">
+      <tspan x="1535.0" y="378.31">MMA_t+2</tspan>
+      <tspan x="1535.0" y="420.81">FP32 A_t+2</tspan>
+    </text>
+  </g>
+  <g id="f3_s2_input" data-claim="I004" data-kind="input" data-status="implemented">
+    <rect id="f3_s2_input_box" x="1420" y="480" width="350" height="150" rx="12" fill="#EAF5F2" stroke="#187E77" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f3_s2_input_badge_box" x="1432" y="490" width="88.8828125" height="38" rx="5" fill="#FFFFFF" />
+    <text id="f3_s2_input_badge" x="1443" y="519" font-size="28" text-anchor="start" fill="#187E77" font-weight="bold" data-claim="I004" data-role="badge">
+      <tspan x="1443" y="519.0">IMPL</tspan>
+    </text>
+    <text id="f3_s2_input_text" x="1595.0" y="568.31" font-size="34" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I004" data-role="label">
+      <tspan x="1595.0" y="568.31">load U_t+2</tspan>
+      <tspan x="1595.0" y="610.81">input ready</tspan>
+    </text>
+  </g>
+  <g id="f3_s2_update" data-claim="I005 I007" data-kind="compute" data-status="implemented">
+    <rect id="f3_s2_update_box" x="1430" y="670" width="340" height="150" rx="12" fill="#EDF3FA" stroke="#3568A0" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f3_s2_update_badge_box" x="1442" y="680" width="88.8828125" height="38" rx="5" fill="#FFFFFF" />
+    <text id="f3_s2_update_badge" x="1453" y="709" font-size="28" text-anchor="start" fill="#3568A0" font-weight="bold" data-claim="I005 I007" data-role="badge">
+      <tspan x="1453" y="709.0">IMPL</tspan>
+    </text>
+    <text id="f3_s2_update_text" x="1600.0" y="758.31" font-size="34" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I005 I007" data-role="label">
+      <tspan x="1600.0" y="758.31">update S_t+2</tspan>
+      <tspan x="1600.0" y="800.81">store Y_t+2</tspan>
+    </text>
+  </g>
+  <g id="f3_s2_ready" data-claim="I005 U001" data-kind="state" data-status="implemented">
+    <rect id="f3_s2_ready_box" x="1440" y="860" width="330" height="150" rx="12" fill="#F2EDF8" stroke="#7556A6" stroke-width="2.5" stroke-dasharray="none" />
+    <rect id="f3_s2_ready_badge_box" x="1452" y="870" width="88.8828125" height="38" rx="5" fill="#FFFFFF" />
+    <text id="f3_s2_ready_badge" x="1463" y="899" font-size="28" text-anchor="start" fill="#7556A6" font-weight="bold" data-claim="I005 U001" data-role="badge">
+      <tspan x="1463" y="899.0">IMPL</tspan>
+    </text>
+    <text id="f3_s2_ready_text" x="1605.0" y="948.31" font-size="34" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="I005 U001" data-role="label">
+      <tspan x="1605.0" y="948.31">cast h_t+2</tspan>
+      <tspan x="1605.0" y="990.81">state ready</tspan>
+    </text>
+  </g>
+  <g id="f3_p_issue" data-claim="P001" data-kind="input" data-status="proposed">
+    <rect id="f3_p_issue_box" x="74" y="1320" width="342" height="160" rx="12" fill="#EAF5F2" stroke="#187E77" stroke-width="2.5" stroke-dasharray="12 8" />
+    <rect id="f3_p_issue_badge_box" x="86" y="1330" width="180.703125" height="38" rx="5" fill="#FFFFFF" />
+    <text id="f3_p_issue_badge" x="97" y="1359" font-size="28" text-anchor="start" fill="#187E77" font-weight="bold" data-claim="P001" data-role="badge">
+      <tspan x="97" y="1359.0">PROPOSED</tspan>
+    </text>
+    <text id="f3_p_issue_text" x="245.0" y="1413.31" font-size="34" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="P001" data-role="label">
+      <tspan x="245.0" y="1413.31">issue input load</tspan>
+      <tspan x="245.0" y="1455.81">U_(t+1)</tspan>
+    </text>
+  </g>
+  <g id="f3_p_ready" data-claim="P001" data-kind="input" data-status="proposed">
+    <rect id="f3_p_ready_box" x="494" y="1320" width="342" height="160" rx="12" fill="#EAF5F2" stroke="#187E77" stroke-width="2.5" stroke-dasharray="12 8" />
+    <rect id="f3_p_ready_badge_box" x="506" y="1330" width="180.703125" height="38" rx="5" fill="#FFFFFF" />
+    <text id="f3_p_ready_badge" x="517" y="1359" font-size="28" text-anchor="start" fill="#187E77" font-weight="bold" data-claim="P001" data-role="badge">
+      <tspan x="517" y="1359.0">PROPOSED</tspan>
+    </text>
+    <text id="f3_p_ready_text" x="665.0" y="1413.31" font-size="34" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="P001" data-role="label">
+      <tspan x="665.0" y="1413.31">load complete</tspan>
+      <tspan x="665.0" y="1455.81">input ready</tspan>
+    </text>
+  </g>
+  <g id="f3_p_consume" data-claim="P001" data-kind="sync" data-status="proposed">
+    <rect id="f3_p_consume_box" x="914" y="1320" width="406" height="160" rx="12" fill="#FFF4E3" stroke="#A66B1F" stroke-width="2.5" stroke-dasharray="12 8" />
+    <rect id="f3_p_consume_badge_box" x="926" y="1330" width="180.703125" height="38" rx="5" fill="#FFFFFF" />
+    <text id="f3_p_consume_badge" x="937" y="1359" font-size="28" text-anchor="start" fill="#A66B1F" font-weight="bold" data-claim="P001" data-role="badge">
+      <tspan x="937" y="1359.0">PROPOSED</tspan>
+    </text>
+    <text id="f3_p_consume_text" x="1117.0" y="1413.31" font-size="34" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="P001" data-role="label">
+      <tspan x="1117.0" y="1413.31">next-step compute</tspan>
+      <tspan x="1117.0" y="1455.81">consumer complete</tspan>
+    </text>
+  </g>
+  <g id="f3_p_reuse" data-claim="P001" data-kind="sync" data-status="proposed">
+    <rect id="f3_p_reuse_box" x="1398" y="1320" width="420" height="160" rx="12" fill="#FFF4E3" stroke="#A66B1F" stroke-width="2.5" stroke-dasharray="12 8" />
+    <rect id="f3_p_reuse_badge_box" x="1410" y="1330" width="180.703125" height="38" rx="5" fill="#FFFFFF" />
+    <text id="f3_p_reuse_badge" x="1421" y="1359" font-size="28" text-anchor="start" fill="#A66B1F" font-weight="bold" data-claim="P001" data-role="badge">
+      <tspan x="1421" y="1359.0">PROPOSED</tspan>
+    </text>
+    <text id="f3_p_reuse_text" x="1608.0" y="1413.31" font-size="34" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="P001" data-role="label">
+      <tspan x="1608.0" y="1413.31">slot reusable</tspan>
+      <tspan x="1608.0" y="1455.81">all consumers done</tspan>
+    </text>
+  </g>
+  <g id="f3_p_compute" data-claim="P001" data-kind="compute" data-status="proposed">
+    <rect id="f3_p_compute_box" x="74" y="1510" width="764" height="150" rx="12" fill="#EDF3FA" stroke="#3568A0" stroke-width="2.5" stroke-dasharray="12 8" />
+    <rect id="f3_p_compute_badge_box" x="86" y="1520" width="180.703125" height="38" rx="5" fill="#FFFFFF" />
+    <text id="f3_p_compute_badge" x="97" y="1549" font-size="28" text-anchor="start" fill="#3568A0" font-weight="bold" data-claim="P001" data-role="badge">
+      <tspan x="97" y="1549.0">PROPOSED</tspan>
+    </text>
+    <text id="f3_p_compute_text" x="456.0" y="1598.31" font-size="34" text-anchor="middle" fill="#172B3A" font-weight="normal" data-claim="P001" data-role="label">
+      <tspan x="456.0" y="1598.31">current MMA -&gt; update</tspan>
+      <tspan x="456.0" y="1640.81">S_t ready before next MMA</tspan>
+    </text>
+  </g>
+  <g id="fig03_dependency_pipeline_title" data-claim="I004" data-kind="storage" data-status="implemented">
+    <text id="fig03_dependency_pipeline_title_text" x="48" y="64" font-size="46" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="I004" data-role="title">
+      <tspan x="48" y="64.0">Dependency-aware execution: preserve recurrent order</tspan>
+    </text>
+  </g>
+  <g id="fig03_dependency_pipeline_scope" data-claim="I004 I005" data-kind="storage" data-status="implemented">
+    <text id="fig03_dependency_pipeline_scope_text" x="48" y="118" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I004 I005" data-role="secondary">
+      <tspan x="48" y="118.0">Logical execution order - not to scale; no measured overlap or speedup implied</tspan>
+    </text>
+  </g>
+  <g id="f3_lane_0" data-claim="I004 I005 I007" data-kind="compute" data-status="implemented">
+    <text id="f3_lane_0_text" x="78" y="355" font-size="32" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="I004 I005 I007" data-role="secondary">
+      <tspan x="78" y="355.0">Recurrent MMA</tspan>
+    </text>
+  </g>
+  <g id="f3_lane_1" data-claim="I004 I005 I007" data-kind="input" data-status="implemented">
+    <text id="f3_lane_1_text" x="78" y="550" font-size="32" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="I004 I005 I007" data-role="secondary">
+      <tspan x="78" y="550.0">Input loads</tspan>
+    </text>
+  </g>
+  <g id="f3_lane_2" data-claim="I004 I005 I007" data-kind="compute" data-status="implemented">
+    <text id="f3_lane_2_text" x="78" y="745" font-size="32" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="I004 I005 I007" data-role="secondary">
+      <tspan x="78" y="745.0">Update + Y_t stores</tspan>
+    </text>
+  </g>
+  <g id="f3_lane_3" data-claim="I004 I005 I007" data-kind="state" data-status="implemented">
+    <text id="f3_lane_3_text" x="78" y="940" font-size="32" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="I004 I005 I007" data-role="secondary">
+      <tspan x="78" y="940.0">Cast / state ready</tspan>
+    </text>
+  </g>
+  <g id="f3_state_note" data-claim="I005 I015" data-kind="storage" data-status="implemented">
+    <text id="f3_state_note_text" x="48" y="1140" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="I005 I015" data-role="secondary">
+      <tspan x="48" y="1140.0">h_t feeds the next MMA; c[,n,m] also feed the next update. C_t is absent in inference.</tspan>
+    </text>
+  </g>
+  <g id="f3_tbd" data-claim="U002 P001" data-kind="storage" data-status="unknown">
+    <text id="f3_tbd_text" x="48" y="1740" font-size="32" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="U002 P001" data-role="secondary">
+      <tspan x="48" y="1740.0">TBD: prefetch backend, independent resources, buffer protocol and measured overlap.</tspan>
+    </text>
+  </g>
+  <g id="color_legend_state" data-kind="legend">
+    <rect id="color_sample_state" x="48.0" y="1826" width="30" height="30" rx="5" fill="#F2EDF8" stroke="#7556A6" stroke-width="2.5" />
+    <text id="color_label_state" x="92.0" y="1851" font-size="28" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="" data-role="legend">
+      <tspan x="92.0" y="1851.0">State / feedback</tspan>
+    </text>
+  </g>
+  <g id="color_legend_compute" data-kind="legend">
+    <rect id="color_sample_compute" x="412.8" y="1826" width="30" height="30" rx="5" fill="#EDF3FA" stroke="#3568A0" stroke-width="2.5" />
+    <text id="color_label_compute" x="456.8" y="1851" font-size="28" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="" data-role="legend">
+      <tspan x="456.8" y="1851.0">Compute</tspan>
+    </text>
+  </g>
+  <g id="color_legend_input" data-kind="legend">
+    <rect id="color_sample_input" x="777.6" y="1826" width="30" height="30" rx="5" fill="#EAF5F2" stroke="#187E77" stroke-width="2.5" />
+    <text id="color_label_input" x="821.6" y="1851" font-size="28" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="" data-role="legend">
+      <tspan x="821.6" y="1851.0">Input / output</tspan>
+    </text>
+  </g>
+  <g id="color_legend_sync" data-kind="legend">
+    <rect id="color_sample_sync" x="1142.4" y="1826" width="30" height="30" rx="5" fill="#FFF4E3" stroke="#A66B1F" stroke-width="2.5" />
+    <text id="color_label_sync" x="1186.4" y="1851" font-size="28" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="" data-role="legend">
+      <tspan x="1186.4" y="1851.0">Sync / constraints</tspan>
+    </text>
+  </g>
+  <g id="color_legend_storage" data-kind="legend">
+    <rect id="color_sample_storage" x="1507.2" y="1826" width="30" height="30" rx="5" fill="#F7F8FA" stroke="#667085" stroke-width="2.5" />
+    <text id="color_label_storage" x="1551.2" y="1851" font-size="28" text-anchor="start" fill="#172B3A" font-weight="normal" data-claim="" data-role="legend">
+      <tspan x="1551.2" y="1851.0">Storage / scope</tspan>
+    </text>
+  </g>
+  <g id="legend_implemented" data-status="implemented" data-kind="legend">
+    <rect id="legend_implemented_sample" x="48.0" y="1884" width="48" height="32" rx="5" fill="#FFFFFF" stroke="#667085" stroke-width="2.5" stroke-dasharray="none" />
+    <text id="legend_implemented_text" x="112.0" y="1911" font-size="28" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="" data-role="legend">
+      <tspan x="112.0" y="1911.0">IMPL: Implemented</tspan>
+    </text>
+  </g>
+  <g id="legend_documented" data-status="documented" data-kind="legend">
+    <rect id="legend_documented_sample" x="504.0" y="1884" width="48" height="32" rx="5" fill="#FFFFFF" stroke="#667085" stroke-width="2.5" stroke-dasharray="none" />
+    <text id="legend_documented_text" x="568.0" y="1911" font-size="28" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="" data-role="legend">
+      <tspan x="568.0" y="1911.0">DOC: Documented</tspan>
+    </text>
+  </g>
+  <g id="legend_proposed" data-status="proposed" data-kind="legend">
+    <rect id="legend_proposed_sample" x="960.0" y="1884" width="48" height="32" rx="5" fill="#FFFFFF" stroke="#667085" stroke-width="2.5" stroke-dasharray="12 8" />
+    <text id="legend_proposed_text" x="1024.0" y="1911" font-size="28" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="" data-role="legend">
+      <tspan x="1024.0" y="1911.0">PROPOSED</tspan>
+    </text>
+  </g>
+  <g id="legend_unknown" data-status="unknown" data-kind="legend">
+    <rect id="legend_unknown_sample" x="1416.0" y="1884" width="48" height="32" rx="5" fill="#FFFFFF" stroke="#667085" stroke-width="2.5" stroke-dasharray="12 5 2 5" />
+    <text id="legend_unknown_text" x="1480.0" y="1911" font-size="28" text-anchor="start" fill="#172B3A" font-weight="bold" data-claim="" data-role="legend">
+      <tspan x="1480.0" y="1911.0">TBD: Unknown</tspan>
+    </text>
+  </g>
+</svg>

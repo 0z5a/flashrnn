@@ -134,3 +134,23 @@ Apache-2.0 (see `LICENSE` file)
 -  Merrill, W., Petty, J., & Sabharwal, A. (2024). The illusion of state in state-space models. In Proceedings of the Forty-first International Conference on Machine Learning. Retrieved from https://openreview.net/forum?id=QZgo9JZpLq
 
 - Dao, T., Fu, D., Ermon, S., Rudra, A., & Ré, C. (2022). FlashAttention: Fast and memory-efficient exact attention with IO-awareness. In S. Koyejo, S. Mohamed, A. Agarwal, D. Belgrave, K. Cho, & A. Oh (Eds.), Advances in Neural Information Processing Systems (Vol. 35, pp. 16344–16359). Curran Associates, Inc. Retrieved from https://proceedings.neurips.cc/paper_files/paper/2022/file/67d57c32e20fd0a7a302cb81d36e40d5-Paper-Conference.pdf
+
+## FlashRNN2 research status
+
+The opt-in [prepared single-GPU implementation and H100 results](docs/flashrnn2/prepared-h100-results.md)
+separate computation carry from output snapshots, reuse fixed buffers across chunks,
+and expose full, hidden and last output modes. An explicit offline shape policy
+can select a qualified MMA or SIMT configuration; unknown shapes retain MMA16/4/B.
+The default public API is preserved. These are forward inference experiments.
+
+Eight fixed-weight, four-layer classifiers improve 1.2133×–2.8846× versus the
+previous FlashRNN2 execution, or 1.1395×–2.0508× with CUDA Graphs in both arms.
+These ratios are within-FlashRNN2 ablations. Separate matched FP16 controls compare
+with original FlashRNN's CUDA, CUDA-fused and Triton-fused backends. Historical
+pretrained TiRex measurements remain bound to their own source and cohort.
+
+[State/continuation contracts](docs/flashrnn2/persistent-continuation.md) and
+[four editable architecture figures](docs/architecture/flashrnn2/README.md)
+distinguish implemented behavior, documented mechanisms, proposed overlap and
+unknown physical mapping. The figures do not establish asynchronous overlap,
+WGMMA/TMA/FP8, GPU backward or distributed execution.

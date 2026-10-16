@@ -10,6 +10,7 @@ from pathlib import Path
 
 import torch
 import triton
+from tirex_qualification import current_manifest
 from tirex_slstm_reference_gate import (
     SOURCE_REVISION,
     WEIGHT_BYTES,
@@ -86,6 +87,7 @@ def main():
         assert source.stat().st_size == entry["bytes"]
         assert git_blob_sha(source) == entry["sha"]
 
+    manifest = current_manifest(args.source)
     shim = add_training_import_shim()
     sys.path.insert(0, str(args.source / "src"))
     from tirex.models.tirex import TiRexZero
@@ -126,6 +128,10 @@ def main():
                 entry = {
                     "batch": batch,
                     "steps": steps,
+                    "gates": gates.detach().cpu().clone(),
+                    "initial": None
+                    if initial is None
+                    else initial.detach().cpu().clone(),
                     "reference": None,
                     "candidate": None,
                 }
@@ -152,6 +158,7 @@ def main():
                 context = inputs[:batch]
                 entry = {
                     "batch": batch,
+                    "context": context.clone(),
                     "reference": {
                         "forecast": None,
                         "cells": [[] for _ in model.blocks],
@@ -205,6 +212,7 @@ def main():
         torch.save(raw, raw_path)
         result = {
             "status": status,
+            "execution_manifest": manifest,
             "failure_traceback": failure,
             "checkpoint_sha256": WEIGHT_SHA256,
             "source_revision": SOURCE_REVISION,

@@ -8,7 +8,7 @@ now records completed Mamba3 SISO/MIMO, RWKV6, DeltaNet, RetNet, HGRN, HGRN2 and
 Gated DeltaNet work rather than leaving stale not-downloaded entries. Original numerical
 failures remain visible.
 
-The [full-model speedup matrix](full-model-e2e-speedups.md) lists the accelerated baselines still requiring same-device qualification; none of its pretrained checkpoints has a reportable GPU E2E ratio yet. Separate fixed-weight synthetic four-layer controls cover [34 LSTM/sLSTM comparisons with original FlashRNN1](h100-flashrnn1-results.md) and [51 LSTM/GRU/Elman comparisons with packed cuDNN](h100-full-matrix-results.md).
+The [full-model speedup matrix](full-model-e2e-speedups.md) lists the accelerated baselines still requiring same-device qualification; TiRex B2/C32 has a qualified historical H100 ratio of 20.0234× against the original Torch cell. Other pretrained checkpoints remain unmeasured. Changes to kernel or qualification sources require new gates before new timing. Separate fixed-weight synthetic four-layer controls cover [34 LSTM/sLSTM comparisons with original FlashRNN1](h100-flashrnn1-results.md) and [51 LSTM/GRU/Elman comparisons with packed cuDNN](h100-full-matrix-results.md).
 The [competing-baseline ledger](competing-baselines.md) separately tracks original FlashRNN, cuDNN/Haste and historical or parallel-time papers with their comparability gates.
 
 | Registered family | Existing complete-model evidence | Remaining GPU/native qualification |
@@ -22,7 +22,7 @@ The [competing-baseline ledger](competing-baselines.md) separately tracks origin
 | RetNet 1.3B | Original 36-step/84-token reference retains nine BS=1 state failures; changed Linear arithmetic control passes 36/36 with bitwise state/logit parity | Native FLA, long contexts and high-concurrency GPU E2E unfinished |
 | xLSTM / mLSTM 7B | Immutable checkpoint metadata pinned; full checkpoint not downloaded | Complete-model and mlstm_kernels baseline execution unfinished |
 | xLSTM / mLSTM 164M | Complete checkpoint: 36/36 logits and 84/84 tokens; original five cell-state failures retained, fixed-row Linear control bitwise pass | Native `mlstm_kernels` and high-concurrency GPU E2E unfinished |
-| TiRex sLSTM 35M, time-series forecast | Complete checkpoint: nine forecasts, 21 series, 12,096 quantile values per path and 864 layer-state tensor comparisons bitwise | [H100 BF16 GPU numerical qualification](tirex-gpu-r5-results.md) passes 381/381 with B2 FlashRNN2 only; B1/B4 retain Torch. Native author CUDA, ONNX and high-concurrency forecast E2E remain unmeasured; not a language-token baseline |
+| TiRex sLSTM 35M, time-series forecast | Complete checkpoint: nine forecasts, 21 series, 12,096 quantile values per path and 864 layer-state tensor comparisons bitwise | [Rounded-division H100 qualification](../../evidence/tirex-rounded-division-20261011/README.md) passes 381 model and 2048 B2/C32 diagnostic comparisons; historical B2/C32 forecast timing is 20.0234× versus Torch, 20 within-process paired blocks. B1/B4 retain Torch. Native author CUDA, ONNX, C128 and distributed forecast E2E remain unmeasured; not a language-token baseline |
 | Mixed mLSTM/sLSTM language model, 2.1M | Complete checkpoint: 36/36 full-vocabulary batch/serial and cached/full-prefix checks, 84/84 tokens, 504/504 state tensor pairs; independent audit pass | Pinned weight restored. Native CUDA, FlashRNN2 FP32 cell and separate B1/2/4 and B16/32/64 full-model numerical gates are source-only; paired baseline and candidate high-concurrency E2E remain unmeasured |
 | Gated DeltaNet 340M | Complete checkpoint: 36/36 logits, recurrent and convolution checks; 84/84 tokens; independent audit pass | Native FLA and high-concurrency GPU E2E unfinished |
 | Monostich-2-base GDN-2/GQA 149M | Complete checkpoint: 36/36 full-model batched/serial logits and 84/84 tokens; independent audit and pinned first GDN-2 layer crosscheck pass | Native FLA, cache, backward and high-concurrency GPU E2E unfinished |
@@ -51,7 +51,7 @@ replay must restore those exact files from their retained delta manifests.
 | Four-cell functional API | Portable CPU and Apple MPS, 38 cases per matrix | Correctness only |
 | Small CPU compiled recurrence | Inductor, B2/T4/H1/D8, full history/gradients | Local forward+loss+backward probe 1.61–3.44×; no model E2E claim |
 | One LSTM GPU layer | Paired layer pilot, B16/T128/H1/D64 | 6.3669× versus cuDNN in this layer pilot |
-| Full recurrent models | Reports above; synthetic stacked controls | Pretrained high-concurrency GPU speedups unmeasured; H100 FP16 FlashRNN1 34/34 at 1.177×–1.808×, H100 packed cuDNN 51/51 at 1.422×–1.655× |
+| Full recurrent models | Reports above; synthetic stacked controls | Historical pretrained TiRex B2/C32: 20.0234× versus Torch; other pretrained and distributed speedups unmeasured. H100 FP16 FlashRNN1 34/34 at 1.177×–1.808×, H100 packed cuDNN 51/51 at 1.422×–1.655× |
 
 The required campaign still includes model batches 1/4/16/32/64, request
 concurrency 1/8/32/64/128, native and accelerated baselines, comparable output

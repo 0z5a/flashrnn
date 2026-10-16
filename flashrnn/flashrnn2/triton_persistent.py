@@ -5,6 +5,8 @@ import triton
 import triton.language as tl
 from triton.language.extra import libdevice
 
+from .state_contract import SequenceContext, state_contract
+
 
 @triton.jit
 def _sequence(
@@ -13,6 +15,7 @@ def _sequence(
     BIAS,
     INITIAL,
     OUTPUT,
+    FINAL,
     B: tl.constexpr,
     T: tl.constexpr,
     H: tl.constexpr,
@@ -24,7 +27,15 @@ def _sequence(
     WEIGHT_A: tl.constexpr,
     TIREX: tl.constexpr,
     XLSTM: tl.constexpr,
+    STORE_FINAL: tl.constexpr,
+    SEQUENCE_START: tl.constexpr,
+    TOTAL_T: tl.constexpr = 0,
+    STEP_BASE: tl.constexpr = 0,
+    OUTPUT_MODE: tl.constexpr = 0,
 ):
+    # Defaults preserve the public full-state history contract. Prepared callers
+    # address the original buffers directly across chunk boundaries.
+    full_steps: tl.constexpr = T if TOTAL_T == 0 else TOTAL_T
     rows = tl.program_id(0) * BM + tl.arange(0, BM)
     head = tl.program_id(1)
     d = tl.arange(0, BD)
@@ -53,7 +64,7 @@ def _sequence(
     dtype = WX.dtype.element_ty
     for step in range(T):
         h_mma = hidden.to(dtype)
-        x_offset = (((rows[:, None] * T + step) * 4) * H + head) * D + d[None, :]
+        x_offset = (((rows[:, None] * full_steps + STEP_BASE + step) * 4) * H + head) * D + d[None, :]
         if XLSTM:
             # Keep the pinned FP32 checkpoint out of TF32 truncation.
             ai = tl.dot(h_mma, ri, input_precision="ieee")
@@ -103,7 +114,11 @@ def _sequence(
             if XLSTM:
                 next_m = tl.where(n == 0.0, i, tl.maximum(i, logf))
             else:
-                next_m = tl.where((step == 0) & zero_normalizer, i, tl.maximum(i, logf))
+                next_m = tl.where(
+                    SEQUENCE_START & (step == 0) & zero_normalizer,
+                    i,
+                    tl.maximum(i, logf),
+                )
             if TIREX or XLSTM:
                 igate = tl.minimum(libdevice.exp(i - next_m), 1.0)
                 fgate = tl.minimum(libdevice.exp(logf - next_m), 1.0)
@@ -136,13 +151,25 @@ def _sequence(
         else:
             c = tl.sigmoid(f) * c + tl.sigmoid(i) * z_value
             hidden = tl.sigmoid(o) * (2.0 * tl.sigmoid(2.0 * c) - 1.0)
-        output_offset = ((rows[:, None] * T + step) * H + head) * D + d[None, :]
-        output_stride = B * T * H * D
-        tl.store(OUTPUT + output_offset, hidden, valid)
-        tl.store(OUTPUT + output_stride + output_offset, c, valid)
+        if OUTPUT_MODE == 2:
+            if STEP_BASE + step == full_steps - 1:
+                tl.store(OUTPUT + state_offset, hidden, valid)
+        else:
+            output_offset = ((rows[:, None] * full_steps + STEP_BASE + step) * H + head) * D + d[None, :]
+            tl.store(OUTPUT + output_offset, hidden, valid)
+            if OUTPUT_MODE == 0:
+                output_stride = B * full_steps * H * D
+                tl.store(OUTPUT + output_stride + output_offset, c, valid)
+                if SLSTM:
+                    tl.store(OUTPUT + 2 * output_stride + output_offset, n, valid)
+                    tl.store(OUTPUT + 3 * output_stride + output_offset, m, valid)
+
+    if STORE_FINAL:
+        tl.store(FINAL + state_offset, hidden, valid)
+        tl.store(FINAL + stride + state_offset, c, valid)
         if SLSTM:
-            tl.store(OUTPUT + 2 * output_stride + output_offset, n, valid)
-            tl.store(OUTPUT + 3 * output_stride + output_offset, m, valid)
+            tl.store(FINAL + 2 * stride + state_offset, n, valid)
+            tl.store(FINAL + 3 * stride + state_offset, m, valid)
 
 
 def recurrence(
@@ -156,8 +183,28 @@ def recurrence(
     weight_operand: str = "b",
     register_layout: bool = False,
     slstm_semantics: str = "flashrnn",
+    *,
+    return_compute_carry: bool = False,
+    sequence_context: SequenceContext | None = None,
+    output_mode: str = "full",
+    num_warps: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Run one program per batch tile/head; optional FP32 snapshots are diagnostic."""
+    """Run one program per batch tile/head.
+
+    The default final state is an output snapshot (legacy behavior). For lossless
+    chunk boundaries, request compute carry and pass a context from begin_sequence
+    over the full logical call; advance it between chunks. Output history keeps
+    its own dtype. This forward path does not implement backward.
+
+    ``hidden`` returns [B,T,H,D], and ``last`` returns [B,1,H,D]; both
+    require the explicit compute-carry contract. Full remains the default.
+    """
+    if output_mode not in ("full", "hidden", "last"):
+        raise ValueError("output mode must be full, hidden or last")
+    if output_mode != "full" and (not return_compute_carry or register_layout):
+        raise ValueError("reduced output requires compute carry and ordinary layout")
+    if num_warps not in (None, 4, 8) or (register_layout and num_warps not in (None, 8)):
+        raise ValueError("ordinary warp count must be 4 or 8; Gluon requires 8")
     if register_layout and weight_operand != "b":
         raise ValueError("explicit register layout uses weights as operand b")
     if weight_operand not in ("a", "b"):
@@ -184,6 +231,16 @@ def recurrence(
         x.requires_grad for x in (wx, recurrent, bias, initial)
     ):
         raise ValueError("persistent prototype has no backward implementation yet")
+    contract = state_contract(cell, wx.dtype, slstm_semantics)
+    if return_compute_carry and sequence_context is None:
+        raise ValueError("compute carry requires a full logical-call sequence context")
+    if sequence_context is not None:
+        if not return_compute_carry or sequence_context.contract != contract:
+            raise ValueError("sequence context must match the compute-carry contract")
+        if sequence_context.zero_normalizer.device != wx.device:
+            raise ValueError("sequence context must be on the input device")
+    if snapshot_dtype not in (None, wx.dtype, torch.float32):
+        raise ValueError("snapshot dtype must be input dtype or FP32")
     batch, steps, gates, heads, width = wx.shape
     states = 4 if cell == "slstm" else 2
     if gates != 4 or steps < 1 or not 16 <= width <= 128:
@@ -192,8 +249,21 @@ def recurrence(
         raise ValueError("expected public weight and bias layouts")
     if initial.shape != (states, batch, 1, heads, width):
         raise ValueError("expected public initial state layout")
-    if recurrent.dtype != wx.dtype or initial.dtype != wx.dtype:
-        raise ValueError("recurrent weights and initial state must match input dtype")
+    initial_dtypes = (
+        (wx.dtype, contract.compute_dtype) if return_compute_carry else (wx.dtype,)
+    )
+    if recurrent.dtype != wx.dtype or initial.dtype not in initial_dtypes:
+        raise ValueError(
+            "recurrent weights or initial state do not match the state contract"
+        )
+    if (
+        sequence_context is not None
+        and sequence_context.step_offset > 0
+        and initial.dtype != contract.compute_dtype
+    ):
+        raise ValueError(
+            "continuation requires compute carry, not a rounded output snapshot"
+        )
     bias_dtypes = (
         (wx.dtype, torch.float32) if slstm_semantics == "tirex" else (wx.dtype,)
     )
@@ -205,14 +275,28 @@ def recurrence(
         x.contiguous() for x in (wx, recurrent, bias, initial)
     )
     zero_normalizer = (
-        torch.all(initial[2] == 0)
-        if cell == "slstm" and slstm_semantics != "xlstm"
-        else initial
+        sequence_context.zero_normalizer
+        if sequence_context is not None
+        else (
+            torch.all(initial[2] == 0)
+            if cell == "slstm" and slstm_semantics != "xlstm"
+            else initial
+        )
+    )
+    output_shape = (
+        (states, batch, steps, heads, width)
+        if output_mode == "full"
+        else (batch, 1 if output_mode == "last" else steps, heads, width)
     )
     output = torch.empty(
-        (states, batch, steps, heads, width),
+        output_shape,
         device=wx.device,
         dtype=wx.dtype if snapshot_dtype is None else snapshot_dtype,
+    )
+    final = (
+        torch.empty(initial.shape, device=wx.device, dtype=contract.compute_dtype)
+        if return_compute_carry
+        else output
     )
     sequence = _sequence
     if register_layout:
@@ -223,6 +307,7 @@ def recurrence(
         bias,
         initial,
         output,
+        final,
         batch,
         steps,
         heads,
@@ -234,7 +319,10 @@ def recurrence(
         weight_operand == "a",
         slstm_semantics == "tirex",
         slstm_semantics == "xlstm",
-        num_warps=8 if register_layout else 4,
+        return_compute_carry,
+        sequence_context is None or sequence_context.step_offset == 0,
+        **({} if register_layout else {"OUTPUT_MODE": {"full": 0, "hidden": 1, "last": 2}[output_mode]}),
+        num_warps=8 if register_layout else (num_warps or 4),
         enable_fp_fusion=False,
     )
     if diagnostics is not None:
@@ -248,4 +336,4 @@ def recurrence(
             persistent=True,
             synchronization="single_cta",
         )
-    return output, output[:, :, -1:]
+    return output, final if return_compute_carry else output[:, :, -1:]
