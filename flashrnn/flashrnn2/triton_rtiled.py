@@ -73,6 +73,28 @@ def _verify_operand(h1, h2, OUTPUT, COUNTER, rows, row_valid, head, prev, TOTAL_
     tl.atomic_add(COUNTER, bad)
 
 
+@triton.jit
+def _group_arrive(SYNC, slot):
+    # First half of _group_barrier: every thread's exchange stores precede the release arrive.
+    tl.debug_barrier()
+    tl.atomic_add(SYNC + slot, 1, sem="release", scope="gpu")
+
+
+@triton.jit
+def _group_wait(SYNC, slot, target, ERR, SPIN: tl.constexpr):
+    # Second half of _group_barrier: acquire spin until every CTA of the group has arrived.
+    seen = tl.atomic_add(SYNC + slot, 0, sem="acquire", scope="gpu")
+    spins = seen * 0
+    failed = seen * 0
+    while (seen < target) & (spins < SPIN) & (failed == 0):
+        seen = tl.atomic_add(SYNC + slot, 0, sem="acquire", scope="gpu")
+        failed = tl.load(ERR, volatile=True)
+        spins += 1
+    if seen < target:
+        tl.atomic_max(ERR, 1)
+    tl.debug_barrier()
+
+
 # Race-verification bits (VERIFY, compile-time; 0 compiles to the unmodified kernel). CHECK compares every received
 # hidden operand with the sender's stored output, after the barrier and again after the MMAs; DELAY injects seeded
 # sleeps before the producer's store and after the consumer's barrier; the BROKEN_* bits are negative controls.

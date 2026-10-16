@@ -6,7 +6,9 @@ Medians of 15 CUDA-event timed calls after warm-up:
                           forward backend (Triton default, Triton R-tiled S32/4w for D > 128, and with --tilelang the
                           qualified TileLang cluster/grid configuration)
   bw_phases               backward wrapper split into preactivation GEMM, sequential kernel, dR/dbias, for the
-                          kernel variants base / fast (bitwise-identical) and tf32 GEMMs; several slice widths
+                          kernel variants base / fast (bitwise-identical) and tf32 GEMMs, and the fused
+                          preactivation recompute (fuse1 / fuse2: no GEMM; "preactivation" is then the round(h) copy);
+                          several slice widths
   step                    complete training steps (training.recurrence + autograd.grad) per variant
   v1_fwd / v1_step        FlashRNN1 cuda_fused forward only / forward + backward (the pinned extension is built in the
                           non-TileLang environment; with --tilelang the run records whether it imports there)
@@ -89,6 +91,9 @@ def main():
             variants[f"s{s}w{warps}_fast"] = dict(slice_width=s, num_warps=warps, fast=True,
                                                   history_grad_components=(True, False, False))
             variants[f"s{s}w{warps}_fast_tf32"] = dict(variants[f"s{s}w{warps}_fast"], tf32=True)
+            if width >= 192 and s <= 32:
+                for f in (1, 2):
+                    variants[f"s{s}w{warps}_fuse{f}"] = dict(variants[f"s{s}w{warps}_fast_tf32"], fuse_pre=f)
     reference = {}
     for name, opts in variants.items():
         try:
@@ -118,10 +123,15 @@ def main():
     # Complete training steps.
     best_s = min((n for n in rec["bw_phases"] if n.endswith("_fast")), key=lambda n: rec["bw_phases"][n]["total"],
                  default=None)
+    best_f = min((n for n in rec["bw_phases"] if "_fuse" in n), key=lambda n: rec["bw_phases"][n]["total"],
+                 default=None)
+    best_t = min((n for n in rec["bw_phases"] if n.endswith("_fast_tf32")),
+                 key=lambda n: rec["bw_phases"][n]["total"], default=None)
     step_variants = {}
     for fname, cfg in forwards.items():
         for bname, opts in variants.items():
-            if bname.endswith("_fast") and (bname == best_s or bname.startswith("s32w4") or bname.startswith("s16w4")):
+            if (bname.endswith("_fast") and (bname == best_s or bname.startswith("s32w4") or bname.startswith("s16w4"))
+                    or bname in (best_f, best_t)):
                 step_variants[f"{fname}+{bname}"] = (cfg, opts)
         step_variants[f"{fname}+s32w8_base" if width > 32 else f"{fname}+base"] = (cfg, variants.get("s32w8_base", {}))
     for name, (cfg, opts) in step_variants.items():

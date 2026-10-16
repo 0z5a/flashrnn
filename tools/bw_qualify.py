@@ -1,6 +1,7 @@
 """GPU qualification of the FlashRNN2 training path (forward + R-tiled Triton backward), one case per call.
 
-Case JSON: {cell, dtype, width, slice_width, warps, batch, steps, init (zero|warm), forward (optional KernelConfig)}.
+Case JSON: {cell, dtype, width, slice_width, warps, batch, steps, init (zero|warm), forward (optional KernelConfig),
+fast, tf32, fuse (0|1|2: preactivation recompute fused into the backward kernel; needs fast)}.
 Stages
   grads     gradients of two losses against the FP64 oracle (flashrnn2.grad_reference on the same rounded inputs):
             "hist" = <dH, h history>; "full" = <dH, h history> + <dF, final carry (h, c, n)>.
@@ -12,7 +13,8 @@ Stages
             unavailable baseline is recorded, not a failure
   modes     persistent (sync=grid) == one launch per step (sync=launch), bitwise, all gradients; barrier counts
             and error flag
-  vs_base   (cases with "fast") the fast kernel variant's gradients bitwise equal to the base kernel's
+  vs_base   (cases with "fast", not "fuse") the fast kernel variant's gradients bitwise equal to the base kernel's;
+            a fused case is not bitwise to the GEMM path by construction and is gated by grads/modes/repeat only
   repeat    20 complete training steps (forward + backward) bitwise identical
 Writes bw.json (status PASS only if every gated stage passes) and DONE.json.
 """
@@ -71,7 +73,7 @@ def run_ours(leaves, cot_h, cot_f, case, loss, sync="grid", diagnostics=None):
     cell = case["cell"]
     forward = KernelConfig(**case["forward"]) if case.get("forward") else default_config(case["width"])
     opts = dict(slice_width=case["slice_width"], num_warps=case["warps"], sync=sync, fast=case.get("fast", False),
-                tf32=case.get("tf32", False))
+                tf32=case.get("tf32", False), fuse_pre=case.get("fuse", 0))
     if diagnostics is not None:
         opts["diagnostics"] = diagnostics
     xs = [x.detach().clone().requires_grad_(True) for x in leaves]
@@ -177,7 +179,7 @@ def stage_modes(case, rec):
 def stage_vs_base(case, rec):
     """The fast kernel variant must reproduce the qualified base kernel bit for bit (both losses)."""
     leaves, cot_h, cot_f = inputs(case, 13 + case["width"])
-    base_case = dict(case, fast=False, tf32=False)
+    base_case = dict(case, fast=False, tf32=False, fuse=0)
     out = {}
     for loss in ("hist", "full"):
         a = run_ours(leaves, cot_h, cot_f, case, loss)
@@ -211,13 +213,17 @@ def main():
                       ("repeat", stage_repeat)):
         if stage not in a.stages.split(","):
             continue
+        if stage == "vs_base" and case.get("fuse"):
+            rec["gates"][stage] = "NOT_APPLICABLE_FUSED"  # pre-registered: not a gate for fused cases
+            continue
         try:
             rec["gates"][stage] = "PASS" if fn(case, rec) else "FAIL"
         except Exception:  # noqa: BLE001
             rec["gates"][stage] = "ERROR"
             rec[f"{stage}_error"] = traceback.format_exc()[-3000:]
         write(Path(a.out) / "bw.json", rec)
-    rec["status"] = "PASS" if rec["gates"] and all(v == "PASS" for v in rec["gates"].values()) else "FAIL"
+    rec["status"] = "PASS" if rec["gates"] and all(v in ("PASS", "NOT_APPLICABLE_FUSED")
+                                                   for v in rec["gates"].values()) else "FAIL"
     rec["finished"] = time.time()
     write(Path(a.out) / "bw.json", rec)
     (Path(a.out) / "DONE.json").write_text(json.dumps(dict(finished=time.time())))

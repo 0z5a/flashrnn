@@ -1,7 +1,8 @@
 # FlashRNN2 R tiling and high-concurrency evidence (curated)
 
 One directory per run, named by the run labels used in `docs/flashrnn2/` (M0 … M7, HC0 … HC5, dispatch check,
-FP16/BF16 table fill, backward qualification, race verification rounds 1 and 2). Each holds the paired-timing summaries (`analysis/m4-summary.*`), frozen comparison and policy tables,
+FP16/BF16 table fill, backward qualification, race verification rounds 1 and 2, B = 16 breakdown and fix,
+fused preactivation backward). Each holds the paired-timing summaries (`analysis/m4-summary.*`), frozen comparison and policy tables,
 qualification records (`science/phase0/*/m6.json`), selection records, run receipts and archive manifests. Keys that
 identify hosts, processes or storage paths were removed. Raw per-start timings and task logs are not published; each
 run's `control/finalize-result.json` keeps the SHA256 of its verified raw archive. JSON records here are scrubbed

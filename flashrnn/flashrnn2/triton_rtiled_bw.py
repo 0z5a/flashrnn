@@ -25,7 +25,7 @@ import triton
 import triton.language as tl
 
 from .triton_rtiled import (SPIN_LIMIT, V_BROKEN_ARRIVE_FIRST, V_BROKEN_NO_BARRIER, V_BROKEN_SINGLE, V_CHECK, V_DELAY,
-                            _group_barrier, _verify_delay, k_parts, plan, verify_bits)
+                            _group_arrive, _group_barrier, _group_wait, _verify_delay, k_parts, plan, verify_bits)
 
 
 @triton.jit
@@ -82,12 +82,17 @@ def _verify_dg(XBUF, src_row, DG, dg_row, row_valid, COUNTER, gate_stride, K1: t
 
 @triton.jit
 def _step_inputs(PRE, STATES, INITIAL, DSTATES, here, pre, unit, valid, t, hd, state_stride, history_stride,
-                 SLSTM: tl.constexpr, DS_C: tl.constexpr, DS_N: tl.constexpr):
-    """Pointwise inputs of step t except the step's own c/n/m (FAST path; see _rtiled_bw)."""
-    gi = tl.load(PRE + pre, valid, 0)
-    gf = tl.load(PRE + pre + hd, valid, 0)
-    gz = tl.load(PRE + pre + 2 * hd, valid, 0)
-    go = tl.load(PRE + pre + 3 * hd, valid, 0)
+                 SLSTM: tl.constexpr, DS_C: tl.constexpr, DS_N: tl.constexpr, NO_PRE: tl.constexpr = 0):
+    """Pointwise inputs of step t except the step's own c/n/m (FAST path; see _rtiled_bw). With NO_PRE the gate
+    preactivations are not loaded (zeros; the FUSE path computes them with _fused_gates)."""
+    if NO_PRE:
+        gi = (here * 0).to(tl.float32)
+        gf, gz, go = gi, gi, gi
+    else:
+        gi = tl.load(PRE + pre, valid, 0)
+        gf = tl.load(PRE + pre + hd, valid, 0)
+        gz = tl.load(PRE + pre + 2 * hd, valid, 0)
+        go = tl.load(PRE + pre + 3 * hd, valid, 0)
     dsh = tl.load(DSTATES + here, valid, 0)
     dsc = gi * 0.0
     if DS_C:
@@ -109,6 +114,45 @@ def _step_inputs(PRE, STATES, INITIAL, DSTATES, here, pre, unit, valid, t, hd, s
             n_prev = tl.load(INITIAL + 2 * state_stride + unit, valid, 1.0).to(tl.float32)
             m_prev = tl.load(INITIAL + 3 * state_stride + unit, valid, 0).to(tl.float32)
     return gi, gf, gz, go, dsh, dsc, dsn, c_prev, n_prev, m_prev
+
+
+@triton.jit
+def _fused_gates(WX, HPREV, rows, row_valid, head, pre, valid, t, T, hd,
+                 r_i1, r_f1, r_z1, r_o1, r_i2, r_f2, r_z2, r_o2, rc1, rc2, b_i, b_f, b_z, b_o,
+                 H: tl.constexpr, D: tl.constexpr, S: tl.constexpr, BM: tl.constexpr, K1: tl.constexpr,
+                 K2: tl.constexpr, FUSE: tl.constexpr):
+    """Gate preactivations of step t for this CTA's units, recomputed in the kernel (FUSE path):
+    Wx_t + R[:, p, :] round(h_{t-1}) + b. HPREV[b, t] holds round(h_{t-1}) in the input dtype (the dR GEMM operand).
+    FUSE = 1: one [BM, S] MMA per gate; FUSE = 2: one [BM, 4S] MMA over the gate-interleaved tile (column 4 p + g)."""
+    src = HPREV + ((rows * T + t) * H + head) * D
+    k1 = tl.arange(0, K1)
+    h1 = tl.load(src[:, None] + k1[None, :], row_valid[:, None] & (k1[None, :] < D), 0)
+    if FUSE == 2:
+        acc = tl.dot(h1, rc1)
+        if K2 > 0:
+            k2 = K1 + tl.arange(0, K2)
+            h2 = tl.load(src[:, None] + k2[None, :], row_valid[:, None] & (k2[None, :] < D), 0)
+            acc = tl.dot(h2, rc2, acc)
+        even, odd = tl.split(tl.reshape(acc, (BM, S, 2, 2)))  # column 4 p + 2 a + b -> split b, then a
+        ai, az = tl.split(even)
+        af, ao = tl.split(odd)
+    else:
+        ai = tl.dot(h1, r_i1)
+        af = tl.dot(h1, r_f1)
+        az = tl.dot(h1, r_z1)
+        ao = tl.dot(h1, r_o1)
+        if K2 > 0:
+            k2 = K1 + tl.arange(0, K2)
+            h2 = tl.load(src[:, None] + k2[None, :], row_valid[:, None] & (k2[None, :] < D), 0)
+            ai = tl.dot(h2, r_i2, ai)
+            af = tl.dot(h2, r_f2, af)
+            az = tl.dot(h2, r_z2, az)
+            ao = tl.dot(h2, r_o2, ao)
+    gi = ai + tl.load(WX + pre, valid, 0).to(tl.float32) + b_i[None, :]
+    gf = af + tl.load(WX + pre + hd, valid, 0).to(tl.float32) + b_f[None, :]
+    gz = az + tl.load(WX + pre + 2 * hd, valid, 0).to(tl.float32) + b_z[None, :]
+    go = ao + tl.load(WX + pre + 3 * hd, valid, 0).to(tl.float32) + b_o[None, :]
+    return gi, gf, gz, go
 
 
 @triton.jit(do_not_specialize=["B", "T", "T_START", "NSTEPS", "FROM_FINAL", "TAIL", "GROUPS", "SLOTS",
@@ -147,10 +191,15 @@ def _rtiled_bw(
     FAST: tl.constexpr = 0,
     DS_C: tl.constexpr = 1,
     DS_N: tl.constexpr = 1,
+    FUSE: tl.constexpr = 0,
 ):
     # FAST (same values, same arithmetic): step t's c/n/m are step t+1's c_{t-1}/n_{t-1}/m_{t-1} (no reload), the
     # next step's pointwise inputs are loaded before this step's barrier, and the c/n history-gradient loads are
     # skipped when DS_C / DS_N say they are zero (an exact +0.0 is added instead).
+    # FUSE (with FAST): PRE carries Wx (input dtype); the bias and round(h_{t-1}) [B, T, H, D] (input dtype) ride
+    # after the exchange buffer in XBUF; each step's gate preactivations are recomputed in the kernel with the row
+    # slice R[:, p, :], issued between the barrier's arrive and its wait so that the extra MMA overlaps the exchange.
+    # FUSE = 1 runs one MMA per gate, FUSE = 2 one MMA over the four gates interleaved (see _fused_gates).
     split = tl.program_id(0)
     slot = tl.program_id(1)
     splits = tl.num_programs(0)
@@ -187,6 +236,40 @@ def _rtiled_bw(
             w_f2 = tl.load(R + hd * D + w2, w2_mask, 0)
             w_z2 = tl.load(R + 2 * hd * D + w2, w2_mask, 0)
             w_o2 = tl.load(R + 3 * hd * D + w2, w2_mask, 0)
+        if FUSE:
+            # Tile [k, p] = R[g, head, p, k]: this CTA's output rows p, every input column k (forward layout).
+            r1 = (head * D + p[None, :]) * D + k1[:, None]
+            r1_mask = p_valid[None, :] & (k1[:, None] < D)
+            if FUSE == 2:
+                # Gate-interleaved tile [k, 4 j + g] = R[g, head, p_j, k].
+                c = tl.arange(0, 4 * S)
+                pc = split * S + c // 4
+                rc = (c % 4) * hd * D + (head * D + pc[None, :]) * D
+                rc1 = tl.load(R + rc + k1[:, None], (pc[None, :] < D) & (k1[:, None] < D), 0)
+                rc2 = rc1
+                if K2 > 0:
+                    rc2 = tl.load(R + rc + k2[:, None], (pc[None, :] < D) & (k2[:, None] < D), 0)
+                r_i1, r_f1, r_z1, r_o1, r_i2, r_f2, r_z2, r_o2 = rc1, rc1, rc1, rc1, rc1, rc1, rc1, rc1
+            else:
+                r_i1 = tl.load(R + r1, r1_mask, 0)
+                r_f1 = tl.load(R + hd * D + r1, r1_mask, 0)
+                r_z1 = tl.load(R + 2 * hd * D + r1, r1_mask, 0)
+                r_o1 = tl.load(R + 3 * hd * D + r1, r1_mask, 0)
+                r_i2, r_f2, r_z2, r_o2 = r_i1, r_f1, r_z1, r_o1
+                if K2 > 0:
+                    r2 = (head * D + p[None, :]) * D + k2[:, None]
+                    r2_mask = p_valid[None, :] & (k2[:, None] < D)
+                    r_i2 = tl.load(R + r2, r2_mask, 0)
+                    r_f2 = tl.load(R + hd * D + r2, r2_mask, 0)
+                    r_z2 = tl.load(R + 2 * hd * D + r2, r2_mask, 0)
+                    r_o2 = tl.load(R + 3 * hd * D + r2, r2_mask, 0)
+                rc1, rc2 = r_i1, r_i1
+            bias_base = XBUF + SLOTS * 2 * BM * 4 * D + head * D + p
+            b_i = tl.load(bias_base, p_valid, 0).to(tl.float32)
+            b_f = tl.load(bias_base + hd, p_valid, 0).to(tl.float32)
+            b_z = tl.load(bias_base + 2 * hd, p_valid, 0).to(tl.float32)
+            b_o = tl.load(bias_base + 3 * hd, p_valid, 0).to(tl.float32)
+            HPREV = XBUF + SLOTS * 2 * BM * 4 * D + 4 * hd
         if FROM_FINAL != 0:
             dh_in = tl.load(DFINAL + unit, valid, 0)
             dc = tl.load(DFINAL + state_stride + unit, valid, 0)
@@ -204,7 +287,12 @@ def _rtiled_bw(
             pre0 = ((rows[:, None] * T + T_START) * 4 * H + head) * D + p[None, :]
             q_gi, q_gf, q_gz, q_go, q_dh, q_dc, q_dn, q_cp, q_np, q_mp = _step_inputs(
                 PRE, STATES, INITIAL, DSTATES, here0, pre0, unit, valid, T_START, hd, state_stride, history_stride,
-                SLSTM, DS_C, DS_N)
+                SLSTM, DS_C, DS_N, FUSE)
+            if FUSE:
+                q_gi, q_gf, q_gz, q_go = _fused_gates(
+                    PRE, HPREV, rows, row_valid, head, pre0, valid, T_START, T, hd,
+                    r_i1, r_f1, r_z1, r_o1, r_i2, r_f2, r_z2, r_o2, rc1, rc2, b_i, b_f, b_z, b_o,
+                    H, D, S, BM, K1, K2, FUSE)
             q_ct = tl.load(STATES + history_stride + here0, valid, 0)
             q_nt = q_ct * 0.0 + 1.0
             q_mt = q_ct * 0.0
@@ -293,34 +381,72 @@ def _rtiled_bw(
             tl.store(DG + pre + hd, d_f, valid)
             tl.store(DG + pre + 2 * hd, d_z, valid)
             tl.store(DG + pre + 3 * hd, d_o, valid)
-            if FAST:
+            if FUSE:
+                # Publish dG, arrive, compute the next step's inputs (incl. its gate preactivations), then wait.
+                if PERSISTENT != 0:
+                    parity = bars % 2
+                    if VERIFY & V_BROKEN_SINGLE:
+                        parity = 0
+                    write = XBUF + ((slot * 2 + parity) * BM + local[:, None]) * (4 * D) + p[None, :]
+                    if VERIFY & V_DELAY:
+                        _verify_delay(seed, split + splits * slot, group, t, 0)
+                    if VERIFY & V_BROKEN_ARRIVE_FIRST:
+                        bars += 1
+                        _group_arrive(SYNC, slot)
+                    tl.store(write, d_i.to(dtype), p_valid[None, :])
+                    tl.store(write + D, d_f.to(dtype), p_valid[None, :])
+                    tl.store(write + 2 * D, d_z.to(dtype), p_valid[None, :])
+                    tl.store(write + 3 * D, d_o.to(dtype), p_valid[None, :])
+                    if VERIFY & V_BROKEN_ARRIVE_FIRST:
+                        pass
+                    elif VERIFY & V_BROKEN_NO_BARRIER:
+                        bars += 1
+                    else:
+                        bars += 1
+                        _group_arrive(SYNC, slot)
                 if index + 1 < NSTEPS:
-                    # Next step's inputs, issued before this step's exchange so their latency hides behind it.
                     q_ct, q_nt, q_mt = c_prev, q_np, q_mp
                     q_gi, q_gf, q_gz, q_go, q_dh, q_dc, q_dn, q_cp, q_np, q_mp = _step_inputs(
                         PRE, STATES, INITIAL, DSTATES, here - hd, pre - 4 * hd, unit, valid, t - 1, hd, state_stride,
-                        history_stride, SLSTM, DS_C, DS_N)
-            if PERSISTENT != 0:
-                parity = bars % 2
-                if VERIFY & V_BROKEN_SINGLE:
-                    parity = 0
-                write = XBUF + ((slot * 2 + parity) * BM + local[:, None]) * (4 * D) + p[None, :]
-                if VERIFY & V_DELAY:
-                    _verify_delay(seed, split + splits * slot, group, t, 0)
-                if VERIFY & V_BROKEN_ARRIVE_FIRST:
-                    bars += 1
-                    _group_barrier(SYNC, slot, bars * splits, ERR, SPIN)
-                tl.store(write, d_i.to(dtype), p_valid[None, :])
-                tl.store(write + D, d_f.to(dtype), p_valid[None, :])
-                tl.store(write + 2 * D, d_z.to(dtype), p_valid[None, :])
-                tl.store(write + 3 * D, d_o.to(dtype), p_valid[None, :])
-                if VERIFY & V_BROKEN_ARRIVE_FIRST:
-                    pass
-                elif VERIFY & V_BROKEN_NO_BARRIER:
-                    bars += 1
-                else:
-                    bars += 1
-                    _group_barrier(SYNC, slot, bars * splits, ERR, SPIN)
+                        history_stride, SLSTM, DS_C, DS_N, FUSE)
+                    q_gi, q_gf, q_gz, q_go = _fused_gates(
+                        PRE, HPREV, rows, row_valid, head, pre - 4 * hd, valid, t - 1, T, hd,
+                        r_i1, r_f1, r_z1, r_o1, r_i2, r_f2, r_z2, r_o2, rc1, rc2, b_i, b_f, b_z, b_o,
+                        H, D, S, BM, K1, K2, FUSE)
+                if PERSISTENT != 0:
+                    if VERIFY & V_BROKEN_NO_BARRIER:
+                        pass
+                    else:
+                        _group_wait(SYNC, slot, bars * splits, ERR, SPIN)
+            else:
+                if FAST:
+                    if index + 1 < NSTEPS:
+                        # Next step's inputs, issued before this step's exchange so their latency hides behind it.
+                        q_ct, q_nt, q_mt = c_prev, q_np, q_mp
+                        q_gi, q_gf, q_gz, q_go, q_dh, q_dc, q_dn, q_cp, q_np, q_mp = _step_inputs(
+                            PRE, STATES, INITIAL, DSTATES, here - hd, pre - 4 * hd, unit, valid, t - 1, hd, state_stride,
+                            history_stride, SLSTM, DS_C, DS_N)
+                if PERSISTENT != 0:
+                    parity = bars % 2
+                    if VERIFY & V_BROKEN_SINGLE:
+                        parity = 0
+                    write = XBUF + ((slot * 2 + parity) * BM + local[:, None]) * (4 * D) + p[None, :]
+                    if VERIFY & V_DELAY:
+                        _verify_delay(seed, split + splits * slot, group, t, 0)
+                    if VERIFY & V_BROKEN_ARRIVE_FIRST:
+                        bars += 1
+                        _group_barrier(SYNC, slot, bars * splits, ERR, SPIN)
+                    tl.store(write, d_i.to(dtype), p_valid[None, :])
+                    tl.store(write + D, d_f.to(dtype), p_valid[None, :])
+                    tl.store(write + 2 * D, d_z.to(dtype), p_valid[None, :])
+                    tl.store(write + 3 * D, d_o.to(dtype), p_valid[None, :])
+                    if VERIFY & V_BROKEN_ARRIVE_FIRST:
+                        pass
+                    elif VERIFY & V_BROKEN_NO_BARRIER:
+                        bars += 1
+                    else:
+                        bars += 1
+                        _group_barrier(SYNC, slot, bars * splits, ERR, SPIN)
         if TAIL != 0:
             if PERSISTENT != 0:
                 parity = (bars + 1) % 2
@@ -349,6 +475,26 @@ def _rtiled_bw(
             tl.store(CARRY + unit, dc, valid)
             if SLSTM:
                 tl.store(CARRY + state_stride + unit, dn, valid)
+
+
+def rounded_hidden(wx, initial, history, out=None):
+    """round(h_{t-1}) for every step [B, T, H, D] in the input dtype (the forward MMA operand)."""
+    batch, steps, gates, heads, width = wx.shape
+    h_prev = torch.empty((batch, steps, heads, width), device=wx.device, dtype=wx.dtype) if out is None else out
+    h_prev[:, :1] = initial[0]
+    h_prev[:, 1:] = history[0][:, :-1]
+    return h_prev
+
+
+def fused_buffer(slots, wx, bias, initial, history):
+    """Exchange buffer of the FUSE kernel: [exchange (SLOTS, 2, 16, 4D) | bias (4, H, D) | round(h_{t-1}) (B, T, H, D)],
+    all in the input dtype; returns the flat buffer and the round(h_{t-1}) view (also the dR GEMM operand)."""
+    batch, steps, gates, heads, width = wx.shape
+    exchange, hd = slots * 2 * 16 * 4 * width, heads * width
+    buf = torch.empty((exchange + 4 * hd + batch * steps * hd,), device=wx.device, dtype=wx.dtype)
+    buf[exchange:exchange + 4 * hd] = bias.reshape(-1)
+    h_prev = rounded_hidden(wx, initial, history, buf[exchange + 4 * hd:].view(batch, steps, heads, width))
+    return buf, h_prev
 
 
 def preactivations(wx, recurrent, bias, initial, history, tf32=False):
@@ -415,6 +561,7 @@ def backward(
     diagnostics: dict[str, object] | None = None,
     _verify: dict[str, object] | None = None,
     fast: bool = False,
+    fuse_pre: bool | int = False,
     history_grad_components: tuple[bool, ...] | None = None,
     tf32: bool = False,
 ):
@@ -424,7 +571,10 @@ def backward(
     gradients of the history and of the final carry (zeros where a component is unused).
     ``fast`` selects the bitwise-identical kernel variant (no reload of the step's c/n/m, next-step inputs loaded
     before the barrier); ``history_grad_components`` (h, c, n) lets it skip history-gradient components that are
-    zero. ``tf32`` runs the preactivation and dR GEMMs with TF32 (not bitwise identical).
+    zero. ``tf32`` runs the preactivation and dR GEMMs with TF32 (not bitwise identical). ``fuse_pre`` (with ``fast``)
+    recomputes the gate preactivations inside the kernel between the barrier's arrive and wait instead of a separate
+    GEMM (not bitwise identical to the GEMM path); 1 (or True) runs one MMA per gate, 2 one MMA over the four
+    gates interleaved.
     """
     if sync not in ("grid", "launch"):
         raise ValueError("sync must be grid or launch")
@@ -458,16 +608,25 @@ def backward(
     events = [torch.cuda.Event(enable_timing=True) for _ in range(4)] if (diagnostics or {}).get("time") else None
     if events:
         events[0].record()
-    pre, h_prev = preactivations(wx, recurrent, bias, initial, history, tf32)
-    if events:
-        events[1].record()
+    fuse = int(fuse_pre)
+    if fuse not in (0, 1, 2):
+        raise ValueError("fuse_pre must be 0/False, 1/True or 2")
+    if fuse and not fast:
+        raise ValueError("fuse_pre needs the fast kernel variant")
     sms = torch.cuda.get_device_properties(device).multi_processor_count
     splits, groups, slots = plan(batch, heads, width, slice_width, sms=sms, max_ctas=max_ctas)
+    if fuse:  # preactivations are recomputed in the kernel; bias and round(h_{t-1}) ride behind the exchange buffer
+        xbuf, h_prev = fused_buffer(slots, wx, bias, initial, history)
+        pre = wx
+    else:
+        pre, h_prev = preactivations(wx, recurrent, bias, initial, history, tf32)
+        xbuf = torch.empty((slots, 2, 16, 4 * width), device=device, dtype=wx.dtype)
+    if events:
+        events[1].record()
     k1, k2 = k_parts(width, pad_k)
     dg = torch.empty((batch, steps, 4, heads, width), device=device, dtype=torch.float32)
     d_init = torch.empty((states, batch, 1, heads, width), device=device, dtype=torch.float32)
     carry = torch.zeros((2, batch, heads, width), device=device, dtype=torch.float32)
-    xbuf = torch.empty((slots, 2, 16, 4 * width), device=device, dtype=wx.dtype)
     launches = 1 if sync == "grid" else steps + 1
     sync_counts = torch.zeros((launches, slots), device=device, dtype=torch.int32)
     verify, seed = verify_bits(_verify)
@@ -493,6 +652,7 @@ def backward(
             launch_cooperative_grid=True,
             **(dict(VERIFY=verify) if verify else {}),
             **(dict(FAST=1, DS_C=int(ds[1]), DS_N=int(ds[2])) if fast else {}),
+            **(dict(FUSE=fuse) if fuse else {}),
         )
     if verify:
         counts = err.tolist()

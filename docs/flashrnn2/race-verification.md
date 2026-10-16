@@ -97,3 +97,16 @@ and D 768 S16, eight warps, LSTM and sLSTM:
 * single buffer and skipped barrier: caught under the rule in all four;
 * arrive before store: LSTM caught; sLSTM 9/21 (D 256) and 1/21 (D 768) -- under the 80% rule a weak control -- with no
   changed output in any run (the late store landed before the readers' load) and no silent corruption.
+
+## Fused backward (run fused backward)
+
+The fused-preactivation backward splits the group barrier into arrive and wait and computes the next step's gates in
+between. Same rule (0-65 us delays, one process per variant, eight warps, LSTM and sLSTM), FUSE=2 at D 256/512/768 S16
+and FUSE=1 at D 384 S16:
+
+* correct: 0/21 flagged with outputs bitwise equal to the uninstrumented kernel in all 8 configurations;
+* single buffer and skipped barrier: 21/21 flagged in all 8 (outputs changed in 20-21 of 21 runs);
+* arrive before store: 0/21 flagged and no output changed in any configuration. With the split barrier this variant
+  only moves the arrive before the four stores that follow it directly, while the peers still wait for every arrival
+  and then spend the recompute before they read; the injected delay sits before the arrive, so it never opens that
+  window. The control is not informative for this path; no run changed its output silently.

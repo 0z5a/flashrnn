@@ -1,6 +1,6 @@
 # FlashRNN2 training path: R-tiled backward
 
-Status: implemented and qualified on H100 (168/168 cases); training step timed against FlashRNN1 (faster at B = 64, slower at B = 16).
+Status: implemented and qualified on H100 (168/168 cases, plus 186/186 for the fused recompute); training step timed against FlashRNN1 (faster at B = 64, at most 14% slower at B = 16, faster at LSTM D = 256).
 
 ## Contract
 
@@ -209,3 +209,72 @@ were not in the 168-case qualification, so they are not the default.
 | TileLang | slstm | 384 | 16 | 0.652 | 0.882 [0.881, 0.883] | 2.933 | TileLang cluster S32 | 16 / 4 |
 | TileLang | slstm | 512 | 16 | 0.647 | 0.892 [0.891, 0.892] | 3.231 | TileLang cluster S32 | 32 / 4 |
 | TileLang | slstm | 768 | 16 | 0.665 | 0.975 [0.974, 0.976] | 3.806 | TileLang grid S16 | 32 / 4 |
+
+## Fused preactivation recompute (run fused backward)
+
+**Change.** `backward(..., fuse_pre=1|2)` (needs `fast`) drops the separate preactivation GEMM: each CTA also holds
+the row slice R[:, p, :] in shared memory and recomputes Wx_t + R round(h_{t-1}) + b for the next step between the
+split barrier's arrive and its wait. round(h_{t-1}) (input dtype, also the dR GEMM operand) and the bias ride behind
+the exchange buffer, so the kernel signature is unchanged and `FUSE=0` compiles to the qualified PTX (base and fast
+variants, `tools/verify_ptx_unchanged.py`). `FUSE=1` runs one [BM, S] MMA per gate; `FUSE=2` one [BM, 4S] MMA over
+the gate-interleaved row slice (column 4p + g), which removes the four-fold duplicated MMAs of N = 16 tiles and the
+shared live operand: in-loop spill instructions at D = 384/512, S16, eight warps went from 234/83 (first version) to
+0/5. Both R slices must fit in shared memory: S32 fits up to D = 384, D = 512/768 need S16.
+
+**Qualification and admission** (pre-registered: a level enters selection only if all its qualification cases pass,
+its race 'correct' groups are clean and every sanitizer run reports 0 errors):
+
+| level | qualification | gradient error vs FP64 (worst) | race, correct kernel | sanitizer |
+| --- | --- | --- | --- | --- |
+| FUSE=1 (S16, 4/8 warps) | 60/60 | FP16 3.2e-4, BF16 2.4e-3 | 2/2 configurations, 0/21 flagged, bitwise | 8/8 clean |
+| FUSE=2 (S16/S32, 4/8 warps) | 126/126 | FP16 3.2e-4, BF16 2.4e-3; at most 0.375x FlashRNN1's error | 6/6, 0/21 flagged, bitwise | 8/8 clean |
+
+Both levels were admitted. Gates per case: gradients of two losses against the FP64 oracle, persistent == one launch
+per step bitwise, 20 complete training steps bitwise; the fused kernel is not bitwise to the GEMM path by
+construction, so the vs-base stage does not apply.
+
+**Where the time goes** (D = 384/512, B = 16, TileLang forward, best backward per variant; ms per call):
+
+| cell, D, T | unfused: GEMM / kernel / dR | fused: round(h) copy / kernel / dR | FlashRNN1 step |
+| --- | --- | --- | --- |
+| LSTM 384, 256 | 0.184 / 1.471 / 0.117 | 0.064 / 1.842 / 0.116 | 2.666 |
+| LSTM 512, 256 | 0.233 / 1.662 / 0.147 | 0.066 / 1.890 / 0.144 | 2.981 |
+| sLSTM 384, 256 | 0.183 / 1.726 / 0.118 | 0.064 / 1.938 / 0.116 | 2.809 |
+| sLSTM 512, 256 | 0.230 / 1.779 / 0.145 | 0.062 / 1.999 / 0.142 | 3.065 |
+
+Fusion removes the GEMM (0.12-0.17 ms, 0.5-0.65 us per step at T = 256) but adds 0.8-1.45 us per step to the
+kernel: at one batch tile per group the recompute does not hide behind the exchange, it lengthens the sequential
+chain. With four times the rows (B = 64) the GEMM it replaces is larger and the fused step wins.
+
+**Timing** (split-0 selection, frozen table, split-1 5 starts x 20 ABBA/BAAB blocks, FP16, T = 256; role frnn2 =
+unfused + admitted fused candidates; FUSE=2 beat FUSE=1 in every fused selection):
+
+| comparison | result |
+| --- | --- |
+| FlashRNN2 vs FlashRNN1, B = 16, TileLang forward | LSTM 0.985 / **1.048** / 0.911 / 0.888 / 0.971; sLSTM 0.986 / 0.984 / 0.897 / 0.892 / 0.971 (D 192 / 256 / 384 / 512 / 768) |
+| FlashRNN2 vs FlashRNN1, B = 16, Triton forward | 0.785-0.917 |
+| FlashRNN2 vs FlashRNN1, B = 64 | LSTM 1.39-1.91x, sLSTM 1.49-1.89x (fused selected at D 192-512) |
+| fused vs unfused, B = 16, TileLang forward | LSTM 0.944 / **1.044** / 0.932 / 1.003 / 0.964; sLSTM 0.960 / **1.024** / 0.986 / 1.001 / 0.943 |
+| fused vs unfused, B = 16, Triton forward | 0.939-1.009 |
+| fused vs unfused, B = 64 | D 192-512: 1.02-1.15x faster; D 768: 0.78x / 0.77x (fused is limited to S16 there) |
+
+Lower 95% bounds and every selected configuration are in `evidence/flashrnn2-rtiled/fuse/analysis`.
+
+**Pre-registered criterion: B = 16 is still not fixed** (TileLang environment: only LSTM D = 256 has a lower bound
+>= 1; D = 384/512 remain 9-14% behind); B = 64 does not regress and improves (lower bounds 1.35-1.91). **Default rule**
+(fused-vs-unfused lower bound >= 1 at B = 16 in the TileLang environment for both cells; all batch sizes if B = 64 is
+not slower): it holds only at D = 256, so `training.backward_defaults` now runs `fuse_pre=2`, slice 16, four warps
+there, and the unfused fast + TF32 kernel elsewhere. The data would also support the fused kernel at B = 64 for
+D = 192-512, but that is not what the rule tested, so it is not a default.
+
+**What this says about the rest of the B = 16 gap.** With the preactivation GEMM gone, the step at D = 384/512 is
+dominated by the backward kernel's sequential chain (1.5-1.8 ms of a 2.8-3.3 ms step at T = 256). Each step there
+reduces over all four gates for dh with N = 16 output tiles, which the MMA layout replicates across warps; a split-K
+over warps or a wider output tile per CTA is the next candidate. Not attempted here.
+
+**Storage incident.** Run fused backward v1 (stopped: storage quota) stopped after 6 minutes in the FlashRNN1 prebuild with EDQUOT: the group scratch
+quota was at its hard limit while `df` still showed free bytes (the 4.4 GB in the quota report is the 'in doubt'
+column). Partial outputs were archived. Run fused backward ran the same sealed source and plan from home storage, with an
+admission check that parses the quota headroom and writes a 50 MB probe. The plan's admission text cites the
+qualification of the unfused candidates under a run id that is not one of this work's runs (a typo); the runs meant
+are the backward qualification and the B = 16 fix confirmation above.

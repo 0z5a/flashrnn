@@ -24,16 +24,20 @@ for _name in ("V_CHECK", "V_DELAY", "V_BROKEN_SINGLE", "V_BROKEN_NO_BARRIER", "V
     setattr(triton_rtiled_bw, _name, int(getattr(triton_rtiled_bw, _name)))
 
 
-def run_kernel(wx, r, b, init, hist, d_hist, d_final, cell, slice_width, fast=None):
+def run_kernel(wx, r, b, init, hist, d_hist, d_final, cell, slice_width, fast=None, fuse=False):
     batch, steps, _, heads, width = wx.shape
     states = init.shape[0]
-    pre, h_prev = triton_rtiled_bw.preactivations(wx, r, b, init, hist)
     splits, groups, slots = plan(batch, heads, width, slice_width, sms=132)
+    if fuse:
+        xbuf, h_prev = triton_rtiled_bw.fused_buffer(slots, wx.contiguous(), b, init, hist)
+        pre = wx.contiguous()
+    else:
+        pre, h_prev = triton_rtiled_bw.preactivations(wx, r, b, init, hist)
+        xbuf = torch.zeros((slots, 2, 16, 4 * width), dtype=wx.dtype)
     k1, k2 = k_parts(width)
     dg = torch.zeros((batch, steps, 4, heads, width), dtype=torch.float32)
     d_init = torch.zeros((states, batch, 1, heads, width), dtype=torch.float32)
     carry = torch.zeros((2, batch, heads, width), dtype=torch.float32)
-    xbuf = torch.zeros((slots, 2, 16, 4 * width), dtype=wx.dtype)
     sync = torch.zeros((slots,), dtype=torch.int32)
     err = torch.zeros((1,), dtype=torch.int32)
     for index in range(steps + 1):
@@ -45,7 +49,8 @@ def run_kernel(wx, r, b, init, hist, d_hist, d_final, cell, slice_width, fast=No
             pre, hist, init, d_hist, d_final, r, dg, d_init, carry, xbuf, sync, err,
             batch, steps, t_start, nsteps, from_final, tail, groups, slots, 0,
             heads, width, cell == "slstm", 16, slice_width, k1, k2, SPIN_LIMIT,
-            **(dict(FAST=1, DS_C=int(fast[0]), DS_N=int(fast[1])) if fast else {}))
+            **(dict(FAST=1, DS_C=int(fast[0]), DS_N=int(fast[1])) if fast else {}),
+            **(dict(FUSE=int(fuse)) if fuse else {}))
     d_r, d_b = triton_rtiled_bw.weight_gradients(dg, h_prev)
     return [dg, d_r, d_b, d_init]
 
@@ -91,6 +96,16 @@ def case(cell, init_mode, batch, steps, heads, width, slice_width, seed):
             a, e = a[:3], e[:3]
         out[name] = dict(rel_fro=((a - e).norm() / e.norm().clamp_min(1e-300)).item(),
                          max_abs_scaled=((a - e).abs().max() / e.abs().max().clamp_min(1e-300)).item())
+    # The FUSE variant recomputes the preactivations in the kernel: compared with the FP64 oracle like the base.
+    for fuse in (1, 2):
+        fused = run_kernel(wx, r, b, init, hist64.detach().float().contiguous(), d_hist, d_final, cell, slice_width,
+                           (1, 1), fuse=fuse)
+        for name, a, e in zip(["d_wx", "d_r", "d_bias", "d_init"], fused, ref):
+            a, e = a.double(), e.double()
+            if name == "d_init" and cell == "slstm":
+                a, e = a[:3], e[:3]
+            out[f"fused{fuse}_{name}"] = dict(rel_fro=((a - e).norm() / e.norm().clamp_min(1e-300)).item(),
+                                              max_abs_scaled=((a - e).abs().max() / e.abs().max().clamp_min(1e-300)).item())
     out.update(out_fast)
     return out
 
