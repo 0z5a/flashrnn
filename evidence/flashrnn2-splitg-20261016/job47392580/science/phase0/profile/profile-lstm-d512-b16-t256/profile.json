@@ -1,0 +1,244 @@
+{
+ "case": {
+  "cell": "lstm",
+  "dtype": "float16",
+  "width": 512,
+  "batch": 16,
+  "steps": 256,
+  "init": "warm"
+ },
+ "tilelang_env": true,
+ "started": 1792166305.3860416,
+ "fwd": {
+  "triton_default": {
+   "full": 1.522047996520996,
+   "hidden": 1.340000033378601
+  },
+  "triton_s32w4": {
+   "full": 1.3432960510253906,
+   "hidden": 1.2143679857254028
+  },
+  "tilelang": {
+   "full": 1.0911999940872192,
+   "hidden": 1.0707839727401733
+  }
+ },
+ "bw_phases": {
+  "s16w4_fast_tf32": {
+   "ms": {
+    "preactivation": 0.24940800666809082,
+    "kernel": 1.626304030418396,
+    "weight_gradients": 0.14470399916172028
+   },
+   "total": 2.0025599002838135,
+   "vs_base": null
+  },
+  "s16w4_splitg": {
+   "ms": {
+    "preactivation": 0.23296000063419342,
+    "kernel": 2.0038399696350098,
+    "weight_gradients": 0.14419199526309967
+   },
+   "total": 2.3799359798431396,
+   "vs_base": null
+  },
+  "s16w4_fuse2": {
+   "ms": {
+    "preactivation": 0.07791999727487564,
+    "kernel": 1.913856029510498,
+    "weight_gradients": 0.14371199905872345
+   },
+   "total": 2.1059200763702393,
+   "vs_base": null
+  },
+  "s16w8_fast_tf32": {
+   "ms": {
+    "preactivation": 0.24320000410079956,
+    "kernel": 2.230112075805664,
+    "weight_gradients": 0.14441600441932678
+   },
+   "total": 2.61411190032959,
+   "vs_base": null
+  },
+  "s16w8_splitg": {
+   "ms": {
+    "preactivation": 0.23360000550746918,
+    "kernel": 1.2640000581741333,
+    "weight_gradients": 0.14486399292945862
+   },
+   "total": 1.634719967842102,
+   "vs_base": null
+  },
+  "s16w8_fuse2": {
+   "ms": {
+    "preactivation": 0.07161600142717361,
+    "kernel": 2.6179521083831787,
+    "weight_gradients": 0.14339199662208557
+   },
+   "total": 2.8098878860473633,
+   "vs_base": null
+  }
+ },
+ "step": {
+  "triton_default+s16w4_fast_tf32": 3.6970880031585693,
+  "triton_default+s16w4_fuse2": 3.7173759937286377,
+  "triton_default+s16w8_splitg": 3.2642879486083984,
+  "triton_default+s32w8_base": 4.189119815826416,
+  "triton_s32w4+s16w4_fast_tf32": 3.4448320865631104,
+  "triton_s32w4+s16w4_fuse2": 3.4709761142730713,
+  "triton_s32w4+s16w8_splitg": 3.0834240913391113,
+  "triton_s32w4+s32w8_base": 4.017792224884033,
+  "tilelang+s16w4_fast_tf32": 3.1695680618286133,
+  "tilelang+s16w4_fuse2": 3.2006399631500244,
+  "tilelang+s16w8_splitg": 2.8089599609375,
+  "tilelang+s32w8_base": 3.75052809715271
+ },
+ "errors": {
+  "bw_s16w4_fuse2_splitg": "^^^^^\n  File \"/gpfs/scratch/ehpc390/tueb043681/flashrnn2-splitg-20261016/source/flashrnn/flashrnn2/triton_rtiled_bw.py\", line 738, in backward\n    kernel = _rtiled_bw[(splits, slots)](\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/gpfs/scratch/ehpc390/tueb043681/flashrnn2-distributed-20261011-v2/deps36/triton/runtime/jit.py\", line 370, in <lambda>\n    return lambda *args, **kwargs: self.run(grid=grid, warmup=False, *args, **kwargs)\n                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/gpfs/scratch/ehpc390/tueb043681/flashrnn2-distributed-20261011-v2/deps36/triton/runtime/jit.py\", line 743, in run\n    launch_metadata = kernel.launch_metadata(grid, stream, *bound_args.values())\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/gpfs/scratch/ehpc390/tueb043681/flashrnn2-distributed-20261011-v2/deps36/triton/compiler/compiler.py\", line 482, in launch_metadata\n    self._init_handles()\n  File \"/gpfs/scratch/ehpc390/tueb043681/flashrnn2-distributed-20261011-v2/deps36/triton/compiler/compiler.py\", line 456, in _init_handles\n    raise_(OutOfResources(self.metadata.shared, max_shared, \"shared memory\"))\n  File \"/gpfs/scratch/ehpc390/tueb043681/flashrnn2-distributed-20261011-v2/deps36/triton/compiler/compiler.py\", line 448, in raise_\n    raise err\ntriton.runtime.errors.OutOfResources: out of resource: shared memory, Required: 262144, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.\n",
+  "bw_s16w8_fuse2_splitg": "^^^^^\n  File \"/gpfs/scratch/ehpc390/tueb043681/flashrnn2-splitg-20261016/source/flashrnn/flashrnn2/triton_rtiled_bw.py\", line 738, in backward\n    kernel = _rtiled_bw[(splits, slots)](\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/gpfs/scratch/ehpc390/tueb043681/flashrnn2-distributed-20261011-v2/deps36/triton/runtime/jit.py\", line 370, in <lambda>\n    return lambda *args, **kwargs: self.run(grid=grid, warmup=False, *args, **kwargs)\n                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/gpfs/scratch/ehpc390/tueb043681/flashrnn2-distributed-20261011-v2/deps36/triton/runtime/jit.py\", line 743, in run\n    launch_metadata = kernel.launch_metadata(grid, stream, *bound_args.values())\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/gpfs/scratch/ehpc390/tueb043681/flashrnn2-distributed-20261011-v2/deps36/triton/compiler/compiler.py\", line 482, in launch_metadata\n    self._init_handles()\n  File \"/gpfs/scratch/ehpc390/tueb043681/flashrnn2-distributed-20261011-v2/deps36/triton/compiler/compiler.py\", line 456, in _init_handles\n    raise_(OutOfResources(self.metadata.shared, max_shared, \"shared memory\"))\n  File \"/gpfs/scratch/ehpc390/tueb043681/flashrnn2-distributed-20261011-v2/deps36/triton/compiler/compiler.py\", line 448, in raise_\n    raise err\ntriton.runtime.errors.OutOfResources: out of resource: shared memory, Required: 262144, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.\n"
+ },
+ "phases": {
+  "s16w4_fast_tf32": {
+   "names": [
+    "dh",
+    "pointwise",
+    "publish",
+    "barrier"
+   ],
+   "mean_ns": [
+    3422.03515625,
+    804.390625,
+    699.875,
+    1277.8203125
+   ],
+   "max_ns": [
+    3437.625,
+    810.75,
+    715.75,
+    1301.125
+   ],
+   "kernel_ms": 1.6910079717636108,
+   "steps": 256,
+   "unprofiled_kernel_ms": 1.626304030418396
+  },
+  "s16w4_splitg": {
+   "names": [
+    "dh",
+    "pointwise",
+    "publish",
+    "barrier"
+   ],
+   "mean_ns": [
+    4153.9921875,
+    354.09375,
+    1159.34375,
+    1172.75390625
+   ],
+   "max_ns": [
+    4201.5,
+    359.125,
+    1183.75,
+    1252.625
+   ],
+   "kernel_ms": 1.8377599716186523,
+   "steps": 256,
+   "unprofiled_kernel_ms": 2.0038399696350098
+  },
+  "s16w4_fuse2": {
+   "names": [
+    "dh",
+    "pointwise",
+    "publish",
+    "barrier"
+   ],
+   "mean_ns": [
+    3546.60546875,
+    827.69921875,
+    2552.25390625,
+    414.93359375
+   ],
+   "max_ns": [
+    3567.375,
+    919.0,
+    2608.375,
+    479.875
+   ],
+   "kernel_ms": 2.051584005355835,
+   "steps": 256,
+   "unprofiled_kernel_ms": 1.913856029510498
+  },
+  "s16w8_fast_tf32": {
+   "names": [
+    "dh",
+    "pointwise",
+    "publish",
+    "barrier"
+   ],
+   "mean_ns": [
+    5563.42578125,
+    1010.51171875,
+    1048.78125,
+    1288.890625
+   ],
+   "max_ns": [
+    5575.125,
+    1017.0,
+    1078.5,
+    1335.625
+   ],
+   "kernel_ms": 2.392224073410034,
+   "steps": 256,
+   "unprofiled_kernel_ms": 2.230112075805664
+  },
+  "s16w8_splitg": {
+   "names": [
+    "dh",
+    "pointwise",
+    "publish",
+    "barrier"
+   ],
+   "mean_ns": [
+    2681.1171875,
+    235.9375,
+    643.88671875,
+    1279.54296875
+   ],
+   "max_ns": [
+    2706.875,
+    239.75,
+    662.0,
+    1326.25
+   ],
+   "kernel_ms": 1.3056000471115112,
+   "steps": 256,
+   "unprofiled_kernel_ms": 1.2640000581741333
+  },
+  "s16w8_fuse2": {
+   "names": [
+    "dh",
+    "pointwise",
+    "publish",
+    "barrier"
+   ],
+   "mean_ns": [
+    5600.83203125,
+    1019.4140625,
+    2555.94921875,
+    416.5
+   ],
+   "max_ns": [
+    5627.375,
+    1026.125,
+    2581.75,
+    464.5
+   ],
+   "kernel_ms": 2.657952070236206,
+   "steps": 256,
+   "unprofiled_kernel_ms": 2.6179521083831787
+  }
+ },
+ "v1_fwd": 1.102720022201538,
+ "v1_step": 2.957184076309204,
+ "v1_status": "AVAILABLE",
+ "finished": 1792166367.3525934
+}

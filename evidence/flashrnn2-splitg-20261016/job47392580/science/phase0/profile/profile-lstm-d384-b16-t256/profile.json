@@ -1,0 +1,305 @@
+{
+ "case": {
+  "cell": "lstm",
+  "dtype": "float16",
+  "width": 384,
+  "batch": 16,
+  "steps": 256,
+  "init": "warm"
+ },
+ "tilelang_env": true,
+ "started": 1792166240.653186,
+ "fwd": {
+  "triton_default": {
+   "full": 1.375167965888977,
+   "hidden": 1.1055999994277954
+  },
+  "triton_s32w4": {
+   "full": 1.14137601852417,
+   "hidden": 0.8773120045661926
+  },
+  "tilelang": {
+   "full": 0.9813439846038818,
+   "hidden": 0.8967679738998413
+  }
+ },
+ "bw_phases": {
+  "s16w4_fast_tf32": {
+   "ms": {
+    "preactivation": 0.18822400271892548,
+    "kernel": 1.467039942741394,
+    "weight_gradients": 0.1181119978427887
+   },
+   "total": 1.7598079442977905,
+   "vs_base": null
+  },
+  "s16w4_splitg": {
+   "ms": {
+    "preactivation": 0.1796479970216751,
+    "kernel": 1.1656320095062256,
+    "weight_gradients": 0.11776000261306763
+   },
+   "total": 1.4524480104446411,
+   "vs_base": null
+  },
+  "s16w4_fuse2": {
+   "ms": {
+    "preactivation": 0.06307200342416763,
+    "kernel": 1.849984049797058,
+    "weight_gradients": 0.11584000289440155
+   },
+   "total": 2.0160319805145264,
+   "vs_base": null
+  },
+  "s16w4_fuse2_splitg": {
+   "ms": {
+    "preactivation": 0.0679360032081604,
+    "kernel": 1.5158720016479492,
+    "weight_gradients": 0.11558400094509125
+   },
+   "total": 1.6766079664230347,
+   "vs_base": null
+  },
+  "s16w8_fast_tf32": {
+   "ms": {
+    "preactivation": 0.1894720047712326,
+    "kernel": 1.90665602684021,
+    "weight_gradients": 0.11823999881744385
+   },
+   "total": 2.1968319416046143,
+   "vs_base": null
+  },
+  "s16w8_splitg": {
+   "ms": {
+    "preactivation": 0.18265600502490997,
+    "kernel": 1.1617599725723267,
+    "weight_gradients": 0.11907199770212173
+   },
+   "total": 1.4506880044937134,
+   "vs_base": null
+  },
+  "s16w8_fuse2": {
+   "ms": {
+    "preactivation": 0.06384000182151794,
+    "kernel": 2.227936029434204,
+    "weight_gradients": 0.11635199934244156
+   },
+   "total": 2.3962559700012207,
+   "vs_base": null
+  },
+  "s16w8_fuse2_splitg": {
+   "ms": {
+    "preactivation": 0.06729599833488464,
+    "kernel": 1.4648959636688232,
+    "weight_gradients": 0.11711999773979187
+   },
+   "total": 1.6291520595550537,
+   "vs_base": null
+  }
+ },
+ "step": {
+  "triton_default+s16w4_fast_tf32": 3.3824639320373535,
+  "triton_default+s16w8_splitg": 3.041343927383423,
+  "triton_default+s16w8_fuse2_splitg": 3.1048638820648193,
+  "triton_default+s32w8_base": 3.700160026550293,
+  "triton_s32w4+s16w4_fast_tf32": 3.097759962081909,
+  "triton_s32w4+s16w8_splitg": 2.772671937942505,
+  "triton_s32w4+s16w8_fuse2_splitg": 2.8966400623321533,
+  "triton_s32w4+s32w8_base": 3.48905611038208,
+  "tilelang+s16w4_fast_tf32": 2.7854719161987305,
+  "tilelang+s16w8_splitg": 2.4681921005249023,
+  "tilelang+s16w8_fuse2_splitg": 2.5970559120178223,
+  "tilelang+s32w8_base": 3.1889920234680176
+ },
+ "errors": {},
+ "phases": {
+  "s16w4_fast_tf32": {
+   "names": [
+    "dh",
+    "pointwise",
+    "publish",
+    "barrier"
+   ],
+   "mean_ns": [
+    2856.9270833333335,
+    833.2395833333334,
+    695.9375,
+    1216.984375
+   ],
+   "max_ns": [
+    2885.25,
+    837.5,
+    748.5,
+    1264.25
+   ],
+   "kernel_ms": 1.5531519651412964,
+   "steps": 256,
+   "unprofiled_kernel_ms": 1.467039942741394
+  },
+  "s16w4_splitg": {
+   "names": [
+    "dh",
+    "pointwise",
+    "publish",
+    "barrier"
+   ],
+   "mean_ns": [
+    1884.15625,
+    334.953125,
+    707.0989583333334,
+    1252.3645833333333
+   ],
+   "max_ns": [
+    1908.75,
+    338.875,
+    722.375,
+    1283.0
+   ],
+   "kernel_ms": 1.1916160583496094,
+   "steps": 256,
+   "unprofiled_kernel_ms": 1.1656320095062256
+  },
+  "s16w4_fuse2": {
+   "names": [
+    "dh",
+    "pointwise",
+    "publish",
+    "barrier"
+   ],
+   "mean_ns": [
+    3152.6927083333335,
+    826.9166666666666,
+    2734.2916666666665,
+    478.5833333333333
+   ],
+   "max_ns": [
+    3182.5,
+    834.375,
+    2780.375,
+    511.0
+   ],
+   "kernel_ms": 2.0162880420684814,
+   "steps": 256,
+   "unprofiled_kernel_ms": 1.849984049797058
+  },
+  "s16w4_fuse2_splitg": {
+   "names": [
+    "dh",
+    "pointwise",
+    "publish",
+    "barrier"
+   ],
+   "mean_ns": [
+    2318.4322916666665,
+    368.390625,
+    2437.6145833333335,
+    367.3020833333333
+   ],
+   "max_ns": [
+    2371.625,
+    371.625,
+    2460.125,
+    390.625
+   ],
+   "kernel_ms": 1.5727039575576782,
+   "steps": 256,
+   "unprofiled_kernel_ms": 1.5158720016479492
+  },
+  "s16w8_fast_tf32": {
+   "names": [
+    "dh",
+    "pointwise",
+    "publish",
+    "barrier"
+   ],
+   "mean_ns": [
+    4422.864583333333,
+    1001.3489583333334,
+    612.0572916666666,
+    1291.6510416666667
+   ],
+   "max_ns": [
+    4438.25,
+    1007.75,
+    631.25,
+    1339.5
+   ],
+   "kernel_ms": 2.021183967590332,
+   "steps": 256,
+   "unprofiled_kernel_ms": 1.90665602684021
+  },
+  "s16w8_splitg": {
+   "names": [
+    "dh",
+    "pointwise",
+    "publish",
+    "barrier"
+   ],
+   "mean_ns": [
+    2308.5572916666665,
+    241.93229166666666,
+    631.3385416666666,
+    1301.984375
+   ],
+   "max_ns": [
+    2328.875,
+    248.0,
+    646.0,
+    1338.875
+   ],
+   "kernel_ms": 1.2691839933395386,
+   "steps": 256,
+   "unprofiled_kernel_ms": 1.1617599725723267
+  },
+  "s16w8_fuse2": {
+   "names": [
+    "dh",
+    "pointwise",
+    "publish",
+    "barrier"
+   ],
+   "mean_ns": [
+    4435.572916666667,
+    1028.125,
+    2425.3020833333335,
+    409.4427083333333
+   ],
+   "max_ns": [
+    4455.375,
+    1034.75,
+    2446.0,
+    445.375
+   ],
+   "kernel_ms": 2.3181118965148926,
+   "steps": 256,
+   "unprofiled_kernel_ms": 2.227936029434204
+  },
+  "s16w8_fuse2_splitg": {
+   "names": [
+    "dh",
+    "pointwise",
+    "publish",
+    "barrier"
+   ],
+   "mean_ns": [
+    2385.4791666666665,
+    256.359375,
+    2478.1510416666665,
+    415.3854166666667
+   ],
+   "max_ns": [
+    2427.25,
+    262.25,
+    2502.0,
+    449.875
+   ],
+   "kernel_ms": 1.5763520002365112,
+   "steps": 256,
+   "unprofiled_kernel_ms": 1.4648959636688232
+  }
+ },
+ "v1_fwd": 1.0006400346755981,
+ "v1_step": 2.6425280570983887,
+ "v1_status": "AVAILABLE",
+ "finished": 1792166310.1896765
+}

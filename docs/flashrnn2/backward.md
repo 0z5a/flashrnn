@@ -1,6 +1,6 @@
 # FlashRNN2 training path: R-tiled backward
 
-Status: implemented and qualified on H100 (168/168 cases, plus 186/186 for the fused recompute); training step timed against FlashRNN1 (faster at B = 64, at most 14% slower at B = 16, faster at LSTM D = 256).
+Status: implemented and qualified on H100 (168/168 cases, plus 186/186 for the fused recompute and 192/192 for the gate-batched dh reduction); training step faster than FlashRNN1 at B = 16 and B = 64 for D = 192-768 (TileLang forward at B = 16).
 
 ## Contract
 
@@ -278,3 +278,58 @@ column). Partial outputs were archived. Job 47369272 ran the same sealed source 
 admission check that parses the quota headroom and writes a 50 MB probe. The plan's admission text cites the
 qualification of the unfused candidates under a run id that is not one of this work's runs (a typo); the runs meant
 are the backward qualification and the B = 16 fix confirmation above.
+
+## Gate-batched dh reduction (job 47392580): B = 16 fixed
+
+**Where the step went** (in-kernel phase timing, `PROF` build: `%globaltimer` behind block barriers at the phase
+boundaries, per step, mean over CTAs; the profiled kernel time is mostly within 10% of the unprofiled one, two
+four-warp SPLITG rows had unstable unprofiled times). The dh reduction —
+loading the exchanged dG of every CTA and the four-gate MMA — was the largest phase: LSTM D = 384, slice 16, four
+warps: dh 2.86 us, pointwise 0.83, publish 0.70, barrier 1.22 (5.60 us per step); with eight warps dh is 4.42 us,
+and at D = 768 8.27 us. The MMA layout put every warp on the same [16, 16] output tile (`warpsPerCTA [4, 1]`), so
+the four (or eight) warps repeated the same reduction. The fused recompute's cost shows up the same way: its publish
+phase grows to 2.0-3.4 us while the barrier it was meant to hide behind is only 0.4-1.3 us.
+
+**Change.** `split_gates=True` (`SPLITG`) runs the reduction as one gate-batched MMA, [4, BM, K] x [4, K, S], and
+sums over the gate axis: the warps sit on the gate axis (`warpsPerCTA [4, 1, 1]`), in-loop HMMA per warp drops
+4x (D = 384: 384 -> 96, D = 512: 512 -> 128) and in-loop block barriers 71 -> 21. The R tiles take twice the shared
+memory: SPLITG fits at slice 16 up to D = 768 (and slice 32 up to D = 256), SPLITG + FUSE=2 up to D = 384. The
+summation order changes, so it is not bitwise to the per-gate accumulation. `SPLITG=0` and `PROF=0` compile to the
+qualified PTX (base, fast and fused).
+
+**Measured phases with SPLITG** (B = 16, T = 256, slice 16; us per step):
+
+| cell, D, warps | dh: before -> SPLITG | pointwise | whole step in the kernel |
+| --- | --- | --- | --- |
+| LSTM 192, 4 | 2.09 -> 1.27 | 0.82 -> 0.34 | 4.60 -> 3.31 |
+| LSTM 384, 8 | 4.42 -> 2.31 | 1.00 -> 0.24 | 7.33 -> 4.48 |
+| LSTM 512, 8 | 5.56 -> 2.68 | 1.01 -> 0.24 | 8.91 -> 4.84 |
+| LSTM 768, 8 | 8.27 -> 3.63 | 1.02 -> 0.24 | 11.30 -> 5.89 |
+| sLSTM 512, 8 | 5.62 -> 2.72 | 1.24 -> 0.33 | 8.88 -> 5.45 |
+
+With four warps SPLITG spills at D >= 512 (its dh phase is slower there); eight warps are spill-free in the step
+loop. What is left per step is mostly the cross-SM barrier, 1.2-1.4 us.
+
+**Qualification and admission** (same pre-registered gate as the fused batch): SPLITG alone 114/114, SPLITG + FUSE=2
+78/78 (FP16 worst 3.2e-4, BF16 2.4e-3; at most 0.38x FlashRNN1's error); persistent == launch bitwise; 20 repeats
+bitwise; sanitizer 16/16 clean; race verification of the correct kernels 0/21 flagged with bitwise outputs in all 8
+configurations, single-buffer and skipped-barrier controls caught; the arrive-before-store control is now caught
+21/21 on SPLITG alone and, as before, not on the fused path (0/21, no output changed). Both levels were admitted.
+
+**Timing** (split-0 selection, frozen table, split-1 5 starts x 20 ABBA/BAAB blocks, FP16, T = 256; role frnn2 =
+previous candidates + SPLITG):
+
+| comparison | result (lower 95% bound) |
+| --- | --- |
+| FlashRNN2 vs FlashRNN1, B = 16, TileLang forward | LSTM 1.222 / 1.231 / 1.025 / 1.017 / 1.135 (>= 1.015); sLSTM 1.180 / 1.162 / 1.047 / 1.003 / 1.108 (>= 1.002) for D 192 / 256 / 384 / 512 / 768 |
+| FlashRNN2 vs FlashRNN1, B = 16, Triton forward | 0.877-1.038 |
+| FlashRNN2 vs FlashRNN1, B = 64 | LSTM 1.72-1.82x, sLSTM 1.65-1.89x; lower bounds 1.59-1.88 |
+| SPLITG vs previous best, B = 16 | TileLang forward 1.10-1.21x, Triton forward 1.11-1.17x (every shape) |
+| SPLITG vs previous best, B = 64 | D 192-384: 1.10-1.19x; D 512: 0.96x; D 768: 0.84-0.87x |
+
+**Pre-registered criterion: B = 16 is fixed.** In the TileLang environment the selected training step's lower bound
+against FlashRNN1 is >= 1 for every D in 192-768 and both cells; B = 64 does not regress. In the Triton-forward
+environment B = 16 is still behind (the Triton R-tiled forward is the slower half there). **Default rule:** SPLITG
+won at B = 16 for every width, and was not slower at B = 64 for D = 192/256/384, so `training.backward_defaults`
+uses SPLITG for every batch size there and for B <= 16 at D = 512/768 (slice 16; four warps at D = 192/256, eight
+above). This replaces the fused default at D = 256; the fused kernel stays available (`fuse_pre`).

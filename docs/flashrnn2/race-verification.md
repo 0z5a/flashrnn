@@ -110,3 +110,12 @@ and FUSE=1 at D 384 S16:
   only moves the arrive before the four stores that follow it directly, while the peers still wait for every arrival
   and then spend the recompute before they read; the injected delay sits before the arrive, so it never opens that
   window. The control is not informative for this path; no run changed its output silently.
+
+## Gate-batched backward (job 47392580)
+
+SPLITG alone at D 256/512/768 and SPLITG + FUSE=2 at D 384, slice 16, eight warps, LSTM and sLSTM, same rule:
+
+* correct: 0/21 flagged with outputs bitwise equal to the uninstrumented kernel in all 8 configurations;
+* single buffer and skipped barrier: caught in all 8 (20-21/21);
+* arrive before store: caught 21/21 on SPLITG alone (no output changed: the content check sees the stale operand
+  before it matters); on the fused path still 0/21 with no output changed, as for the fused batch.
