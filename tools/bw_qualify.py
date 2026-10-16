@@ -1,7 +1,8 @@
 """GPU qualification of the FlashRNN2 training path (forward + R-tiled Triton backward), one case per call.
 
 Case JSON: {cell, dtype, width, slice_width, warps, batch, steps, init (zero|warm), forward (optional KernelConfig),
-fast, tf32, fuse (0|1|2: preactivation recompute fused into the backward kernel; needs fast)}.
+fast, tf32, fuse (0|1|2: preactivation recompute fused into the backward kernel; needs fast), splitg (gate-batched
+dh reduction; not bitwise to the per-gate accumulation, gated like fuse)}.
 Stages
   grads     gradients of two losses against the FP64 oracle (flashrnn2.grad_reference on the same rounded inputs):
             "hist" = <dH, h history>; "full" = <dH, h history> + <dF, final carry (h, c, n)>.
@@ -73,7 +74,7 @@ def run_ours(leaves, cot_h, cot_f, case, loss, sync="grid", diagnostics=None):
     cell = case["cell"]
     forward = KernelConfig(**case["forward"]) if case.get("forward") else default_config(case["width"])
     opts = dict(slice_width=case["slice_width"], num_warps=case["warps"], sync=sync, fast=case.get("fast", False),
-                tf32=case.get("tf32", False), fuse_pre=case.get("fuse", 0))
+                tf32=case.get("tf32", False), fuse_pre=case.get("fuse", 0), split_gates=case.get("splitg", False))
     if diagnostics is not None:
         opts["diagnostics"] = diagnostics
     xs = [x.detach().clone().requires_grad_(True) for x in leaves]
@@ -179,7 +180,7 @@ def stage_modes(case, rec):
 def stage_vs_base(case, rec):
     """The fast kernel variant must reproduce the qualified base kernel bit for bit (both losses)."""
     leaves, cot_h, cot_f = inputs(case, 13 + case["width"])
-    base_case = dict(case, fast=False, tf32=False, fuse=0)
+    base_case = dict(case, fast=False, tf32=False, fuse=0, splitg=False)
     out = {}
     for loss in ("hist", "full"):
         a = run_ours(leaves, cot_h, cot_f, case, loss)
@@ -213,7 +214,7 @@ def main():
                       ("repeat", stage_repeat)):
         if stage not in a.stages.split(","):
             continue
-        if stage == "vs_base" and case.get("fuse"):
+        if stage == "vs_base" and (case.get("fuse") or case.get("splitg")):
             rec["gates"][stage] = "NOT_APPLICABLE_FUSED"  # pre-registered: not a gate for fused cases
             continue
         try:

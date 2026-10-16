@@ -24,7 +24,7 @@ for _name in ("V_CHECK", "V_DELAY", "V_BROKEN_SINGLE", "V_BROKEN_NO_BARRIER", "V
     setattr(triton_rtiled_bw, _name, int(getattr(triton_rtiled_bw, _name)))
 
 
-def run_kernel(wx, r, b, init, hist, d_hist, d_final, cell, slice_width, fast=None, fuse=False):
+def run_kernel(wx, r, b, init, hist, d_hist, d_final, cell, slice_width, fast=None, fuse=False, splitg=False):
     batch, steps, _, heads, width = wx.shape
     states = init.shape[0]
     splits, groups, slots = plan(batch, heads, width, slice_width, sms=132)
@@ -50,7 +50,8 @@ def run_kernel(wx, r, b, init, hist, d_hist, d_final, cell, slice_width, fast=No
             batch, steps, t_start, nsteps, from_final, tail, groups, slots, 0,
             heads, width, cell == "slstm", 16, slice_width, k1, k2, SPIN_LIMIT,
             **(dict(FAST=1, DS_C=int(fast[0]), DS_N=int(fast[1])) if fast else {}),
-            **(dict(FUSE=int(fuse)) if fuse else {}))
+            **(dict(FUSE=int(fuse)) if fuse else {}),
+            **(dict(SPLITG=1) if splitg else {}))
     d_r, d_b = triton_rtiled_bw.weight_gradients(dg, h_prev)
     return [dg, d_r, d_b, d_init]
 
@@ -97,14 +98,14 @@ def case(cell, init_mode, batch, steps, heads, width, slice_width, seed):
         out[name] = dict(rel_fro=((a - e).norm() / e.norm().clamp_min(1e-300)).item(),
                          max_abs_scaled=((a - e).abs().max() / e.abs().max().clamp_min(1e-300)).item())
     # The FUSE variant recomputes the preactivations in the kernel: compared with the FP64 oracle like the base.
-    for fuse in (1, 2):
+    for fuse, splitg in ((1, False), (2, False), (0, True), (2, True)):
         fused = run_kernel(wx, r, b, init, hist64.detach().float().contiguous(), d_hist, d_final, cell, slice_width,
-                           (1, 1), fuse=fuse)
+                           (1, 1), fuse=fuse, splitg=splitg)
         for name, a, e in zip(["d_wx", "d_r", "d_bias", "d_init"], fused, ref):
             a, e = a.double(), e.double()
             if name == "d_init" and cell == "slstm":
                 a, e = a[:3], e[:3]
-            out[f"fused{fuse}_{name}"] = dict(rel_fro=((a - e).norm() / e.norm().clamp_min(1e-300)).item(),
+            out[f"fused{fuse}{'_splitg' if splitg else ''}_{name}"] = dict(rel_fro=((a - e).norm() / e.norm().clamp_min(1e-300)).item(),
                                               max_abs_scaled=((a - e).abs().max() / e.abs().max().clamp_min(1e-300)).item())
     out.update(out_fast)
     return out

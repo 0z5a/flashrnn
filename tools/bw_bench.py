@@ -2,7 +2,8 @@
 
 Arms (case JSON "roles" lists of specs)
   {"kind": "frnn2", "forward": <KernelConfig dict or null = packaged table/default>, "slice_width": S, "warps": W,
-   "fast": bool, "tf32": bool, "fuse": 0|1|2 (preactivation recompute fused into the backward kernel)}
+   "fast": bool, "tf32": bool, "fuse": 0|1|2 (preactivation recompute fused into the backward kernel),
+   "splitg": bool (gate-batched dh reduction)}
   {"kind": "v1"}  pinned FlashRNN1 cuda_fused forward + backward (FRNN_V1_BASE / FRNN_V1_BUILD_ROOT)
 One call = forward with requires_grad, loss <dH, h history>, backward (torch.autograd.grad, no accumulation).
 
@@ -58,7 +59,7 @@ def step_fn(spec, case):
     if spec["kind"] == "frnn2":
         forward = KernelConfig(**spec["forward"]) if spec.get("forward") else None
         opts = dict(slice_width=spec["slice_width"], num_warps=spec["warps"], fast=spec.get("fast", False),
-                    tf32=spec.get("tf32", False), fuse_pre=spec.get("fuse", 0))
+                    tf32=spec.get("tf32", False), fuse_pre=spec.get("fuse", 0), split_gates=spec.get("splitg", False))
 
         def run(leaves, cot_h):
             xs = [x.detach().requires_grad_(True) for x in leaves]
