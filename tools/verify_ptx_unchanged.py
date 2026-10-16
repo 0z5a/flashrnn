@@ -71,14 +71,25 @@ def main():
                        BM="constexpr", S="constexpr", K1="constexpr", K2="constexpr", SPIN="constexpr")
             const = dict(H=1, D=width, SLSTM=cell == "slstm", BM=16, S=s, K1=k1, K2=k2, SPIN=new.SPIN_LIMIT)
             old_names = old_bw._rtiled_bw.arg_names
-            extra = {k: v for k, v in (("VERIFY", 0), ("FAST", 0), ("DS_C", 1), ("DS_N", 1)) if k in old_names}
+            extra = {k: v for k, v in (("VERIFY", 0), ("FAST", 0), ("DS_C", 1), ("DS_N", 1), ("FUSE", 0), ("SPLITG", 0),
+                                       ("PROF", 0)) if k in old_names}
             old_sig = dict(sig, **{k: "constexpr" for k in extra})
             old_const = dict(const, **extra)
             a_ptx = ptx(old_bw._rtiled_bw, old_sig, old_const, 8)
-            sig_v = dict(sig, VERIFY="constexpr", FAST="constexpr", DS_C="constexpr", DS_N="constexpr", FUSE="constexpr")
-            c_ptx = ptx(new_bw._rtiled_bw, sig_v, dict(const, VERIFY=0, FAST=0, DS_C=1, DS_N=1, FUSE=0), 8)
-            on = ptx(new_bw._rtiled_bw, sig_v, dict(const, VERIFY=3, FAST=0, DS_C=1, DS_N=1, FUSE=0), 8)
-            fast = ptx(new_bw._rtiled_bw, sig_v, dict(const, VERIFY=0, FAST=1, DS_C=0, DS_N=0, FUSE=0), 8)
+            sig_v = dict(sig, VERIFY="constexpr", FAST="constexpr", DS_C="constexpr", DS_N="constexpr", FUSE="constexpr",
+                         SPLITG="constexpr", PROF="constexpr")
+            off = dict(SPLITG=0, PROF=0)
+            c_ptx = ptx(new_bw._rtiled_bw, sig_v, dict(const, VERIFY=0, FAST=0, DS_C=1, DS_N=1, FUSE=0, **off), 8)
+            on = ptx(new_bw._rtiled_bw, sig_v, dict(const, VERIFY=3, FAST=0, DS_C=1, DS_N=1, FUSE=0, **off), 8)
+            fast = ptx(new_bw._rtiled_bw, sig_v, dict(const, VERIFY=0, FAST=1, DS_C=0, DS_N=0, FUSE=0, **off), 8)
+            if "FUSE" in old_names:  # the fused variant (Wx operand in the input dtype) must also be unchanged
+                sig_f = dict(sig_v, PRE="*fp16")
+                old_sig_f = dict(old_sig, PRE="*fp16")
+                new_fused = ptx(new_bw._rtiled_bw, sig_f, dict(const, VERIFY=0, FAST=1, DS_C=0, DS_N=0, FUSE=2, **off), 8)
+                old_fused = ptx(old_bw._rtiled_bw, old_sig_f, dict(old_const, FAST=1, DS_C=0, DS_N=0, FUSE=2), 8)
+                fused_equal = new_fused == old_fused
+            else:
+                fused_equal = None
             if "FAST" in old_names:  # the fast variant of the baseline must also be unchanged
                 old_fast = ptx(old_bw._rtiled_bw, dict(old_sig), dict(old_const, FAST=1, DS_C=0, DS_N=0), 8)
                 rows_fast_equal = old_fast == fast
@@ -86,9 +97,11 @@ def main():
                 rows_fast_equal = None
             rows.append(dict(kernel="backward", cell=cell, width=width, slice_width=s,
                              explicit_zero_equal=a_ptx == c_ptx, verify_on_differs=on != a_ptx,
-                             fast_compiles_and_differs=fast != a_ptx, fast_equal_to_baseline_fast=rows_fast_equal))
+                             fast_compiles_and_differs=fast != a_ptx, fast_equal_to_baseline_fast=rows_fast_equal,
+                             fused_equal_to_baseline_fused=fused_equal))
     status = "PASS" if all(r["explicit_zero_equal"] and r["verify_on_differs"]
-                           and r.get("fast_equal_to_baseline_fast") is not False for r in rows) \
+                           and r.get("fast_equal_to_baseline_fast") is not False
+                           and r.get("fused_equal_to_baseline_fused") is not False for r in rows) \
         else "FAIL"
     Path(a.out).mkdir(parents=True, exist_ok=True)
     (Path(a.out) / "verify-ptx.json").write_text(json.dumps(dict(rows=rows, status=status), indent=1))

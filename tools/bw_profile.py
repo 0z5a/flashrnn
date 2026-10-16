@@ -55,6 +55,9 @@ def main():
     p.add_argument("--out", required=True)
     p.add_argument("--case", required=True)
     p.add_argument("--tilelang", action="store_true")
+    p.add_argument("--slices", default="", help="comma list restricting the backward slice widths")
+    p.add_argument("--kinds", default="", help="comma list restricting the backward variants (base, fast, fast_tf32, "
+                                               "splitg, fuse1, fuse2, fuse2_splitg)")
     a = p.parse_args()
     torch.backends.cuda.matmul.allow_tf32 = False
     case = dict(json.loads(a.case), init="warm")
@@ -91,9 +94,16 @@ def main():
             variants[f"s{s}w{warps}_fast"] = dict(slice_width=s, num_warps=warps, fast=True,
                                                   history_grad_components=(True, False, False))
             variants[f"s{s}w{warps}_fast_tf32"] = dict(variants[f"s{s}w{warps}_fast"], tf32=True)
+            variants[f"s{s}w{warps}_splitg"] = dict(variants[f"s{s}w{warps}_fast_tf32"], split_gates=True)
             if width >= 192 and s <= 32:
                 for f in (1, 2):
                     variants[f"s{s}w{warps}_fuse{f}"] = dict(variants[f"s{s}w{warps}_fast_tf32"], fuse_pre=f)
+                variants[f"s{s}w{warps}_fuse2_splitg"] = dict(variants[f"s{s}w{warps}_fuse2"], split_gates=True)
+    if a.slices:
+        variants = {n: v for n, v in variants.items() if n.split("w")[0][1:] in a.slices.split(",")}
+    if a.kinds:
+        keep = set(a.kinds.split(","))
+        variants = {n: v for n, v in variants.items() if n.split("_", 1)[1] in keep}
     reference = {}
     for name, opts in variants.items():
         try:
@@ -120,10 +130,34 @@ def main():
             rec["bw_phases"][name] = dict(ms=med, total=median_ms(run, 7), vs_base=equal)
         except Exception:  # noqa: BLE001
             rec["errors"][f"bw_{name}"] = traceback.format_exc()[-1500:]
+    # In-kernel step phases (PROF build): dh reduction, pointwise + dG store, publish + next-step inputs (+ fused
+    # recompute), barrier; per step, mean over CTAs and the slowest CTA, with the profiled kernel time against the
+    # unprofiled one (the timer reads sit behind block barriers and perturb the step).
+    rec["phases"] = {}
+    for name in [n for n in rec["bw_phases"] if n.startswith(("s16w4", "s16w8", "s32w4")) and not n.endswith("_base")
+                 and not n.endswith("_fast") and "fuse1" not in n]:
+        try:
+            runs = []
+            for _ in range(3):
+                diag = dict(time=True)
+                triton_rtiled_bw.backward(*leaves, history, d_hist, d_final, cell, diagnostics=diag, profile_steps=True,
+                                          **variants[name])
+                per = diag["phases_ns"]["per_cta"]
+                steps = max(1, per[0][4])
+                mean = [sum(r[i] for r in per) / len(per) / steps for i in range(4)]
+                worst = [max(r[i] for r in per) / steps for i in range(4)]
+                runs.append(dict(mean_ns=mean, max_ns=worst, kernel_ms=diag["ms"]["kernel"], steps=steps))
+            mid = sorted(runs, key=lambda r: r["kernel_ms"])[1]
+            rec["phases"][name] = dict(names=["dh", "pointwise", "publish", "barrier"], **mid,
+                                       unprofiled_kernel_ms=rec["bw_phases"][name]["ms"]["kernel"])
+        except Exception:  # noqa: BLE001
+            rec["errors"][f"phases_{name}"] = traceback.format_exc()[-1500:]
     # Complete training steps.
     best_s = min((n for n in rec["bw_phases"] if n.endswith("_fast")), key=lambda n: rec["bw_phases"][n]["total"],
                  default=None)
     best_f = min((n for n in rec["bw_phases"] if "_fuse" in n), key=lambda n: rec["bw_phases"][n]["total"],
+                 default=None)
+    best_g = min((n for n in rec["bw_phases"] if n.endswith("splitg")), key=lambda n: rec["bw_phases"][n]["total"],
                  default=None)
     best_t = min((n for n in rec["bw_phases"] if n.endswith("_fast_tf32")),
                  key=lambda n: rec["bw_phases"][n]["total"], default=None)
@@ -131,7 +165,7 @@ def main():
     for fname, cfg in forwards.items():
         for bname, opts in variants.items():
             if (bname.endswith("_fast") and (bname == best_s or bname.startswith("s32w4") or bname.startswith("s16w4"))
-                    or bname in (best_f, best_t)):
+                    or bname in (best_f, best_t, best_g)):
                 step_variants[f"{fname}+{bname}"] = (cfg, opts)
         step_variants[f"{fname}+s32w8_base" if width > 32 else f"{fname}+base"] = (cfg, variants.get("s32w8_base", {}))
     for name, (cfg, opts) in step_variants.items():
