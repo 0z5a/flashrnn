@@ -9,6 +9,8 @@ Chunk continuation is inference only: a call with a ``sequence_context`` past th
 differentiated here.
 """
 
+import importlib.util
+
 import torch
 
 # Defaults from the B = 16 fix (training-step timing against FlashRNN1): the fast backward variant (bitwise identical
@@ -41,6 +43,33 @@ def backward_defaults(width, user=None, batch=None):
         if "split_gates" not in user:
             options["split_gates"] = False
     return options
+
+
+# Forward for training calls whose shape is not in the packaged tables: the TileLang configuration the gate-batched
+# batch selected at B = 16 (H = 1), used when TileLang is installed and the runtime matches the tables' measured
+# identity; otherwise the table default (Triton). With the Triton forward the B = 16 training step stays behind
+# FlashRNN1 (0.88-1.04x), with these TileLang forwards it is faster at every D = 192-768.
+TILELANG_TRAINING_FORWARD = {192: ("cluster", 16), 256: ("cluster", 16), 384: ("cluster", 32), 512: ("cluster", 32),
+                             768: ("grid", 16)}
+
+
+def _tilelang_installed():
+    return importlib.util.find_spec("tilelang") is not None
+
+
+def training_forward(cell, dtype, batch, steps, heads, width, *, policy=None):
+    """KernelConfig of a training call's forward and where it came from ("table", "tilelang" or "default")."""
+    from . import dispatch
+    from .execution_policy import KernelConfig
+
+    config, source = dispatch.select_config(cell, dtype, batch, steps, heads, width, policy=policy)
+    if source == "table":
+        return config, source
+    measured = (dispatch.default_policy() if policy is None else policy).table
+    if measured and heads == 1 and width in TILELANG_TRAINING_FORWARD and _tilelang_installed():
+        sync, slice_width = TILELANG_TRAINING_FORWARD[width]
+        return KernelConfig(family="tilelang", slice_width=slice_width, sync=sync), "tilelang"
+    return config, source
 
 
 def backward_slice_width(width):
@@ -110,4 +139,7 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, output_mode="hidden
     if sequence_context is not None and sequence_context.step_offset > 0:
         raise ValueError("a continuation chunk cannot be differentiated; run the whole logical call")
     options = backward_defaults(wx.shape[-1], backward_options, batch=wx.shape[0])
+    if config is None:
+        batch, steps, _, heads, width = wx.shape
+        config, _ = training_forward(cell, wx.dtype, batch, steps, heads, width)
     return _Recurrence.apply(wx, recurrent, bias, initial, cell, output_mode, snapshot_dtype, config, options)
