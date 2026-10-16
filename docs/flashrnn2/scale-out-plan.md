@@ -125,3 +125,22 @@ Disk streaming is bounded analytically (NVMe bandwidth), not run.
 | multi-GPU forward kernel, stream baselines, microbenchmarks | being built |
 | phase A batch | not submitted |
 | phase B | not decided |
+
+## 6. Known model gaps (written 2026-10-16, after phase A was sealed and submitted, before any result)
+
+These are visible in the sealed code of job "scale phase A"; check 2 is reported exactly as pre-registered, and any
+corrected model that addresses them is labelled post hoc.
+
+* **Streamed R is often L2-resident.** H100 L2 is about 50 MB. R at D = 2048 (FP16) is 4·2048²·2 ≈ 33.5 MB, and each
+  GPU's slice in design B at D = 4096, P = 4 is the same size, so those rows stream from L2, not HBM. `predict()`
+  prices every stream at the measured HBM copy bandwidth, so design A/B rows below about 50 MB of R per GPU are
+  expected to run well under the prediction. Only P = 1 at D = 4096 (134 MB) is HBM-bound.
+* **The barrier may be counted twice.** `predict()` adds α_l2 (1.3 µs) on top of the exchange term; for P > 1 the
+  cross-GPU wait already is the step barrier.
+* **α_l2 is not measured in this job.** `scale_micro` does not measure the intra-GPU barrier; the 1.3 µs is the value
+  from the gate-batched backward profile, not from the same job as the plan says.
+* **Necessity at two nodes.** Column-only slices need S ≥ 8 (smallest MMA shape), so one CTA's slice is ≥ 64·D bytes
+  and fits shared memory only up to D ≈ 3200, where D/8 = 400 CTAs fit one node (528 SMs). With the phase A kernel,
+  every D whose slices fit is also a one-node size; a two-node run of it is a topology test, not a necessity test.
+  The two-node necessity case (D = 4096: about 1024 CTAs of 131 KB) needs a K split per CTA, a per-step partial-sum
+  reduction across the K-part CTAs and a second barrier; that term goes into the phase B model.
