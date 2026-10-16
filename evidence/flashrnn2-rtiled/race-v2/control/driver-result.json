@@ -1,0 +1,1916 @@
+{
+ "started": 1792068731.000386,
+ "plan": {
+  "purpose": "Race verification of every cross-CTA exchange (Triton L2 counter barrier forward and backward, TileLang cluster DSMEM bulk copies with mbarriers, TileLang cooperative-grid exchange) with compile-time content checks, seeded producer/consumer delays and broken-variant negative controls; plus the two-warpgroup cluster kernel as a positive control",
+  "rule": "correct: zero violations and bitwise equal to the uninstrumented reference in all 21 runs; broken variant (own process): violations in >= 80% of its completed runs (>= 1) and no completed run with a differing output but zero violations; runs after a CUDA-context corruption count as crashed; no_sync reported only; delays 0-65 us",
+  "minutes": 150,
+  "tasks": [
+   {
+    "name": "race-triton_fwd-lstm-d256-s32-w8-correct",
+    "lane": 0,
+    "tilelang": false,
+    "variants": "correct",
+    "task": {
+     "path": "triton_fwd",
+     "cell": "lstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_fwd-lstm-d256-s32-w8-broken_single",
+    "lane": 1,
+    "tilelang": false,
+    "variants": "broken_single",
+    "task": {
+     "path": "triton_fwd",
+     "cell": "lstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_fwd-lstm-d256-s32-w8-broken_no_barrier",
+    "lane": 2,
+    "tilelang": false,
+    "variants": "broken_no_barrier",
+    "task": {
+     "path": "triton_fwd",
+     "cell": "lstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_fwd-lstm-d256-s32-w8-broken_arrive_first",
+    "lane": 3,
+    "tilelang": false,
+    "variants": "broken_arrive_first",
+    "task": {
+     "path": "triton_fwd",
+     "cell": "lstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_fwd-slstm-d256-s32-w8-correct",
+    "lane": 0,
+    "tilelang": false,
+    "variants": "correct",
+    "task": {
+     "path": "triton_fwd",
+     "cell": "slstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_fwd-slstm-d256-s32-w8-broken_single",
+    "lane": 1,
+    "tilelang": false,
+    "variants": "broken_single",
+    "task": {
+     "path": "triton_fwd",
+     "cell": "slstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_fwd-slstm-d256-s32-w8-broken_no_barrier",
+    "lane": 2,
+    "tilelang": false,
+    "variants": "broken_no_barrier",
+    "task": {
+     "path": "triton_fwd",
+     "cell": "slstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_fwd-slstm-d256-s32-w8-broken_arrive_first",
+    "lane": 3,
+    "tilelang": false,
+    "variants": "broken_arrive_first",
+    "task": {
+     "path": "triton_fwd",
+     "cell": "slstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_fwd-lstm-d768-s32-w8-correct",
+    "lane": 0,
+    "tilelang": false,
+    "variants": "correct",
+    "task": {
+     "path": "triton_fwd",
+     "cell": "lstm",
+     "config": {
+      "width": 768,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_fwd-lstm-d768-s32-w8-broken_single",
+    "lane": 1,
+    "tilelang": false,
+    "variants": "broken_single",
+    "task": {
+     "path": "triton_fwd",
+     "cell": "lstm",
+     "config": {
+      "width": 768,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_fwd-lstm-d768-s32-w8-broken_no_barrier",
+    "lane": 2,
+    "tilelang": false,
+    "variants": "broken_no_barrier",
+    "task": {
+     "path": "triton_fwd",
+     "cell": "lstm",
+     "config": {
+      "width": 768,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_fwd-lstm-d768-s32-w8-broken_arrive_first",
+    "lane": 3,
+    "tilelang": false,
+    "variants": "broken_arrive_first",
+    "task": {
+     "path": "triton_fwd",
+     "cell": "lstm",
+     "config": {
+      "width": 768,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_fwd-slstm-d768-s32-w8-correct",
+    "lane": 0,
+    "tilelang": false,
+    "variants": "correct",
+    "task": {
+     "path": "triton_fwd",
+     "cell": "slstm",
+     "config": {
+      "width": 768,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_fwd-slstm-d768-s32-w8-broken_single",
+    "lane": 1,
+    "tilelang": false,
+    "variants": "broken_single",
+    "task": {
+     "path": "triton_fwd",
+     "cell": "slstm",
+     "config": {
+      "width": 768,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_fwd-slstm-d768-s32-w8-broken_no_barrier",
+    "lane": 2,
+    "tilelang": false,
+    "variants": "broken_no_barrier",
+    "task": {
+     "path": "triton_fwd",
+     "cell": "slstm",
+     "config": {
+      "width": 768,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_fwd-slstm-d768-s32-w8-broken_arrive_first",
+    "lane": 3,
+    "tilelang": false,
+    "variants": "broken_arrive_first",
+    "task": {
+     "path": "triton_fwd",
+     "cell": "slstm",
+     "config": {
+      "width": 768,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_bw-lstm-d256-s32-w8-correct",
+    "lane": 0,
+    "tilelang": false,
+    "variants": "correct",
+    "task": {
+     "path": "triton_bw",
+     "cell": "lstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_bw-lstm-d256-s32-w8-broken_single",
+    "lane": 1,
+    "tilelang": false,
+    "variants": "broken_single",
+    "task": {
+     "path": "triton_bw",
+     "cell": "lstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_bw-lstm-d256-s32-w8-broken_no_barrier",
+    "lane": 2,
+    "tilelang": false,
+    "variants": "broken_no_barrier",
+    "task": {
+     "path": "triton_bw",
+     "cell": "lstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_bw-lstm-d256-s32-w8-broken_arrive_first",
+    "lane": 3,
+    "tilelang": false,
+    "variants": "broken_arrive_first",
+    "task": {
+     "path": "triton_bw",
+     "cell": "lstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_bw-slstm-d256-s32-w8-correct",
+    "lane": 0,
+    "tilelang": false,
+    "variants": "correct",
+    "task": {
+     "path": "triton_bw",
+     "cell": "slstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_bw-slstm-d256-s32-w8-broken_single",
+    "lane": 1,
+    "tilelang": false,
+    "variants": "broken_single",
+    "task": {
+     "path": "triton_bw",
+     "cell": "slstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_bw-slstm-d256-s32-w8-broken_no_barrier",
+    "lane": 2,
+    "tilelang": false,
+    "variants": "broken_no_barrier",
+    "task": {
+     "path": "triton_bw",
+     "cell": "slstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_bw-slstm-d256-s32-w8-broken_arrive_first",
+    "lane": 3,
+    "tilelang": false,
+    "variants": "broken_arrive_first",
+    "task": {
+     "path": "triton_bw",
+     "cell": "slstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_bw-lstm-d768-s16-w8-correct",
+    "lane": 0,
+    "tilelang": false,
+    "variants": "correct",
+    "task": {
+     "path": "triton_bw",
+     "cell": "lstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_bw-lstm-d768-s16-w8-broken_single",
+    "lane": 1,
+    "tilelang": false,
+    "variants": "broken_single",
+    "task": {
+     "path": "triton_bw",
+     "cell": "lstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_bw-lstm-d768-s16-w8-broken_no_barrier",
+    "lane": 2,
+    "tilelang": false,
+    "variants": "broken_no_barrier",
+    "task": {
+     "path": "triton_bw",
+     "cell": "lstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_bw-lstm-d768-s16-w8-broken_arrive_first",
+    "lane": 3,
+    "tilelang": false,
+    "variants": "broken_arrive_first",
+    "task": {
+     "path": "triton_bw",
+     "cell": "lstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_bw-slstm-d768-s16-w8-correct",
+    "lane": 0,
+    "tilelang": false,
+    "variants": "correct",
+    "task": {
+     "path": "triton_bw",
+     "cell": "slstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_bw-slstm-d768-s16-w8-broken_single",
+    "lane": 1,
+    "tilelang": false,
+    "variants": "broken_single",
+    "task": {
+     "path": "triton_bw",
+     "cell": "slstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_bw-slstm-d768-s16-w8-broken_no_barrier",
+    "lane": 2,
+    "tilelang": false,
+    "variants": "broken_no_barrier",
+    "task": {
+     "path": "triton_bw",
+     "cell": "slstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-triton_bw-slstm-d768-s16-w8-broken_arrive_first",
+    "lane": 3,
+    "tilelang": false,
+    "variants": "broken_arrive_first",
+    "task": {
+     "path": "triton_bw",
+     "cell": "slstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "warps": 8,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_cluster-lstm-d256-s32-bm16-t128-correct",
+    "lane": 0,
+    "tilelang": true,
+    "variants": "correct",
+    "task": {
+     "path": "tl_cluster",
+     "cell": "lstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "bm": 16,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_cluster-lstm-d256-s32-bm16-t128-broken_single",
+    "lane": 1,
+    "tilelang": true,
+    "variants": "broken_single",
+    "task": {
+     "path": "tl_cluster",
+     "cell": "lstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "bm": 16,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_cluster-lstm-d256-s32-bm16-t128-broken_no_wait",
+    "lane": 2,
+    "tilelang": true,
+    "variants": "broken_no_wait",
+    "task": {
+     "path": "tl_cluster",
+     "cell": "lstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "bm": 16,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_cluster-lstm-d256-s32-bm16-t128-broken_no_sync",
+    "lane": 3,
+    "tilelang": true,
+    "variants": "broken_no_sync",
+    "task": {
+     "path": "tl_cluster",
+     "cell": "lstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "bm": 16,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_cluster-slstm-d256-s32-bm16-t128-correct",
+    "lane": 0,
+    "tilelang": true,
+    "variants": "correct",
+    "task": {
+     "path": "tl_cluster",
+     "cell": "slstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "bm": 16,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_cluster-slstm-d256-s32-bm16-t128-broken_single",
+    "lane": 1,
+    "tilelang": true,
+    "variants": "broken_single",
+    "task": {
+     "path": "tl_cluster",
+     "cell": "slstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "bm": 16,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_cluster-slstm-d256-s32-bm16-t128-broken_no_wait",
+    "lane": 2,
+    "tilelang": true,
+    "variants": "broken_no_wait",
+    "task": {
+     "path": "tl_cluster",
+     "cell": "slstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "bm": 16,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_cluster-slstm-d256-s32-bm16-t128-broken_no_sync",
+    "lane": 3,
+    "tilelang": true,
+    "variants": "broken_no_sync",
+    "task": {
+     "path": "tl_cluster",
+     "cell": "slstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "bm": 16,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_cluster-lstm-d256-s16-bm32-t128-correct",
+    "lane": 0,
+    "tilelang": true,
+    "variants": "correct",
+    "task": {
+     "path": "tl_cluster",
+     "cell": "lstm",
+     "config": {
+      "width": 256,
+      "slice_width": 16,
+      "bm": 32,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_cluster-lstm-d256-s16-bm32-t128-broken_single",
+    "lane": 1,
+    "tilelang": true,
+    "variants": "broken_single",
+    "task": {
+     "path": "tl_cluster",
+     "cell": "lstm",
+     "config": {
+      "width": 256,
+      "slice_width": 16,
+      "bm": 32,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_cluster-lstm-d256-s16-bm32-t128-broken_no_wait",
+    "lane": 2,
+    "tilelang": true,
+    "variants": "broken_no_wait",
+    "task": {
+     "path": "tl_cluster",
+     "cell": "lstm",
+     "config": {
+      "width": 256,
+      "slice_width": 16,
+      "bm": 32,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_cluster-lstm-d256-s16-bm32-t128-broken_no_sync",
+    "lane": 3,
+    "tilelang": true,
+    "variants": "broken_no_sync",
+    "task": {
+     "path": "tl_cluster",
+     "cell": "lstm",
+     "config": {
+      "width": 256,
+      "slice_width": 16,
+      "bm": 32,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_cluster-slstm-d256-s16-bm32-t128-correct",
+    "lane": 0,
+    "tilelang": true,
+    "variants": "correct",
+    "task": {
+     "path": "tl_cluster",
+     "cell": "slstm",
+     "config": {
+      "width": 256,
+      "slice_width": 16,
+      "bm": 32,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_cluster-slstm-d256-s16-bm32-t128-broken_single",
+    "lane": 1,
+    "tilelang": true,
+    "variants": "broken_single",
+    "task": {
+     "path": "tl_cluster",
+     "cell": "slstm",
+     "config": {
+      "width": 256,
+      "slice_width": 16,
+      "bm": 32,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_cluster-slstm-d256-s16-bm32-t128-broken_no_wait",
+    "lane": 2,
+    "tilelang": true,
+    "variants": "broken_no_wait",
+    "task": {
+     "path": "tl_cluster",
+     "cell": "slstm",
+     "config": {
+      "width": 256,
+      "slice_width": 16,
+      "bm": 32,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_cluster-slstm-d256-s16-bm32-t128-broken_no_sync",
+    "lane": 3,
+    "tilelang": true,
+    "variants": "broken_no_sync",
+    "task": {
+     "path": "tl_cluster",
+     "cell": "slstm",
+     "config": {
+      "width": 256,
+      "slice_width": 16,
+      "bm": 32,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_grid-lstm-d768-s16-bm16-t128-correct",
+    "lane": 0,
+    "tilelang": true,
+    "variants": "correct",
+    "task": {
+     "path": "tl_grid",
+     "cell": "lstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "bm": 16,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_grid-lstm-d768-s16-bm16-t128-broken_single",
+    "lane": 1,
+    "tilelang": true,
+    "variants": "broken_single",
+    "task": {
+     "path": "tl_grid",
+     "cell": "lstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "bm": 16,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_grid-lstm-d768-s16-bm16-t128-broken_no_barrier",
+    "lane": 2,
+    "tilelang": true,
+    "variants": "broken_no_barrier",
+    "task": {
+     "path": "tl_grid",
+     "cell": "lstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "bm": 16,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_grid-lstm-d768-s16-bm16-t128-broken_arrive_first",
+    "lane": 3,
+    "tilelang": true,
+    "variants": "broken_arrive_first",
+    "task": {
+     "path": "tl_grid",
+     "cell": "lstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "bm": 16,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_grid-slstm-d768-s16-bm16-t128-correct",
+    "lane": 0,
+    "tilelang": true,
+    "variants": "correct",
+    "task": {
+     "path": "tl_grid",
+     "cell": "slstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "bm": 16,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_grid-slstm-d768-s16-bm16-t128-broken_single",
+    "lane": 1,
+    "tilelang": true,
+    "variants": "broken_single",
+    "task": {
+     "path": "tl_grid",
+     "cell": "slstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "bm": 16,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_grid-slstm-d768-s16-bm16-t128-broken_no_barrier",
+    "lane": 2,
+    "tilelang": true,
+    "variants": "broken_no_barrier",
+    "task": {
+     "path": "tl_grid",
+     "cell": "slstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "bm": 16,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_grid-slstm-d768-s16-bm16-t128-broken_arrive_first",
+    "lane": 3,
+    "tilelang": true,
+    "variants": "broken_arrive_first",
+    "task": {
+     "path": "tl_grid",
+     "cell": "slstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "bm": 16,
+      "threads": 128,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_grid-lstm-d768-s16-bm64-t256-correct",
+    "lane": 0,
+    "tilelang": true,
+    "variants": "correct",
+    "task": {
+     "path": "tl_grid",
+     "cell": "lstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "bm": 64,
+      "threads": 256,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_grid-lstm-d768-s16-bm64-t256-broken_single",
+    "lane": 1,
+    "tilelang": true,
+    "variants": "broken_single",
+    "task": {
+     "path": "tl_grid",
+     "cell": "lstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "bm": 64,
+      "threads": 256,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_grid-lstm-d768-s16-bm64-t256-broken_no_barrier",
+    "lane": 2,
+    "tilelang": true,
+    "variants": "broken_no_barrier",
+    "task": {
+     "path": "tl_grid",
+     "cell": "lstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "bm": 64,
+      "threads": 256,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_grid-lstm-d768-s16-bm64-t256-broken_arrive_first",
+    "lane": 3,
+    "tilelang": true,
+    "variants": "broken_arrive_first",
+    "task": {
+     "path": "tl_grid",
+     "cell": "lstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "bm": 64,
+      "threads": 256,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_grid-slstm-d768-s16-bm64-t256-correct",
+    "lane": 0,
+    "tilelang": true,
+    "variants": "correct",
+    "task": {
+     "path": "tl_grid",
+     "cell": "slstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "bm": 64,
+      "threads": 256,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_grid-slstm-d768-s16-bm64-t256-broken_single",
+    "lane": 1,
+    "tilelang": true,
+    "variants": "broken_single",
+    "task": {
+     "path": "tl_grid",
+     "cell": "slstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "bm": 64,
+      "threads": 256,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_grid-slstm-d768-s16-bm64-t256-broken_no_barrier",
+    "lane": 2,
+    "tilelang": true,
+    "variants": "broken_no_barrier",
+    "task": {
+     "path": "tl_grid",
+     "cell": "slstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "bm": 64,
+      "threads": 256,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_grid-slstm-d768-s16-bm64-t256-broken_arrive_first",
+    "lane": 3,
+    "tilelang": true,
+    "variants": "broken_arrive_first",
+    "task": {
+     "path": "tl_grid",
+     "cell": "slstm",
+     "config": {
+      "width": 768,
+      "slice_width": 16,
+      "bm": 64,
+      "threads": 256,
+      "batch": 40,
+      "steps": 48
+     }
+    }
+   },
+   {
+    "name": "race-tl_cluster-positive256-lstm",
+    "lane": 0,
+    "tilelang": true,
+    "variants": "positive_threads256",
+    "task": {
+     "path": "tl_cluster",
+     "cell": "lstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "bm": 32,
+      "threads": 256,
+      "batch": 40,
+      "steps": 48
+     },
+     "positive_control": true
+    }
+   },
+   {
+    "name": "race-tl_cluster-positive256-slstm",
+    "lane": 1,
+    "tilelang": true,
+    "variants": "positive_threads256",
+    "task": {
+     "path": "tl_cluster",
+     "cell": "slstm",
+     "config": {
+      "width": 256,
+      "slice_width": 32,
+      "bm": 32,
+      "threads": 256,
+      "batch": 40,
+      "steps": 48
+     },
+     "positive_control": true
+    }
+   }
+  ],
+  "v1_build_root": "<node-local scratch>",
+  "expected_minutes": {
+   "total": 40,
+   "basis": "about six TileLang compiles (30-60 s) or four Triton compiles per task, 85 short runs per task; 18 tasks on four lanes"
+  },
+  "node_reason": "One H100 node (4 H100): independent single-GPU lanes",
+  "not_claimed": [
+   "compute-sanitizer racecheck coverage",
+   "timing"
+  ]
+ },
+ "phases": {
+  "canary": {
+   "out": "<cluster storage>",
+   "gpu": "0",
+   "started": 1792068731.412553,
+   "exit": 0,
+   "finished": 1792068744.597359,
+   "joined": true,
+   "done": true,
+   "name": "race-triton_fwd-lstm-d256-s32-w8-correct",
+   "status": "PASS"
+  },
+  "tasks": {
+   "records": [
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792068744.601097,
+     "exit": 0,
+     "finished": 1792068752.028826,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_fwd-lstm-d256-s32-w8-broken_no_barrier",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792068744.6008768,
+     "exit": 0,
+     "finished": 1792068752.1786308,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_fwd-lstm-d256-s32-w8-broken_single",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792068744.6015882,
+     "exit": 0,
+     "finished": 1792068752.2302134,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_fwd-lstm-d256-s32-w8-broken_arrive_first",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792068744.6002855,
+     "exit": 0,
+     "finished": 1792068752.6777647,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_fwd-slstm-d256-s32-w8-correct",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792068752.0316155,
+     "exit": 0,
+     "finished": 1792068759.3574986,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_fwd-slstm-d256-s32-w8-broken_no_barrier",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792068752.1808958,
+     "exit": 0,
+     "finished": 1792068759.6067047,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_fwd-slstm-d256-s32-w8-broken_single",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792068752.2323682,
+     "exit": 0,
+     "finished": 1792068759.6584663,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_fwd-slstm-d256-s32-w8-broken_arrive_first",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792068752.6858428,
+     "exit": 0,
+     "finished": 1792068763.1152213,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_fwd-lstm-d768-s32-w8-correct",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792068759.3599265,
+     "exit": 0,
+     "finished": 1792068766.436212,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_fwd-lstm-d768-s32-w8-broken_no_barrier",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792068759.6091144,
+     "exit": 0,
+     "finished": 1792068766.634853,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_fwd-lstm-d768-s32-w8-broken_single",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792068759.6606376,
+     "exit": 0,
+     "finished": 1792068766.6364818,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_fwd-lstm-d768-s32-w8-broken_arrive_first",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792068763.1184764,
+     "exit": 0,
+     "finished": 1792068770.7448735,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_fwd-slstm-d768-s32-w8-correct",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792068766.4389956,
+     "exit": 0,
+     "finished": 1792068774.115286,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_fwd-slstm-d768-s32-w8-broken_no_barrier",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792068766.6368763,
+     "exit": 0,
+     "finished": 1792068774.3150766,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_fwd-slstm-d768-s32-w8-broken_single",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792068766.6388555,
+     "exit": 0,
+     "finished": 1792068774.3166711,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_fwd-slstm-d768-s32-w8-broken_arrive_first",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792068770.7478716,
+     "exit": 0,
+     "finished": 1792068780.227257,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_bw-lstm-d256-s32-w8-correct",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792068774.1178548,
+     "exit": 0,
+     "finished": 1792068783.6980865,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_bw-lstm-d256-s32-w8-broken_no_barrier",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792068774.3189852,
+     "exit": 0,
+     "finished": 1792068783.9485323,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_bw-lstm-d256-s32-w8-broken_arrive_first",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792068774.318197,
+     "exit": 0,
+     "finished": 1792068783.9486763,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_bw-lstm-d256-s32-w8-broken_single",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792068780.2301838,
+     "exit": 0,
+     "finished": 1792068790.3603132,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_bw-slstm-d256-s32-w8-correct",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792068783.9519298,
+     "exit": 0,
+     "finished": 1792068793.481773,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_bw-slstm-d256-s32-w8-broken_single",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792068783.7011437,
+     "exit": 0,
+     "finished": 1792068793.6316245,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_bw-slstm-d256-s32-w8-broken_no_barrier",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792068783.9514232,
+     "exit": 0,
+     "finished": 1792068793.681899,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_bw-slstm-d256-s32-w8-broken_arrive_first",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792068793.4843214,
+     "exit": 0,
+     "finished": 1792068813.9797404,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_bw-lstm-d768-s16-w8-broken_single",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792068793.6338966,
+     "exit": 0,
+     "finished": 1792068814.2313972,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_bw-lstm-d768-s16-w8-broken_no_barrier",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792068793.6842194,
+     "exit": 0,
+     "finished": 1792068814.2816536,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_bw-lstm-d768-s16-w8-broken_arrive_first",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792068790.3631227,
+     "exit": 0,
+     "finished": 1792068814.6171622,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_bw-lstm-d768-s16-w8-correct",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792068813.982419,
+     "exit": 0,
+     "finished": 1792068842.3927474,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_bw-slstm-d768-s16-w8-broken_single",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792068814.2840965,
+     "exit": 0,
+     "finished": 1792068842.5402603,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_bw-slstm-d768-s16-w8-broken_arrive_first",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792068814.2334282,
+     "exit": 0,
+     "finished": 1792068842.8439336,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_bw-slstm-d768-s16-w8-broken_no_barrier",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792068814.619862,
+     "exit": 0,
+     "finished": 1792068842.8797266,
+     "joined": true,
+     "done": true,
+     "name": "race-triton_bw-slstm-d768-s16-w8-correct",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792068842.39665,
+     "exit": 0,
+     "finished": 1792068876.06342,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_cluster-lstm-d256-s32-bm16-t128-broken_single",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792068842.8816068,
+     "exit": 0,
+     "finished": 1792068877.6516223,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_cluster-lstm-d256-s32-bm16-t128-correct",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792068842.5421872,
+     "exit": 0,
+     "finished": 1792068877.703766,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_cluster-lstm-d256-s32-bm16-t128-broken_no_sync",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792068842.8464365,
+     "exit": 0,
+     "finished": 1792068877.9604135,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_cluster-lstm-d256-s32-bm16-t128-broken_no_wait",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792068876.0658875,
+     "exit": 0,
+     "finished": 1792068891.4046361,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_cluster-slstm-d256-s32-bm16-t128-broken_single",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792068877.6537561,
+     "exit": 0,
+     "finished": 1792068925.444432,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_cluster-slstm-d256-s32-bm16-t128-correct",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792068877.7057242,
+     "exit": 0,
+     "finished": 1792068925.4963455,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_cluster-slstm-d256-s32-bm16-t128-broken_no_sync",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792068877.9625857,
+     "exit": 0,
+     "finished": 1792068925.747083,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_cluster-slstm-d256-s32-bm16-t128-broken_no_wait",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792068891.4080527,
+     "exit": 0,
+     "finished": 1792068939.2989242,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_cluster-lstm-d256-s16-bm32-t128-broken_single",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792068925.4466274,
+     "exit": 0,
+     "finished": 1792069003.1842885,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_cluster-lstm-d256-s16-bm32-t128-correct",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792068925.4984357,
+     "exit": 0,
+     "finished": 1792069003.225753,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_cluster-lstm-d256-s16-bm32-t128-broken_no_sync",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792068925.7490366,
+     "exit": 0,
+     "finished": 1792069003.4361136,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_cluster-lstm-d256-s16-bm32-t128-broken_no_wait",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792068939.3014462,
+     "exit": 0,
+     "finished": 1792069017.3895626,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_cluster-slstm-d256-s16-bm32-t128-broken_single",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792069003.2312016,
+     "exit": 0,
+     "finished": 1792069081.368824,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_cluster-slstm-d256-s16-bm32-t128-broken_no_sync",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792069003.1873882,
+     "exit": 0,
+     "finished": 1792069081.519195,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_cluster-slstm-d256-s16-bm32-t128-correct",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792069003.4379895,
+     "exit": 0,
+     "finished": 1792069081.778116,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_cluster-slstm-d256-s16-bm32-t128-broken_no_wait",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792069017.3920333,
+     "exit": 0,
+     "finished": 1792069094.4770718,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_grid-lstm-d768-s16-bm16-t128-broken_single",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792069081.7799947,
+     "exit": 0,
+     "finished": 1792069100.3241322,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_grid-lstm-d768-s16-bm16-t128-broken_no_barrier",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792069081.5210896,
+     "exit": 0,
+     "finished": 1792069100.616009,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_grid-lstm-d768-s16-bm16-t128-correct",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792069081.3729947,
+     "exit": 0,
+     "finished": 1792069100.6665368,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_grid-lstm-d768-s16-bm16-t128-broken_arrive_first",
+     "status": "FAIL"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792069094.4865818,
+     "exit": 0,
+     "finished": 1792069115.2340248,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_grid-slstm-d768-s16-bm16-t128-broken_single",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792069100.3268833,
+     "exit": 0,
+     "finished": 1792069118.5206952,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_grid-slstm-d768-s16-bm16-t128-broken_no_barrier",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792069100.6684766,
+     "exit": 0,
+     "finished": 1792069118.6612024,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_grid-slstm-d768-s16-bm16-t128-broken_arrive_first",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792069100.6185231,
+     "exit": 0,
+     "finished": 1792069118.8106415,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_grid-slstm-d768-s16-bm16-t128-correct",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792069118.5231385,
+     "exit": 0,
+     "finished": 1792069139.5703804,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_grid-lstm-d768-s16-bm64-t256-broken_no_barrier",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792069118.663441,
+     "exit": 0,
+     "finished": 1792069139.7092862,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_grid-lstm-d768-s16-bm64-t256-broken_arrive_first",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792069118.8126926,
+     "exit": 0,
+     "finished": 1792069139.9098876,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_grid-lstm-d768-s16-bm64-t256-correct",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792069115.2365854,
+     "exit": 0,
+     "finished": 1792069140.0867705,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_grid-lstm-d768-s16-bm64-t256-broken_single",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "2",
+     "started": 1792069139.5728543,
+     "exit": 0,
+     "finished": 1792069167.2302556,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_grid-slstm-d768-s16-bm64-t256-broken_no_barrier",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "3",
+     "started": 1792069139.7127082,
+     "exit": 0,
+     "finished": 1792069167.4707341,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_grid-slstm-d768-s16-bm64-t256-broken_arrive_first",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792069139.912364,
+     "exit": 0,
+     "finished": 1792069167.4708948,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_grid-slstm-d768-s16-bm64-t256-correct",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792069140.0884285,
+     "exit": 0,
+     "finished": 1792069178.3595026,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_grid-slstm-d768-s16-bm64-t256-broken_single",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "0",
+     "started": 1792069167.4741812,
+     "exit": 0,
+     "finished": 1792069184.0155945,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_cluster-positive256-lstm",
+     "status": "PASS"
+    },
+    {
+     "out": "<cluster storage>",
+     "gpu": "1",
+     "started": 1792069178.3643627,
+     "exit": 0,
+     "finished": 1792069194.9565604,
+     "joined": true,
+     "done": true,
+     "name": "race-tl_cluster-positive256-slstm",
+     "status": "PASS"
+    }
+   ],
+   "finished": 1792069194.9585938
+  }
+ },
+ "scientific_pass": false,
+ "finished": 1792069195.3303313,
+ "tasks_pass": 65,
+ "tasks_planned": 66,
+ "status": "COMPLETED"
+}

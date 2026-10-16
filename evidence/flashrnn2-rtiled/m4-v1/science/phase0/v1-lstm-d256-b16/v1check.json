@@ -1,0 +1,28 @@
+{
+ "mode": "v1check",
+ "cell": "lstm",
+ "width": 256,
+ "batch": 16,
+ "identity": {
+  "gpu": "NVIDIA H100",
+  "capability": [
+   9,
+   0
+  ],
+  "triton": "3.6.0",
+  "torch": "2.4.0a0+gite3b9b71",
+  "cuda": "11.8",
+  "source": {
+   "tools/rtiled_m4.py": "e5e26677d8b9959bdc940fcc20d99692f63b3d07ce23cbfb6b49df43f2414c5c",
+   "flashrnn/flashrnn2/triton_rtiled.py": "5e822255adcd00c00c19c5aa217dfff268634e3b4e3c8ccb4ba5cc76b97eed12",
+   "flashrnn/flashrnn2/triton_persistent.py": "c83a6255f01e1db30e5ea6bc9a50f5f7a6d24cffe26b7bd8a89faffe7b2148e1",
+   "flashrnn/flashrnn2/tilelang_rtiled.py": "1e776015693e0cdfd65a0cb1b9affbee9b250208bbf682ec95cfd404df20f042",
+   "flashrnn/flashrnn2/reference.py": "9b6351ded119b071f6d7bc749e9a20269dde09c9a536cb6094afd6961c1d8260",
+   "flashrnn/flashrnn2/execution_policy.py": "ccf7e487dfc106c14aa07e38ba46ab18361f5893d4c979c928a62b0adf0cdc45",
+   "flashrnn/flashrnn2/state_contract.py": "b99311ca231c478860b55ecae216e88ecb3a55f9d8aa212428b82157f8b9485e"
+  }
+ },
+ "status": "BASELINE_UNAVAILABLE",
+ "error": "iled_m4.py\", line 281, in mode_v1check\n    y = arm(wx, r, b, init)\n        ^^^^^^^^^^^^^^^^^^^\n  File \"<cluster storage>\", line 188, in run\n    history, _ = v1[\"flashrnn\"](wx, r, b, init, config=config)\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<cluster storage>\", line 1135, in flashrnn\n    h, last_h = kernel(Wx, states, R, b)\n                ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<cluster storage>\", line 1050, in fn\n    states = FlashRNNFuncGeneratorFused(\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<cluster storage>\", line 681, in FlashRNNFuncGeneratorFused\n    flashrnn_cuda = _FlashRNNCUDAFused.instance(config)\n                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<cluster storage>\", line 395, in instance\n    gpu_info = get_gpu_info(device_id=torch.cuda.current_device())\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<cluster storage>\", line 41, in get_gpu_info\n    gpu_info_cuda = _GPUInfoCUDA.instance()\n                    ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<cluster storage>\", line 28, in instance\n    cls.mod = load(\n              ^^^^^\n  File \"<cluster storage>\", line 168, in load\n    mod = _load(name + suffix, sources, **myargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<cluster storage>\", line 172, in load\n    return super().load(*positional, **keywords)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<cluster storage>\", line 118, in load\n    return import_artifact(module_name, artifact, manifest[\"artifact_sha256\"])\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<cluster storage>\", line 25, in import_artifact\n    module = importlib.util.module_from_spec(spec)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<frozen importlib._bootstrap>\", line 573, in module_from_spec\n  File \"<frozen importlib._bootstrap_external>\", line 1233, in create_module\n  File \"<frozen importlib._bootstrap>\", line 241, in _call_with_frames_removed\nImportError: dynamic module does not define module export function (PyInit_gpu_info2_ce57475ca7f9)\n",
+ "seconds": 24.653666496276855
+}

@@ -1,0 +1,187 @@
+{
+ "mode": "select",
+ "case": {
+  "name": "e2-lstm-d128-b16-c32-t32",
+  "lane": 2,
+  "cell": "lstm",
+  "width": 128,
+  "batch": 16,
+  "concurrency": 32,
+  "steps": 32,
+  "roles": {
+   "baseline": [
+    {
+     "kind": "single",
+     "warps": 4
+    },
+    {
+     "kind": "single",
+     "warps": 8
+    }
+   ],
+   "k2": [
+    {
+     "kind": "rtiled",
+     "slice_width": 64,
+     "warps": 4,
+     "pad_k": false
+    },
+    {
+     "kind": "rtiled",
+     "slice_width": 64,
+     "warps": 8,
+     "pad_k": false
+    }
+   ],
+   "kmid": [
+    {
+     "kind": "rtiled",
+     "slice_width": 32,
+     "warps": 4,
+     "pad_k": false
+    },
+    {
+     "kind": "rtiled",
+     "slice_width": 32,
+     "warps": 8,
+     "pad_k": false
+    }
+   ]
+  }
+ },
+ "identity": {
+  "gpu": "NVIDIA H100",
+  "capability": [
+   9,
+   0
+  ],
+  "triton": "3.6.0",
+  "torch": "2.4.0a0+gite3b9b71",
+  "cuda": "11.8",
+  "source": {
+   "tools/rtiled_m4.py": "429a244753fc846288c845b443928676ee4eedde4b86e7167393e158ea384116",
+   "flashrnn/flashrnn2/triton_rtiled.py": "5e822255adcd00c00c19c5aa217dfff268634e3b4e3c8ccb4ba5cc76b97eed12",
+   "flashrnn/flashrnn2/triton_persistent.py": "c83a6255f01e1db30e5ea6bc9a50f5f7a6d24cffe26b7bd8a89faffe7b2148e1",
+   "flashrnn/flashrnn2/tilelang_rtiled.py": "1e776015693e0cdfd65a0cb1b9affbee9b250208bbf682ec95cfd404df20f042",
+   "flashrnn/flashrnn2/reference.py": "9b6351ded119b071f6d7bc749e9a20269dde09c9a536cb6094afd6961c1d8260",
+   "flashrnn/flashrnn2/execution_policy.py": "ccf7e487dfc106c14aa07e38ba46ab18361f5893d4c979c928a62b0adf0cdc45",
+   "flashrnn/flashrnn2/state_contract.py": "b99311ca231c478860b55ecae216e88ecb3a55f9d8aa212428b82157f8b9485e"
+  }
+ },
+ "split": 0,
+ "candidates": {
+  "baseline": {
+   "qualification": {
+    "{\"kind\": \"single\", \"warps\": 4}": "PASS",
+    "{\"kind\": \"single\", \"warps\": 8}": "PASS"
+   },
+   "median_ms": {
+    "{\"kind\": \"single\", \"warps\": 4}": 1.065752,
+    "{\"kind\": \"single\", \"warps\": 8}": 0.982473
+   },
+   "raw_ms": {
+    "{\"kind\": \"single\", \"warps\": 4}": [
+     1.06408,
+     1.068466,
+     1.057823,
+     1.070229,
+     1.06785,
+     1.065752,
+     1.059026,
+     1.059113
+    ],
+    "{\"kind\": \"single\", \"warps\": 8}": [
+     0.982473,
+     0.988736,
+     0.983548,
+     0.980538,
+     0.978697,
+     0.990967,
+     0.976539,
+     0.97759
+    ]
+   },
+   "selected": {
+    "kind": "single",
+    "warps": 8
+   }
+  },
+  "k2": {
+   "qualification": {
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 4}": "PASS",
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 8}": "PASS"
+   },
+   "median_ms": {
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 4}": 1.291119,
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 8}": 1.112878
+   },
+   "raw_ms": {
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 4}": [
+     1.283965,
+     1.30815,
+     1.291574,
+     1.289353,
+     1.29388,
+     1.291119,
+     1.289368,
+     1.289315
+    ],
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 8}": [
+     1.101763,
+     1.134735,
+     1.107915,
+     1.105258,
+     1.121564,
+     1.114279,
+     1.089681,
+     1.112878
+    ]
+   },
+   "selected": {
+    "kind": "rtiled",
+    "pad_k": false,
+    "slice_width": 64,
+    "warps": 8
+   }
+  },
+  "kmid": {
+   "qualification": {
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 4}": "PASS",
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 8}": "PASS"
+   },
+   "median_ms": {
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 4}": 1.070852,
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 8}": 1.101042
+   },
+   "raw_ms": {
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 4}": [
+     1.088792,
+     1.088898,
+     1.070303,
+     1.085053,
+     1.070587,
+     1.070821,
+     1.065451,
+     1.070852
+    ],
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 8}": [
+     1.114013,
+     1.10404,
+     1.100565,
+     1.101042,
+     1.091081,
+     1.100926,
+     1.104735,
+     1.097227
+    ]
+   },
+   "selected": {
+    "kind": "rtiled",
+    "pad_k": false,
+    "slice_width": 32,
+    "warps": 4
+   }
+  }
+ },
+ "status": "SELECTED"
+}

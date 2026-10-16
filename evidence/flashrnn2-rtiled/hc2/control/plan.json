@@ -1,0 +1,1609 @@
+{
+ "purpose": "High-concurrency round 2. Profiling of five recurrence configurations at B = 1024, T = 128 (ncu if counters are permitted, else an nsys timeline of the s0p forward); occupancy plane screen: TileLang R tiling with two warpgroups per CTA (256 threads) vs one, at the round-1 batch tiles, bitwise twin checks and split-0 makespans; launch plane: the round-1 best configuration served through a CUDA Graph of the whole 4-layer forward vs eager, paired split-1 timing",
+ "stop_criterion": "at C = 1024 for D = 256 and D = 768, LSTM and sLSTM: throughput >= 2x max(s0, s0p) and P90 no worse than s0",
+ "minutes": 150,
+ "starts": 5,
+ "blocks": 20,
+ "select_reps": 5,
+ "ncu": "CUDA 12.8 ncu --target-processes application-only --launch-skip 3 --launch-count 1 -k regex:main_kernel|_rtiled --section SpeedOfLight --section Occupancy --section LaunchStats --section WarpStateStats --section SchedulerStats --section MemoryWorkloadAnalysis",
+ "nsys": "CUDA 12.8 nsys profile -t cuda --stats=true --force-overwrite true -o {out}/trace",
+ "profiles": [
+  {
+   "name": "d256-tri-s64-w8",
+   "cell": "lstm",
+   "width": 256,
+   "config": {
+    "family": "mma_rtiled",
+    "batch_tile": 16,
+    "warps": 8,
+    "weight_operand": "b",
+    "slice_width": 64,
+    "sync": "grid",
+    "pad_k": false
+   }
+  },
+  {
+   "name": "d256-tl-cluster-s16-bm16",
+   "cell": "lstm",
+   "width": 256,
+   "config": {
+    "family": "tilelang",
+    "batch_tile": 16,
+    "warps": 4,
+    "weight_operand": "b",
+    "slice_width": 16,
+    "sync": "cluster",
+    "pad_k": false
+   }
+  },
+  {
+   "name": "d256-tl-cluster-s32-bm64",
+   "cell": "lstm",
+   "width": 256,
+   "config": {
+    "family": "tilelang",
+    "batch_tile": 64,
+    "warps": 4,
+    "weight_operand": "b",
+    "slice_width": 32,
+    "sync": "cluster",
+    "pad_k": false
+   }
+  },
+  {
+   "name": "d768-tri-s32-w4",
+   "cell": "lstm",
+   "width": 768,
+   "config": {
+    "family": "mma_rtiled",
+    "batch_tile": 16,
+    "warps": 4,
+    "weight_operand": "b",
+    "slice_width": 32,
+    "sync": "grid",
+    "pad_k": false
+   }
+  },
+  {
+   "name": "d768-tl-grid-s16-bm64",
+   "cell": "lstm",
+   "width": 768,
+   "config": {
+    "family": "tilelang",
+    "batch_tile": 64,
+    "warps": 4,
+    "weight_operand": "b",
+    "slice_width": 16,
+    "sync": "grid",
+    "pad_k": false
+   }
+  }
+ ],
+ "select_cases": [
+  {
+   "name": "hc2-lstm-d256-c256-t128",
+   "lane": 0,
+   "cell": "lstm",
+   "width": 256,
+   "steps": 128,
+   "concurrency": 256,
+   "reference": "r1_best",
+   "candidates": [
+    {
+     "label": "r1_best",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 16,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "cluster",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_cluster_s16_bm32_w4",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "cluster",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_cluster_s16_bm32_w8",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "cluster",
+      "pad_k": false
+     },
+     "twin": "tl_cluster_s16_bm32_w4"
+    },
+    {
+     "label": "tl_cluster_s16_bm64_w4",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 64,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "cluster",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_cluster_s16_bm64_w8",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 64,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "cluster",
+      "pad_k": false
+     },
+     "twin": "tl_cluster_s16_bm64_w4"
+    },
+    {
+     "label": "tl_cluster_s32_bm32_w4",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 32,
+      "sync": "cluster",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_cluster_s32_bm32_w8",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 32,
+      "sync": "cluster",
+      "pad_k": false
+     },
+     "twin": "tl_cluster_s32_bm32_w4"
+    },
+    {
+     "label": "tl_cluster_s32_bm64_w4",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 64,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 32,
+      "sync": "cluster",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_cluster_s32_bm64_w8",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 64,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 32,
+      "sync": "cluster",
+      "pad_k": false
+     },
+     "twin": "tl_cluster_s32_bm64_w4"
+    },
+    {
+     "label": "tl_cluster_s64_bm32_w4",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 64,
+      "sync": "cluster",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_cluster_s64_bm32_w8",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 64,
+      "sync": "cluster",
+      "pad_k": false
+     },
+     "twin": "tl_cluster_s64_bm32_w4"
+    }
+   ],
+   "roles": {
+    "best": [
+     "r1_best",
+     "tl_cluster_s16_bm32_w4",
+     "tl_cluster_s16_bm64_w4",
+     "tl_cluster_s32_bm32_w4",
+     "tl_cluster_s32_bm64_w4",
+     "tl_cluster_s64_bm32_w4",
+     "tl_cluster_s16_bm32_w8",
+     "tl_cluster_s16_bm64_w8",
+     "tl_cluster_s32_bm32_w8",
+     "tl_cluster_s32_bm64_w8",
+     "tl_cluster_s64_bm32_w8"
+    ],
+    "best_w4": [
+     "r1_best",
+     "tl_cluster_s16_bm32_w4",
+     "tl_cluster_s16_bm64_w4",
+     "tl_cluster_s32_bm32_w4",
+     "tl_cluster_s32_bm64_w4",
+     "tl_cluster_s64_bm32_w4"
+    ],
+    "best_w8": [
+     "tl_cluster_s16_bm32_w8",
+     "tl_cluster_s16_bm64_w8",
+     "tl_cluster_s32_bm32_w8",
+     "tl_cluster_s32_bm64_w8",
+     "tl_cluster_s64_bm32_w8"
+    ]
+   }
+  },
+  {
+   "name": "hc2-lstm-d256-c1024-t128",
+   "lane": 1,
+   "cell": "lstm",
+   "width": 256,
+   "steps": 128,
+   "concurrency": 1024,
+   "reference": "r1_best",
+   "candidates": [
+    {
+     "label": "r1_best",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "mma_rtiled",
+      "batch_tile": 16,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 64,
+      "sync": "grid",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_cluster_s16_bm32_w4",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "cluster",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_cluster_s16_bm32_w8",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "cluster",
+      "pad_k": false
+     },
+     "twin": "tl_cluster_s16_bm32_w4"
+    },
+    {
+     "label": "tl_cluster_s16_bm64_w4",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 64,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "cluster",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_cluster_s16_bm64_w8",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 64,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "cluster",
+      "pad_k": false
+     },
+     "twin": "tl_cluster_s16_bm64_w4"
+    },
+    {
+     "label": "tl_cluster_s32_bm32_w4",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 32,
+      "sync": "cluster",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_cluster_s32_bm32_w8",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 32,
+      "sync": "cluster",
+      "pad_k": false
+     },
+     "twin": "tl_cluster_s32_bm32_w4"
+    },
+    {
+     "label": "tl_cluster_s32_bm64_w4",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 64,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 32,
+      "sync": "cluster",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_cluster_s32_bm64_w8",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 64,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 32,
+      "sync": "cluster",
+      "pad_k": false
+     },
+     "twin": "tl_cluster_s32_bm64_w4"
+    },
+    {
+     "label": "tl_cluster_s64_bm32_w4",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 64,
+      "sync": "cluster",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_cluster_s64_bm32_w8",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 64,
+      "sync": "cluster",
+      "pad_k": false
+     },
+     "twin": "tl_cluster_s64_bm32_w4"
+    }
+   ],
+   "roles": {
+    "best": [
+     "r1_best",
+     "tl_cluster_s16_bm32_w4",
+     "tl_cluster_s16_bm64_w4",
+     "tl_cluster_s32_bm32_w4",
+     "tl_cluster_s32_bm64_w4",
+     "tl_cluster_s64_bm32_w4",
+     "tl_cluster_s16_bm32_w8",
+     "tl_cluster_s16_bm64_w8",
+     "tl_cluster_s32_bm32_w8",
+     "tl_cluster_s32_bm64_w8",
+     "tl_cluster_s64_bm32_w8"
+    ],
+    "best_w4": [
+     "r1_best",
+     "tl_cluster_s16_bm32_w4",
+     "tl_cluster_s16_bm64_w4",
+     "tl_cluster_s32_bm32_w4",
+     "tl_cluster_s32_bm64_w4",
+     "tl_cluster_s64_bm32_w4"
+    ],
+    "best_w8": [
+     "tl_cluster_s16_bm32_w8",
+     "tl_cluster_s16_bm64_w8",
+     "tl_cluster_s32_bm32_w8",
+     "tl_cluster_s32_bm64_w8",
+     "tl_cluster_s64_bm32_w8"
+    ]
+   }
+  },
+  {
+   "name": "hc2-slstm-d256-c256-t128",
+   "lane": 2,
+   "cell": "slstm",
+   "width": 256,
+   "steps": 128,
+   "concurrency": 256,
+   "reference": "r1_best",
+   "candidates": [
+    {
+     "label": "r1_best",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 16,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "cluster",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_cluster_s16_bm32_w4",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "cluster",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_cluster_s16_bm32_w8",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "cluster",
+      "pad_k": false
+     },
+     "twin": "tl_cluster_s16_bm32_w4"
+    },
+    {
+     "label": "tl_cluster_s16_bm64_w4",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 64,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "cluster",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_cluster_s16_bm64_w8",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 64,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "cluster",
+      "pad_k": false
+     },
+     "twin": "tl_cluster_s16_bm64_w4"
+    },
+    {
+     "label": "tl_cluster_s32_bm32_w4",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 32,
+      "sync": "cluster",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_cluster_s32_bm32_w8",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 32,
+      "sync": "cluster",
+      "pad_k": false
+     },
+     "twin": "tl_cluster_s32_bm32_w4"
+    },
+    {
+     "label": "tl_cluster_s32_bm64_w4",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 64,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 32,
+      "sync": "cluster",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_cluster_s32_bm64_w8",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 64,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 32,
+      "sync": "cluster",
+      "pad_k": false
+     },
+     "twin": "tl_cluster_s32_bm64_w4"
+    },
+    {
+     "label": "tl_cluster_s64_bm32_w4",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 64,
+      "sync": "cluster",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_cluster_s64_bm32_w8",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 64,
+      "sync": "cluster",
+      "pad_k": false
+     },
+     "twin": "tl_cluster_s64_bm32_w4"
+    }
+   ],
+   "roles": {
+    "best": [
+     "r1_best",
+     "tl_cluster_s16_bm32_w4",
+     "tl_cluster_s16_bm64_w4",
+     "tl_cluster_s32_bm32_w4",
+     "tl_cluster_s32_bm64_w4",
+     "tl_cluster_s64_bm32_w4",
+     "tl_cluster_s16_bm32_w8",
+     "tl_cluster_s16_bm64_w8",
+     "tl_cluster_s32_bm32_w8",
+     "tl_cluster_s32_bm64_w8",
+     "tl_cluster_s64_bm32_w8"
+    ],
+    "best_w4": [
+     "r1_best",
+     "tl_cluster_s16_bm32_w4",
+     "tl_cluster_s16_bm64_w4",
+     "tl_cluster_s32_bm32_w4",
+     "tl_cluster_s32_bm64_w4",
+     "tl_cluster_s64_bm32_w4"
+    ],
+    "best_w8": [
+     "tl_cluster_s16_bm32_w8",
+     "tl_cluster_s16_bm64_w8",
+     "tl_cluster_s32_bm32_w8",
+     "tl_cluster_s32_bm64_w8",
+     "tl_cluster_s64_bm32_w8"
+    ]
+   }
+  },
+  {
+   "name": "hc2-slstm-d256-c1024-t128",
+   "lane": 3,
+   "cell": "slstm",
+   "width": 256,
+   "steps": 128,
+   "concurrency": 1024,
+   "reference": "r1_best",
+   "candidates": [
+    {
+     "label": "r1_best",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "mma_rtiled",
+      "batch_tile": 16,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 64,
+      "sync": "grid",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_cluster_s16_bm32_w4",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "cluster",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_cluster_s16_bm32_w8",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "cluster",
+      "pad_k": false
+     },
+     "twin": "tl_cluster_s16_bm32_w4"
+    },
+    {
+     "label": "tl_cluster_s16_bm64_w4",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 64,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "cluster",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_cluster_s16_bm64_w8",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 64,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "cluster",
+      "pad_k": false
+     },
+     "twin": "tl_cluster_s16_bm64_w4"
+    },
+    {
+     "label": "tl_cluster_s32_bm32_w4",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 32,
+      "sync": "cluster",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_cluster_s32_bm32_w8",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 32,
+      "sync": "cluster",
+      "pad_k": false
+     },
+     "twin": "tl_cluster_s32_bm32_w4"
+    },
+    {
+     "label": "tl_cluster_s32_bm64_w4",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 64,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 32,
+      "sync": "cluster",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_cluster_s32_bm64_w8",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 64,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 32,
+      "sync": "cluster",
+      "pad_k": false
+     },
+     "twin": "tl_cluster_s32_bm64_w4"
+    },
+    {
+     "label": "tl_cluster_s64_bm32_w4",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 64,
+      "sync": "cluster",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_cluster_s64_bm32_w8",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 64,
+      "sync": "cluster",
+      "pad_k": false
+     },
+     "twin": "tl_cluster_s64_bm32_w4"
+    }
+   ],
+   "roles": {
+    "best": [
+     "r1_best",
+     "tl_cluster_s16_bm32_w4",
+     "tl_cluster_s16_bm64_w4",
+     "tl_cluster_s32_bm32_w4",
+     "tl_cluster_s32_bm64_w4",
+     "tl_cluster_s64_bm32_w4",
+     "tl_cluster_s16_bm32_w8",
+     "tl_cluster_s16_bm64_w8",
+     "tl_cluster_s32_bm32_w8",
+     "tl_cluster_s32_bm64_w8",
+     "tl_cluster_s64_bm32_w8"
+    ],
+    "best_w4": [
+     "r1_best",
+     "tl_cluster_s16_bm32_w4",
+     "tl_cluster_s16_bm64_w4",
+     "tl_cluster_s32_bm32_w4",
+     "tl_cluster_s32_bm64_w4",
+     "tl_cluster_s64_bm32_w4"
+    ],
+    "best_w8": [
+     "tl_cluster_s16_bm32_w8",
+     "tl_cluster_s16_bm64_w8",
+     "tl_cluster_s32_bm32_w8",
+     "tl_cluster_s32_bm64_w8",
+     "tl_cluster_s64_bm32_w8"
+    ]
+   }
+  },
+  {
+   "name": "hc2-lstm-d768-c256-t128",
+   "lane": 0,
+   "cell": "lstm",
+   "width": 768,
+   "steps": 128,
+   "concurrency": 256,
+   "reference": "r1_best",
+   "candidates": [
+    {
+     "label": "r1_best",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "grid",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_grid_s16_bm32_w4",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "grid",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_grid_s16_bm32_w8",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "grid",
+      "pad_k": false
+     },
+     "twin": "tl_grid_s16_bm32_w4"
+    },
+    {
+     "label": "tl_grid_s16_bm64_w4",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 64,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "grid",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_grid_s16_bm64_w8",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 64,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "grid",
+      "pad_k": false
+     },
+     "twin": "tl_grid_s16_bm64_w4"
+    }
+   ],
+   "roles": {
+    "best": [
+     "r1_best",
+     "tl_grid_s16_bm32_w4",
+     "tl_grid_s16_bm64_w4",
+     "tl_grid_s16_bm32_w8",
+     "tl_grid_s16_bm64_w8"
+    ],
+    "best_w4": [
+     "r1_best",
+     "tl_grid_s16_bm32_w4",
+     "tl_grid_s16_bm64_w4"
+    ],
+    "best_w8": [
+     "tl_grid_s16_bm32_w8",
+     "tl_grid_s16_bm64_w8"
+    ]
+   }
+  },
+  {
+   "name": "hc2-lstm-d768-c1024-t128",
+   "lane": 1,
+   "cell": "lstm",
+   "width": 768,
+   "steps": 128,
+   "concurrency": 1024,
+   "reference": "r1_best",
+   "candidates": [
+    {
+     "label": "r1_best",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "mma_rtiled",
+      "batch_tile": 16,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 32,
+      "sync": "grid",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_grid_s16_bm32_w4",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "grid",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_grid_s16_bm32_w8",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "grid",
+      "pad_k": false
+     },
+     "twin": "tl_grid_s16_bm32_w4"
+    },
+    {
+     "label": "tl_grid_s16_bm64_w4",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 64,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "grid",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_grid_s16_bm64_w8",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 64,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "grid",
+      "pad_k": false
+     },
+     "twin": "tl_grid_s16_bm64_w4"
+    }
+   ],
+   "roles": {
+    "best": [
+     "r1_best",
+     "tl_grid_s16_bm32_w4",
+     "tl_grid_s16_bm64_w4",
+     "tl_grid_s16_bm32_w8",
+     "tl_grid_s16_bm64_w8"
+    ],
+    "best_w4": [
+     "r1_best",
+     "tl_grid_s16_bm32_w4",
+     "tl_grid_s16_bm64_w4"
+    ],
+    "best_w8": [
+     "tl_grid_s16_bm32_w8",
+     "tl_grid_s16_bm64_w8"
+    ]
+   }
+  },
+  {
+   "name": "hc2-slstm-d768-c256-t128",
+   "lane": 2,
+   "cell": "slstm",
+   "width": 768,
+   "steps": 128,
+   "concurrency": 256,
+   "reference": "r1_best",
+   "candidates": [
+    {
+     "label": "r1_best",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 64,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "grid",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_grid_s16_bm32_w4",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "grid",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_grid_s16_bm32_w8",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "grid",
+      "pad_k": false
+     },
+     "twin": "tl_grid_s16_bm32_w4"
+    },
+    {
+     "label": "tl_grid_s16_bm64_w4",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 64,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "grid",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_grid_s16_bm64_w8",
+     "strategy": "s0p",
+     "group": 256,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 64,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "grid",
+      "pad_k": false
+     },
+     "twin": "tl_grid_s16_bm64_w4"
+    }
+   ],
+   "roles": {
+    "best": [
+     "r1_best",
+     "tl_grid_s16_bm32_w4",
+     "tl_grid_s16_bm64_w4",
+     "tl_grid_s16_bm32_w8",
+     "tl_grid_s16_bm64_w8"
+    ],
+    "best_w4": [
+     "r1_best",
+     "tl_grid_s16_bm32_w4",
+     "tl_grid_s16_bm64_w4"
+    ],
+    "best_w8": [
+     "tl_grid_s16_bm32_w8",
+     "tl_grid_s16_bm64_w8"
+    ]
+   }
+  },
+  {
+   "name": "hc2-slstm-d768-c1024-t128",
+   "lane": 3,
+   "cell": "slstm",
+   "width": 768,
+   "steps": 128,
+   "concurrency": 1024,
+   "reference": "r1_best",
+   "candidates": [
+    {
+     "label": "r1_best",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "mma_rtiled",
+      "batch_tile": 16,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 32,
+      "sync": "grid",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_grid_s16_bm32_w4",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "grid",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_grid_s16_bm32_w8",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 32,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "grid",
+      "pad_k": false
+     },
+     "twin": "tl_grid_s16_bm32_w4"
+    },
+    {
+     "label": "tl_grid_s16_bm64_w4",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 64,
+      "warps": 4,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "grid",
+      "pad_k": false
+     }
+    },
+    {
+     "label": "tl_grid_s16_bm64_w8",
+     "strategy": "s0p",
+     "group": 1024,
+     "config": {
+      "family": "tilelang",
+      "batch_tile": 64,
+      "warps": 8,
+      "weight_operand": "b",
+      "slice_width": 16,
+      "sync": "grid",
+      "pad_k": false
+     },
+     "twin": "tl_grid_s16_bm64_w4"
+    }
+   ],
+   "roles": {
+    "best": [
+     "r1_best",
+     "tl_grid_s16_bm32_w4",
+     "tl_grid_s16_bm64_w4",
+     "tl_grid_s16_bm32_w8",
+     "tl_grid_s16_bm64_w8"
+    ],
+    "best_w4": [
+     "r1_best",
+     "tl_grid_s16_bm32_w4",
+     "tl_grid_s16_bm64_w4"
+    ],
+    "best_w8": [
+     "tl_grid_s16_bm32_w8",
+     "tl_grid_s16_bm64_w8"
+    ]
+   }
+  }
+ ],
+ "comparisons": [
+  {
+   "name": "hc2-lstm-d256-c256-t128-graph-vs-eager",
+   "experiment": "HC_GRAPH_VS_EAGER",
+   "cell": "lstm",
+   "width": 256,
+   "batch": 256,
+   "concurrency": 256,
+   "steps": 128,
+   "lane": 0,
+   "baseline": {
+    "strategy": "s0p",
+    "group": 256,
+    "config": {
+     "family": "tilelang",
+     "batch_tile": 16,
+     "warps": 4,
+     "weight_operand": "b",
+     "slice_width": 16,
+     "sync": "cluster",
+     "pad_k": false
+    }
+   },
+   "candidate": {
+    "strategy": "s0p",
+    "group": 256,
+    "config": {
+     "family": "tilelang",
+     "batch_tile": 16,
+     "warps": 4,
+     "weight_operand": "b",
+     "slice_width": 16,
+     "sync": "cluster",
+     "pad_k": false
+    },
+    "graph": true
+   },
+   "baseline_label": "tl_cluster_s16_bm16",
+   "candidate_label": "tl_cluster_s16_bm16+graph"
+  },
+  {
+   "name": "hc2-lstm-d256-c1024-t128-graph-vs-eager",
+   "experiment": "HC_GRAPH_VS_EAGER",
+   "cell": "lstm",
+   "width": 256,
+   "batch": 1024,
+   "concurrency": 1024,
+   "steps": 128,
+   "lane": 1,
+   "baseline": {
+    "strategy": "s0p",
+    "group": 1024,
+    "config": {
+     "family": "mma_rtiled",
+     "batch_tile": 16,
+     "warps": 8,
+     "weight_operand": "b",
+     "slice_width": 64,
+     "sync": "grid",
+     "pad_k": false
+    }
+   },
+   "candidate": {
+    "strategy": "s0p",
+    "group": 1024,
+    "config": {
+     "family": "mma_rtiled",
+     "batch_tile": 16,
+     "warps": 8,
+     "weight_operand": "b",
+     "slice_width": 64,
+     "sync": "grid",
+     "pad_k": false
+    },
+    "graph": true
+   },
+   "baseline_label": "s0p_default",
+   "candidate_label": "s0p_default+graph"
+  },
+  {
+   "name": "hc2-slstm-d256-c256-t128-graph-vs-eager",
+   "experiment": "HC_GRAPH_VS_EAGER",
+   "cell": "slstm",
+   "width": 256,
+   "batch": 256,
+   "concurrency": 256,
+   "steps": 128,
+   "lane": 2,
+   "baseline": {
+    "strategy": "s0p",
+    "group": 256,
+    "config": {
+     "family": "tilelang",
+     "batch_tile": 16,
+     "warps": 4,
+     "weight_operand": "b",
+     "slice_width": 16,
+     "sync": "cluster",
+     "pad_k": false
+    }
+   },
+   "candidate": {
+    "strategy": "s0p",
+    "group": 256,
+    "config": {
+     "family": "tilelang",
+     "batch_tile": 16,
+     "warps": 4,
+     "weight_operand": "b",
+     "slice_width": 16,
+     "sync": "cluster",
+     "pad_k": false
+    },
+    "graph": true
+   },
+   "baseline_label": "tl_cluster_s16_bm16",
+   "candidate_label": "tl_cluster_s16_bm16+graph"
+  },
+  {
+   "name": "hc2-slstm-d256-c1024-t128-graph-vs-eager",
+   "experiment": "HC_GRAPH_VS_EAGER",
+   "cell": "slstm",
+   "width": 256,
+   "batch": 1024,
+   "concurrency": 1024,
+   "steps": 128,
+   "lane": 3,
+   "baseline": {
+    "strategy": "s0p",
+    "group": 1024,
+    "config": {
+     "family": "mma_rtiled",
+     "batch_tile": 16,
+     "warps": 4,
+     "weight_operand": "b",
+     "slice_width": 64,
+     "sync": "grid",
+     "pad_k": false
+    }
+   },
+   "candidate": {
+    "strategy": "s0p",
+    "group": 1024,
+    "config": {
+     "family": "mma_rtiled",
+     "batch_tile": 16,
+     "warps": 4,
+     "weight_operand": "b",
+     "slice_width": 64,
+     "sync": "grid",
+     "pad_k": false
+    },
+    "graph": true
+   },
+   "baseline_label": "tri_s64_w4",
+   "candidate_label": "tri_s64_w4+graph"
+  },
+  {
+   "name": "hc2-lstm-d768-c256-t128-graph-vs-eager",
+   "experiment": "HC_GRAPH_VS_EAGER",
+   "cell": "lstm",
+   "width": 768,
+   "batch": 256,
+   "concurrency": 256,
+   "steps": 128,
+   "lane": 0,
+   "baseline": {
+    "strategy": "s0p",
+    "group": 256,
+    "config": {
+     "family": "tilelang",
+     "batch_tile": 32,
+     "warps": 4,
+     "weight_operand": "b",
+     "slice_width": 16,
+     "sync": "grid",
+     "pad_k": false
+    }
+   },
+   "candidate": {
+    "strategy": "s0p",
+    "group": 256,
+    "config": {
+     "family": "tilelang",
+     "batch_tile": 32,
+     "warps": 4,
+     "weight_operand": "b",
+     "slice_width": 16,
+     "sync": "grid",
+     "pad_k": false
+    },
+    "graph": true
+   },
+   "baseline_label": "tl_grid_s16_bm32",
+   "candidate_label": "tl_grid_s16_bm32+graph"
+  },
+  {
+   "name": "hc2-lstm-d768-c1024-t128-graph-vs-eager",
+   "experiment": "HC_GRAPH_VS_EAGER",
+   "cell": "lstm",
+   "width": 768,
+   "batch": 1024,
+   "concurrency": 1024,
+   "steps": 128,
+   "lane": 1,
+   "baseline": {
+    "strategy": "s0p",
+    "group": 1024,
+    "config": {
+     "family": "mma_rtiled",
+     "batch_tile": 16,
+     "warps": 4,
+     "weight_operand": "b",
+     "slice_width": 32,
+     "sync": "grid",
+     "pad_k": false
+    }
+   },
+   "candidate": {
+    "strategy": "s0p",
+    "group": 1024,
+    "config": {
+     "family": "mma_rtiled",
+     "batch_tile": 16,
+     "warps": 4,
+     "weight_operand": "b",
+     "slice_width": 32,
+     "sync": "grid",
+     "pad_k": false
+    },
+    "graph": true
+   },
+   "baseline_label": "tri_s32_w4",
+   "candidate_label": "tri_s32_w4+graph"
+  },
+  {
+   "name": "hc2-slstm-d768-c256-t128-graph-vs-eager",
+   "experiment": "HC_GRAPH_VS_EAGER",
+   "cell": "slstm",
+   "width": 768,
+   "batch": 256,
+   "concurrency": 256,
+   "steps": 128,
+   "lane": 2,
+   "baseline": {
+    "strategy": "s0p",
+    "group": 256,
+    "config": {
+     "family": "tilelang",
+     "batch_tile": 64,
+     "warps": 4,
+     "weight_operand": "b",
+     "slice_width": 16,
+     "sync": "grid",
+     "pad_k": false
+    }
+   },
+   "candidate": {
+    "strategy": "s0p",
+    "group": 256,
+    "config": {
+     "family": "tilelang",
+     "batch_tile": 64,
+     "warps": 4,
+     "weight_operand": "b",
+     "slice_width": 16,
+     "sync": "grid",
+     "pad_k": false
+    },
+    "graph": true
+   },
+   "baseline_label": "tl_grid_s16_bm64",
+   "candidate_label": "tl_grid_s16_bm64+graph"
+  },
+  {
+   "name": "hc2-slstm-d768-c1024-t128-graph-vs-eager",
+   "experiment": "HC_GRAPH_VS_EAGER",
+   "cell": "slstm",
+   "width": 768,
+   "batch": 1024,
+   "concurrency": 1024,
+   "steps": 128,
+   "lane": 3,
+   "baseline": {
+    "strategy": "s0p",
+    "group": 1024,
+    "config": {
+     "family": "mma_rtiled",
+     "batch_tile": 16,
+     "warps": 4,
+     "weight_operand": "b",
+     "slice_width": 32,
+     "sync": "grid",
+     "pad_k": false
+    }
+   },
+   "candidate": {
+    "strategy": "s0p",
+    "group": 1024,
+    "config": {
+     "family": "mma_rtiled",
+     "batch_tile": 16,
+     "warps": 4,
+     "weight_operand": "b",
+     "slice_width": 32,
+     "sync": "grid",
+     "pad_k": false
+    },
+    "graph": true
+   },
+   "baseline_label": "tri_s32_w4",
+   "candidate_label": "tri_s32_w4+graph"
+  }
+ ],
+ "node_reason": "One H100 node (4 H100): profiling lanes, then screening lanes, then paired timing lanes",
+ "not_claimed": [
+  "256-thread variants are screened, not qualified: no paired claim for them in this round",
+  "arrival processes other than a closed batch",
+  "multi-GPU",
+  "model quality"
+ ]
+}

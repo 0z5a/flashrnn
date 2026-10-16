@@ -1,0 +1,172 @@
+{
+ "runs": [
+  {
+   "name": "m3-lstm-d128-s64",
+   "prefix": "",
+   "started": 1792004611.6000738,
+   "exit": 0,
+   "finished": 1792004634.7526503,
+   "joined": true,
+   "result": {
+    "variant": "m3",
+    "cell": "lstm",
+    "width": 128,
+    "slice": 64,
+    "batch": 3,
+    "steps": 17,
+    "heads": 2,
+    "out": "<cluster storage>",
+    "status": "RAN",
+    "hidden_max_abs": 3.052180009834038e-05,
+    "carry_max_abs": 7.480868746967406e-07
+   }
+  },
+  {
+   "name": "sync-lstm-d128-s32",
+   "prefix": "",
+   "started": 1792004634.754199,
+   "exit": 0,
+   "finished": 1792004640.9294481,
+   "joined": true,
+   "result": {
+    "variant": "sync",
+    "cell": "lstm",
+    "width": 128,
+    "slice": 32,
+    "batch": 3,
+    "steps": 17,
+    "heads": 2,
+    "out": "<cluster storage>",
+    "status": "RAN",
+    "hidden_max_abs": 3.052180009834038e-05,
+    "carry_max_abs": 7.480868746967406e-07
+   }
+  },
+  {
+   "name": "bulk-lstm-d128-s32",
+   "prefix": "",
+   "started": 1792004640.9308164,
+   "exit": 0,
+   "finished": 1792004647.956874,
+   "joined": true,
+   "result": {
+    "variant": "bulk",
+    "cell": "lstm",
+    "width": 128,
+    "slice": 32,
+    "batch": 3,
+    "steps": 17,
+    "heads": 2,
+    "out": "<cluster storage>",
+    "status": "ERROR",
+    "error": "Traceback (most recent call last):\n  File \"<cluster storage>\", line 37, in main\n    y, fin = tilelang_rtiled.recurrence_v2(*vals, a.cell, slice_width=a.slice, exchange=a.variant)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<cluster storage>\", line 337, in recurrence_v2\n    _KERNELS_V2[key](wx.contiguous(), recurrent.contiguous(), bias.contiguous(), initial.float().contiguous(), zero,\n  File \"<cluster storage>\", line 222, in __call__\n    return self.torch_function(*args, **kwds)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<cluster storage>\", line 339, in func\n    executable(*tensor_list)\n  File \"<cluster storage>\", line 46, in __call__\n    return self.jit().main(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"python/tvm_ffi/cython/function.pxi\", line 968, in tvm_ffi.core.Function.__call__\n  File \"/project/3rdparty/tvm/src/runtime/cuda/cuda_module.cc\", line 367, in void tvm::runtime::CUDAWrappedFunc::operator()(tvm::ffi::PackedArgs, tvm::ffi::Any*, void**) const\ntvm.error.InternalError: CUDALaunch Error: CUDA_ERROR_LAUNCH_FAILED\n grid=(4,2,1),  block=(128,1,1) dyn_smem_bytes=49152\n\n"
+   }
+  },
+  {
+   "name": "bulk-lstm-d128-s32-memcheck",
+   "prefix": "CUDA 12.8 compute-sanitizer --tool memcheck --print-limit 20",
+   "started": 1792004647.9585125,
+   "exit": 0,
+   "finished": 1792004652.5558763,
+   "joined": true,
+   "result": {
+    "variant": "bulk",
+    "cell": "lstm",
+    "width": 128,
+    "slice": 32,
+    "batch": 3,
+    "steps": 17,
+    "heads": 2,
+    "out": "<cluster storage>",
+    "status": "ERROR",
+    "error": "Traceback (most recent call last):\n  File \"<cluster storage>\", line 37, in main\n    y, fin = tilelang_rtiled.recurrence_v2(*vals, a.cell, slice_width=a.slice, exchange=a.variant)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<cluster storage>\", line 337, in recurrence_v2\n    _KERNELS_V2[key](wx.contiguous(), recurrent.contiguous(), bias.contiguous(), initial.float().contiguous(), zero,\n  File \"<cluster storage>\", line 222, in __call__\n    return self.torch_function(*args, **kwds)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<cluster storage>\", line 339, in func\n    executable(*tensor_list)\n  File \"<cluster storage>\", line 299, in __call__\n    return self.main(*args)\n           ^^^^^^^^^^^^^^^^\n  File \"python/tvm_ffi/cython/function.pxi\", line 968, in tvm_ffi.core.Function.__call__\n  File \"<unknown>\", line 0, in __tvm_ffi_main\n  File \"/project/3rdparty/tvm/src/runtime/cuda/cuda_module.cc\", line 367, in void tvm::runtime::CUDAWrappedFunc::operator()(tvm::ffi::PackedArgs, tvm::ffi::Any*, void**) const\ntvm.error.InternalError: CUDALaunch Error: CUDA_ERROR_LAUNCH_FAILED\n grid=(4,2,1),  block=(128,1,1) dyn_smem_bytes=49152\n\n"
+   }
+  },
+  {
+   "name": "bulk-lstm-d128-s32-synccheck",
+   "prefix": "CUDA 12.8 compute-sanitizer --tool synccheck --print-limit 20",
+   "started": 1792004652.558196,
+   "exit": 0,
+   "finished": 1792004656.6800258,
+   "joined": true,
+   "result": {
+    "variant": "bulk",
+    "cell": "lstm",
+    "width": 128,
+    "slice": 32,
+    "batch": 3,
+    "steps": 17,
+    "heads": 2,
+    "out": "<cluster storage>",
+    "status": "ERROR",
+    "error": "Traceback (most recent call last):\n  File \"<cluster storage>\", line 37, in main\n    y, fin = tilelang_rtiled.recurrence_v2(*vals, a.cell, slice_width=a.slice, exchange=a.variant)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<cluster storage>\", line 337, in recurrence_v2\n    _KERNELS_V2[key](wx.contiguous(), recurrent.contiguous(), bias.contiguous(), initial.float().contiguous(), zero,\n  File \"<cluster storage>\", line 222, in __call__\n    return self.torch_function(*args, **kwds)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<cluster storage>\", line 339, in func\n    executable(*tensor_list)\n  File \"<cluster storage>\", line 299, in __call__\n    return self.main(*args)\n           ^^^^^^^^^^^^^^^^\n  File \"python/tvm_ffi/cython/function.pxi\", line 968, in tvm_ffi.core.Function.__call__\n  File \"<unknown>\", line 0, in __tvm_ffi_main\n  File \"/project/3rdparty/tvm/src/runtime/cuda/cuda_module.cc\", line 367, in void tvm::runtime::CUDAWrappedFunc::operator()(tvm::ffi::PackedArgs, tvm::ffi::Any*, void**) const\ntvm.error.InternalError: CUDALaunch Error: CUDA_ERROR_LAUNCH_FAILED\n grid=(4,2,1),  block=(128,1,1) dyn_smem_bytes=49152\n\n"
+   }
+  },
+  {
+   "name": "sync-slstm-d256-s32",
+   "prefix": "",
+   "started": 1792004656.6815443,
+   "exit": 0,
+   "finished": 1792004663.1070352,
+   "joined": true,
+   "result": {
+    "variant": "sync",
+    "cell": "slstm",
+    "width": 256,
+    "slice": 32,
+    "batch": 3,
+    "steps": 17,
+    "heads": 2,
+    "out": "<cluster storage>",
+    "status": "RAN",
+    "hidden_max_abs": 4.380404083925704e-05,
+    "carry_max_abs": 4.208484474244045e-07
+   }
+  },
+  {
+   "name": "bulk-slstm-d256-s32",
+   "prefix": "",
+   "started": 1792004663.1095157,
+   "exit": 0,
+   "finished": 1792004669.885512,
+   "joined": true,
+   "result": {
+    "variant": "bulk",
+    "cell": "slstm",
+    "width": 256,
+    "slice": 32,
+    "batch": 3,
+    "steps": 17,
+    "heads": 2,
+    "out": "<cluster storage>",
+    "status": "ERROR",
+    "error": "Traceback (most recent call last):\n  File \"<cluster storage>\", line 37, in main\n    y, fin = tilelang_rtiled.recurrence_v2(*vals, a.cell, slice_width=a.slice, exchange=a.variant)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<cluster storage>\", line 337, in recurrence_v2\n    _KERNELS_V2[key](wx.contiguous(), recurrent.contiguous(), bias.contiguous(), initial.float().contiguous(), zero,\n  File \"<cluster storage>\", line 222, in __call__\n    return self.torch_function(*args, **kwds)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<cluster storage>\", line 339, in func\n    executable(*tensor_list)\n  File \"<cluster storage>\", line 46, in __call__\n    return self.jit().main(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"python/tvm_ffi/cython/function.pxi\", line 968, in tvm_ffi.core.Function.__call__\n  File \"/project/3rdparty/tvm/src/runtime/cuda/cuda_module.cc\", line 367, in void tvm::runtime::CUDAWrappedFunc::operator()(tvm::ffi::PackedArgs, tvm::ffi::Any*, void**) const\ntvm.error.InternalError: CUDALaunch Error: CUDA_ERROR_LAUNCH_FAILED\n grid=(8,2,1),  block=(128,1,1) dyn_smem_bytes=90112\n\n"
+   }
+  },
+  {
+   "name": "sync-lstm-d256-s32-b16-t128",
+   "prefix": "",
+   "started": 1792004669.888273,
+   "exit": 0,
+   "finished": 1792004675.963506,
+   "joined": true,
+   "result": {
+    "variant": "sync",
+    "cell": "lstm",
+    "width": 256,
+    "slice": 32,
+    "batch": 16,
+    "steps": 128,
+    "heads": 1,
+    "out": "<cluster storage>",
+    "status": "RAN",
+    "hidden_max_abs": 6.007992726883571e-05,
+    "carry_max_abs": 3.6524445034408215e-07
+   }
+  }
+ ],
+ "started": 1792004611.5990574,
+ "scientific_pass": false,
+ "finished": 1792004675.9646869,
+ "status": "ALL_TASKS_RUN"
+}

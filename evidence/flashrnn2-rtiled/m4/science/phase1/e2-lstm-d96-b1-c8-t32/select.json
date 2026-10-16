@@ -1,0 +1,259 @@
+{
+ "mode": "select",
+ "case": {
+  "name": "e2-lstm-d96-b1-c8-t32",
+  "lane": 2,
+  "cell": "lstm",
+  "width": 96,
+  "batch": 1,
+  "concurrency": 8,
+  "steps": 32,
+  "roles": {
+   "baseline": [
+    {
+     "kind": "single",
+     "warps": 4
+    },
+    {
+     "kind": "single",
+     "warps": 8
+    }
+   ],
+   "k2": [
+    {
+     "kind": "rtiled",
+     "slice_width": 64,
+     "warps": 4,
+     "pad_k": false
+    },
+    {
+     "kind": "rtiled",
+     "slice_width": 64,
+     "warps": 4,
+     "pad_k": true
+    },
+    {
+     "kind": "rtiled",
+     "slice_width": 64,
+     "warps": 8,
+     "pad_k": false
+    },
+    {
+     "kind": "rtiled",
+     "slice_width": 64,
+     "warps": 8,
+     "pad_k": true
+    }
+   ],
+   "kmid": [
+    {
+     "kind": "rtiled",
+     "slice_width": 32,
+     "warps": 4,
+     "pad_k": false
+    },
+    {
+     "kind": "rtiled",
+     "slice_width": 32,
+     "warps": 4,
+     "pad_k": true
+    },
+    {
+     "kind": "rtiled",
+     "slice_width": 32,
+     "warps": 8,
+     "pad_k": false
+    },
+    {
+     "kind": "rtiled",
+     "slice_width": 32,
+     "warps": 8,
+     "pad_k": true
+    }
+   ]
+  }
+ },
+ "identity": {
+  "gpu": "NVIDIA H100",
+  "capability": [
+   9,
+   0
+  ],
+  "triton": "3.6.0",
+  "torch": "2.4.0a0+gite3b9b71",
+  "cuda": "11.8",
+  "source": {
+   "tools/rtiled_m4.py": "429a244753fc846288c845b443928676ee4eedde4b86e7167393e158ea384116",
+   "flashrnn/flashrnn2/triton_rtiled.py": "5e822255adcd00c00c19c5aa217dfff268634e3b4e3c8ccb4ba5cc76b97eed12",
+   "flashrnn/flashrnn2/triton_persistent.py": "c83a6255f01e1db30e5ea6bc9a50f5f7a6d24cffe26b7bd8a89faffe7b2148e1",
+   "flashrnn/flashrnn2/tilelang_rtiled.py": "1e776015693e0cdfd65a0cb1b9affbee9b250208bbf682ec95cfd404df20f042",
+   "flashrnn/flashrnn2/reference.py": "9b6351ded119b071f6d7bc749e9a20269dde09c9a536cb6094afd6961c1d8260",
+   "flashrnn/flashrnn2/execution_policy.py": "ccf7e487dfc106c14aa07e38ba46ab18361f5893d4c979c928a62b0adf0cdc45",
+   "flashrnn/flashrnn2/state_contract.py": "b99311ca231c478860b55ecae216e88ecb3a55f9d8aa212428b82157f8b9485e"
+  }
+ },
+ "split": 0,
+ "candidates": {
+  "baseline": {
+   "qualification": {
+    "{\"kind\": \"single\", \"warps\": 4}": "PASS",
+    "{\"kind\": \"single\", \"warps\": 8}": "PASS"
+   },
+   "median_ms": {
+    "{\"kind\": \"single\", \"warps\": 4}": 4.047357,
+    "{\"kind\": \"single\", \"warps\": 8}": 3.638441
+   },
+   "raw_ms": {
+    "{\"kind\": \"single\", \"warps\": 4}": [
+     4.064608,
+     4.037404,
+     4.047357,
+     4.045133,
+     4.040788,
+     4.047958,
+     4.035598,
+     4.062939
+    ],
+    "{\"kind\": \"single\", \"warps\": 8}": [
+     3.651186,
+     3.647224,
+     3.633664,
+     3.638441,
+     3.629521,
+     3.625229,
+     3.63134,
+     3.638474
+    ]
+   },
+   "selected": {
+    "kind": "single",
+    "warps": 8
+   }
+  },
+  "k2": {
+   "qualification": {
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 4}": "PASS",
+    "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 64, \"warps\": 4}": "PASS",
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 8}": "PASS",
+    "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 64, \"warps\": 8}": "PASS"
+   },
+   "median_ms": {
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 4}": 4.365051,
+    "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 64, \"warps\": 4}": 4.985278,
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 8}": 4.268836,
+    "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 64, \"warps\": 8}": 4.335271
+   },
+   "raw_ms": {
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 4}": [
+     4.375479,
+     4.369264,
+     4.367993,
+     4.364609,
+     4.365051,
+     4.336842,
+     4.345012,
+     4.314537
+    ],
+    "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 64, \"warps\": 4}": [
+     5.006409,
+     4.988601,
+     5.000852,
+     4.985278,
+     4.967676,
+     4.936595,
+     4.951761,
+     4.942535
+    ],
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 64, \"warps\": 8}": [
+     4.307899,
+     4.272546,
+     4.310884,
+     4.268836,
+     4.267749,
+     4.242974,
+     4.249438,
+     4.232202
+    ],
+    "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 64, \"warps\": 8}": [
+     4.393269,
+     4.353959,
+     4.335271,
+     4.345063,
+     4.299305,
+     4.285841,
+     4.328855,
+     4.32653
+    ]
+   },
+   "selected": {
+    "kind": "rtiled",
+    "pad_k": false,
+    "slice_width": 64,
+    "warps": 8
+   }
+  },
+  "kmid": {
+   "qualification": {
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 4}": "PASS",
+    "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 32, \"warps\": 4}": "PASS",
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 8}": "PASS",
+    "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 32, \"warps\": 8}": "PASS"
+   },
+   "median_ms": {
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 4}": 4.100688,
+    "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 32, \"warps\": 4}": 4.212667,
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 8}": 4.307771,
+    "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 32, \"warps\": 8}": 4.288309
+   },
+   "raw_ms": {
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 4}": [
+     4.104075,
+     4.107755,
+     4.09449,
+     4.095535,
+     4.080312,
+     4.100688,
+     4.069891,
+     4.107544
+    ],
+    "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 32, \"warps\": 4}": [
+     4.184551,
+     4.227294,
+     4.278798,
+     4.509569,
+     4.193945,
+     4.212667,
+     4.195991,
+     4.188616
+    ],
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 8}": [
+     4.336329,
+     4.285201,
+     4.307771,
+     4.420118,
+     4.320065,
+     4.284763,
+     4.305571,
+     4.259951
+    ],
+    "{\"kind\": \"rtiled\", \"pad_k\": true, \"slice_width\": 32, \"warps\": 8}": [
+     4.291153,
+     4.279122,
+     4.261216,
+     4.307204,
+     4.300835,
+     4.288309,
+     4.286002,
+     4.274929
+    ]
+   },
+   "selected": {
+    "kind": "rtiled",
+    "pad_k": false,
+    "slice_width": 32,
+    "warps": 4
+   }
+  }
+ },
+ "status": "SELECTED"
+}

@@ -1,0 +1,289 @@
+# FlashRNN2 跨 SM 的 R 切分：H100 迭代报告
+
+日期：2026-10-14。分支 `flashrnn2-rtiled-20261014`。全部 GPU 结果来自 H100 SXM 节点（驱动 595.91.07），Triton 3.6.0、PyTorch 2.4.0a0（cu118），TileLang 0.1.15。本报告逐项对应《FlashRNN2 迭代计划：跨 SM 的 R 切分与多后端》的 G1–G4 与 E1–E4。
+
+## 结论
+
+* **D > 128 已可用，且比原版快。** FlashRNN2 的 R 切分路径（Triton，L2 计数器屏障 + cooperative launch）支持 LSTM/sLSTM FP16/BF16，D = 192–768，数值全部通过 PR #79 原预算。在原有分类器负载上与钉住的 FlashRNN1 CUDA fused（0b84fc3）配对计时，30/30 个对比更快，加速 1.12×–1.72×，95% 置信区间全部在 1 以上，30 个对比的几何平均 1.37×。
+* **D ≤ 128 不切换。** 在 D = 96、128 上，现有单 CTA 路径在 24/24 个对比中都快于 R 切分（0.80×–0.96×，区间全部低于 1）。按计划规则，D ≤ 128 的默认保持单 CTA。
+* **TileLang 第一版原型合格但更慢。** cluster + DSMEM 的 TileLang spike 数值 96/96 通过，配对计时 6/6 慢于 Triton R 切分（0.71×–0.88×）。它是未优化的 spike，结论只针对这一实现。
+* **同一算法下 TileLang v2 最快（M5）。** 改用"WGMMA（权重作 A 操作数）+ `cp.async.bulk` 跨 CTA 拷贝 + mbarrier、每步不做 cluster 屏障"之后：
+  * TileLang v2 对 Triton R 切分 40/40 更快（内核级 1.24×–1.85×，分类器 1.05×–1.52×），D = 192–512 全覆盖；
+  * ThunderKittens 对 TileLang v2 40/40 更慢（内核级 0.59×–0.86×，分类器 0.75×–0.96×）；
+  * ThunderKittens 对 Triton 只在 D = 192、256 更快（1.26×–1.55×），D = 384、512 持平或更慢。
+  
+  以上比较的是本次写的两份实现，不代表两个框架的上限。
+* **契约不变。** full / hidden / last、FP32 compute carry、分块续跑、sLSTM full-call 初始化、PreparedSequence 与 CUDA Graph 在 R 切分路径上全部逐位一致。
+* **G4 完成：TileLang 成为完整契约的合格后端，并接入查表（M6）。** 完整契约版 TileLang（`tilelang_cluster`）40/40 个配置（LSTM/sLSTM × FP16/BF16 × 10 种 (D, S)）全部通过 M0 标准：E1 160/160，逐位协议 1440/1440，压力 80/80；compute-sanitizer memcheck、synccheck 0 错误，racecheck 0 hazard。按 split 0 冻结的查表在 40 个形状里选 TileLang 37 个、Triton 3 个（B = 1 的 LSTM D384/512、sLSTM D512）。与保守默认（Triton 8 warps）配对计时，40/40 更快，1.01×–2.33×，几何平均 1.44×，区间全部高于 1。这张表作为注册表文件随代码提交。
+* **D = 768 用 TileLang grid 同步补齐（M7）。** D = 768 需要 24 或 48 个 CTA，超出 cluster 上限 16，改用 `T.sync_grid`（cooperative launch）每步一次全网格屏障、经全局内存交换 h。20/20 配置合格，grid 与 cluster 在两者都支持的宽度上 144/144 逐位一致；查表 10 个 D = 768 形状全部选 TileLang grid，对保守默认 1.30×–2.06×，对最优 Triton 1.05×–1.73×，均 10/10 更快。
+
+## 目标完成情况
+
+| 目标 | 状态 | 证据 |
+| --- | --- | --- |
+| G1 D > 128 可运行并过数值门槛 | 达成：LSTM/sLSTM FP16/BF16，D = 192、256、384、512、768 | M0，E1 1120/1120 PASS |
+| G2 输出契约不变 | 达成：full / hidden / last、FP32 compute carry、分块续跑、sLSTM full-call 初始化；PreparedSequence 与 CUDA Graph | M0 protocol 1260/1260；M1/M3 432/432 |
+| G3 对 v1 CUDA fused 的大 D 配对计时 | 达成：30/30 更快，1.12×–1.72×，区间均高于 1 | M4，5 启动 × 20 配对块 |
+| G4 合格 fallback 后端 | 达成：TileLang 完整契约 40/40 配置通过 M0 标准与 sanitizer；精确形状查表（37 TileLang + 3 Triton）对保守默认 40/40 更快（1.01×–2.33×）；D = 768 由 TileLang grid 覆盖（M7，10/10 更快）。表文件 `h100-rtiled-m6-20261014.json` + `h100-rtiled-m7-20261014.json` 绑定同一 GPU/Triton/TileLang 身份，合并后 50 个形状 | M6 v2；M7；M5a、M5c |
+
+## 设计决定（M0）
+
+Triton 3.6 提供 cooperative launch（`launch_cooperative_grid`），但没有用户可用的 DSMEM 或 cluster barrier（`num_ctas` 只做 CGA 张量切分）。因此主路径采用：
+
+* 沿 gate/输出维把 R 切成 `k = ceil(D/S)` 片，S 为 2 的幂；每个 CTA 常驻四个 gate 的 R 切片（共享内存）和自己的 c/n/m 切片。
+* 每步只交换按输入 dtype 舍入后的 h_t：双缓冲 L2 全局缓冲，读取用 `ld.global.cg` 绕过 L1。
+* 每组 k 个 CTA 每步一次计数器屏障：`bar.sync` 后单线程 `atom.release.gpu` 到达、`ld.acquire.gpu` 自旋；自旋有上限，超时置错误标志，不挂死。
+* cooperative launch 由驱动保证同驻；网格限制为每 SM 一个 CTA，超出的 (batch tile, head) 组在槽位内串行。
+* D 不是 2 的幂但为两个 2 的幂之和时（96、192、384、768），K 精确拆成两段，不补零。
+
+编译资源（sm_90a，FP16）：最小可行 k 为 D=192 → 2、256 → 4、384 → 6、512 → 16、768 → 24，与计划表一致（768 需 k=24，走 grid barrier）。
+
+## 数值与契约（M0、M1）
+
+| 检查 | 范围 | 结果 |
+| --- | --- | --- |
+| 资源启动 | 140 个配置，LSTM/sLSTM，D=64–768 | 140/140，错误标志 0，屏障计数精确 |
+| 协议（逐位）| 网格屏障 = 每步 kernel 边界；槽位串行组；分块续跑；hidden/last = full | 1260/1260 |
+| E1 对 FP64 oracle | PR #79 `CELL_BUDGET` 原值，history/carry/hidden/last，FP16/BF16，sLSTM zero/mixed/warm | 1168/1168，最差占预算 0.53% |
+| 屏障压力 | 3 种 B/T/H × 50 次重复 | 48/48，结果逐位一致，无超时 |
+| PreparedSequence | eager / 不规则分块 / CUDA Graph 20 次重放，三种输出模式 | 432/432 逐位一致 |
+
+与单 CTA 路径的重叠点：D=64、D=128 全部切片宽度逐位相等（含 k=2、4、8）；D=96 只有把 K 补到 128 时逐位相等，精确两段 K（64+32）不逐位，在预算内。
+
+## TileLang（M3）
+
+cluster + DSMEM spike：每个 CTA 把自己的 h 切片写进 cluster 内所有 CTA 的下一步共享缓冲（`copy_cluster` 降为 `cluster.map_shared_rank` 远程写），每步一次 `cluster_sync`。对 FP64 oracle 96/96 通过（最差 0.108 预算），与 Triton 输出不逐位（最大差 4.9e-4）。探索计时比 Triton L2 屏障路径慢 1.4–2.5 倍，k 越大差距越大；spike 的远程写是逐元素 SIMT 循环，未用 TMA multicast 或 WGMMA，量的是 spike 而非 TileLang 上限。
+
+## 配对计时（M4）
+
+负载沿用外部基线分类器：4 层、词表 512、FP16，(B, C, T) ∈ (1, 8, 32)、(16, 32, 32)、(32, 64, 128)，只改变 D。配置在 split 0 上从 M0 合格配置中选出并冻结（表格哈希后才开始 split 1 计时）；每个对比 5 次进程启动 × 20 个 ABBA/BAAB 配对块，10000 次分层 bootstrap（种子 20261013 + 序号）。计时前每个分支都对 FP64 模型 oracle 和对方分支检查 logits 与每层 hidden 历史（原模型预算 atol 0.015、rtol 0.03、max 0.03），每个计时块再检查一次输出。300/300 次启动通过，原始输出归档已独立校验。
+
+### E3：对 FlashRNN1 CUDA fused（加速比与 95% CI）
+
+| D | LSTM B1/C8/T32 | LSTM B16/C32/T32 | LSTM B32/C64/T128 | sLSTM B1/C8/T32 | sLSTM B16/C32/T32 | sLSTM B32/C64/T128 |
+| ---: | --- | --- | --- | --- | --- | --- |
+| 192 | 1.61 [1.60, 1.61] | 1.37 [1.36, 1.38] | 1.28 [1.28, 1.28] | 1.57 [1.56, 1.58] | 1.32 [1.31, 1.33] | 1.43 [1.43, 1.44] |
+| 256 | 1.58 [1.58, 1.59] | 1.33 [1.32, 1.34] | 1.28 [1.28, 1.28] | 1.53 [1.52, 1.54] | 1.29 [1.28, 1.30] | 1.27 [1.27, 1.27] |
+| 384 | 1.58 [1.57, 1.59] | 1.28 [1.27, 1.29] | 1.55 [1.55, 1.55] | 1.39 [1.39, 1.40] | 1.14 [1.14, 1.15] | 1.30 [1.30, 1.31] |
+| 512 | 1.40 [1.40, 1.41] | 1.12 [1.11, 1.13] | 1.32 [1.31, 1.32] | 1.36 [1.35, 1.37] | 1.12 [1.11, 1.13] | 1.33 [1.33, 1.34] |
+| 768 | 1.35 [1.34, 1.36] | 1.21 [1.20, 1.23] | 1.67 [1.66, 1.67] | 1.33 [1.32, 1.34] | 1.21 [1.19, 1.23] | 1.72 [1.71, 1.72] |
+
+v1 的 30 个 (cell, D, B) 构建全部成功并通过单层 FP64 检查；ConstrINT 选出的 tile（gate 方向切成 24–128 份等）逐个记录在 `docs/flashrnn2/rtiled-m4.md`。
+
+### E2：D ≤ 128 切换点（单 CTA 为基线）
+
+| D | 候选 | LSTM 三种负载 | sLSTM 三种负载 |
+| ---: | --- | --- | --- |
+| 96 | k = 2（S = 64） | 0.84 / 0.83 / 0.85 | 0.82 / 0.84 / 0.88 |
+| 96 | k = 3（D=96）/ 4（D=128），S = 32 | 0.87 / 0.87 / 0.94 | 0.84 / 0.84 / 0.96 |
+| 128 | k = 2（S = 64） | 0.84 / 0.87 / 0.89 | 0.80 / 0.86 / 0.93 |
+| 128 | k = 3（D=96）/ 4（D=128），S = 32 | 0.84 / 0.87 / 0.96 | 0.81 / 0.85 / 0.96 |
+
+数值低于 1 表示 R 切分更慢；24 个对比的 95% 区间全部低于 1。先前未配对的 CUDA Graph 内核筛查在 D = 96、128 上略偏向 R 切分，但在这里两边都走公开的逐次调用 API，R 切分每次调用多分配交换缓冲、两份 carry 和清零的屏障计数器；这部分主机侧开销可能是原因之一，本次未单独隔离。
+
+### E4：Triton R 切分对 TileLang spike（D = 256）
+
+| Cell | B1/C8/T32 | B16/C32/T32 | B32/C64/T128 |
+| --- | --- | --- | --- |
+| LSTM | 0.80 [0.79, 0.80] | 0.73 [0.73, 0.74] | 0.74 [0.74, 0.74] |
+| sLSTM | 0.88 [0.87, 0.88] | 0.84 [0.84, 0.85] | 0.71 [0.70, 0.71] |
+
+数值为 Triton 时间 / TileLang 时间，低于 1 表示 TileLang 更慢。完整表格（每个对比的基线/候选毫秒数、所选配置）见 `docs/flashrnn2/rtiled-m4.md`。
+
+## ThunderKittens 与 TileLang（M5）
+
+两份实现用同一个算法：每个 (batch tile, head) 一个 k = D/S 的线程块 cluster；每步用 WGMMA 计算 R 切片[4S × D] · hᵀ[D × 16]；每个 CTA 把自己舍入后的 h 切片写进自己的下一步缓冲，再用 `cp.async.bulk.shared::cluster` 拷进每个邻居的缓冲，在接收方的 mbarrier 上完成。双缓冲加上这条数据依赖已经保证了顺序，所以每步不需要 cluster 屏障。
+
+* ThunderKittens 固定在提交 67845f5（tarball SHA256 38386831…），用 CUDA 12.8 单独编译成共享库，通过 ctypes 调用；本集群的 PyTorch 是 CUDA 11.8 版本，不能编成 torch 扩展。
+* TileLang 0.1.15。
+* 两者目前都是 spike 契约：一次完整调用，输出 hidden 历史和 FP32 最终 carry；都只在 FP16 下资格认证。
+* D = 768 需要超过 16 个 CTA 的 cluster，两者都不覆盖。
+
+资格：每个 (后端, cell, D, S) 都对 FP64 GPU oracle 检查 hidden 与 FP32 carry（PR #79 原 `CELL_BUDGET`），并要求 20 次重复逐位一致。ThunderKittens 20/20，TileLang v2 20/20。
+
+| 对比（基线 → 候选） | 内核级（T = 1024） | 分类器负载 |
+| --- | --- | --- |
+| Triton → ThunderKittens | D 192/256：1.43×–1.55×；D 384/512：0.89×–1.01× | D 192/256：1.26×–1.45×；D 384/512：0.88×–1.22× |
+| TileLang v2 → ThunderKittens | 0.59×–0.86×（16/16 更慢） | 0.75×–0.96×（24/24 更慢） |
+| Triton → TileLang v2 | 1.24×–1.85×（16/16 更快） | 1.05×–1.52×（24/24 更快） |
+
+ThunderKittens 对 Triton 的结果来自运行 M5a；另外两行来自运行 M5c。三类对比都按 split 0 选配置、冻结表格，再在 split 1 上做 5 次启动 × 20 个配对块，95% 区间全部落在 1 的同一侧。完整表格见 `docs/flashrnn2/rtiled-m5.md`。
+
+仍然存在的实现差异：屏障装填方式各按框架习惯（ThunderKittens 由接收方每步装填一次，TileLang 的 `copy_cluster` 由每个发送方远程装填），交换前 TileLang 有两次块级屏障、ThunderKittens 一次。这两点都对 ThunderKittens 有利，解释不了差距。
+
+## G4 收尾：完整契约 TileLang 与查表（M6）
+
+`flashrnn/flashrnn2/tilelang_cluster.py` 沿用 M5 的 TileLang v2 算法，补齐完整契约：
+
+* full / hidden / last 三种输出，FP32 最终 carry，快照可选输入 dtype 或 FP32；
+* 分块续跑：步数是运行时循环上界，kernel 接收全局起始步 `BASE` 和"是否为整次调用开头" `START`，读取上一块的 FP32 carry；
+* sLSTM 的 normalizer 只在整次调用第一步初始化；
+* `KernelConfig` 新增 `tilelang` 家族（batch tile 16，S = 16/32/64，`sync="cluster"`）；`PreparedSequence` 支持预分块与 CUDA Graph；`ExecutionPolicy` 在表选了 TileLang、运行环境却没有 TileLang 时直接报错，不会静默换后端。
+
+### 资格（运行 M6 v2）
+
+| 门槛 | 结果 |
+| --- | --- |
+| E1，fixture_math `CELL_BUDGET`，FP64 oracle；history、FP32 carry、hidden、last | 40/40 配置，160/160 用例，最差占预算 0.42%（BF16 sLSTM D192） |
+| 逐位协议：逐步启动、不规则预分块、公开分块调用、hidden/last = full、20 次重复、带生产者的侧流、CUDA Graph 重放、Graph 跟随绑定的初始状态 | 1440/1440 |
+| 压力：50 次重复逐位一致，最多 1024 个 CTA | 80/80 |
+| compute-sanitizer memcheck / synccheck（LSTM FP16 D256 S16 小用例） | 退出码 0，`ERROR SUMMARY: 0 errors` |
+| compute-sanitizer racecheck（同一用例，不阻断） | 退出码 0，`RACECHECK SUMMARY: 0 hazards displayed` |
+
+驱动收据把 racecheck 标成 FAIL：判定规则找的是 `ERROR SUMMARY` 行，而 racecheck 打印的是 `RACECHECK SUMMARY`。原始日志是干净的，收据保持原样。sanitizer 只覆盖一个小形状；racecheck 对 TMA/cluster 批量拷贝的覆盖可能不完整。TileLang 编译时仍然对单线程拷贝分支打印 `[ThreadSync] Hoisting sync` 警告，上面所有门槛都没有观察到竞争。
+
+### 查表与配对计时
+
+split 0 在 M0 合格的 Triton 配置和 40 个合格 TileLang 配置之间选择，冻结表（SHA256 3b1b8167…）后再在 split 1 上计时。200 次启动全部经由 `ExecutionPolicy.select(..., identity=runtime_identity())` 取配置，并与冻结表一致。基线是 `default_config(D)`（Triton R 切分，8 warps）。
+
+| 层级 | 行数 | 选中 | 加速比范围 | 几何平均 | 区间高于 1 |
+| --- | ---: | --- | --- | ---: | ---: |
+| 内核级（B = 16/64，T = 1024） | 16 | TileLang | 1.37×–2.33× | 1.68× | 16/16 |
+| 分类器（B = 1/16/32，T = 32/128） | 21 | TileLang | 1.01×–1.98× | 1.32× | 21/21 |
+| 分类器 | 3 | Triton 4 warps | 1.08×–1.18× | 1.13× | 3/3 |
+| 全部 | 40 | | 1.01×–2.33× | 1.44× | 40/40 |
+
+增益最大的是 sLSTM D192（内核级 2.24×–2.33×），最小的是 sLSTM D384 B1（1.012×，区间 1.006–1.020）。这里对比的是保守默认，不是最优 Triton 配置；对最优 Triton 配置的对比见 M5（内核级 1.24×–1.85×，分类器 1.05×–1.52×）。
+
+注册表：冻结表连同身份、适用范围、来源和逐行计时写入 `flashrnn/flashrnn2/tables/h100-rtiled-m6-20261014.json`，用 `ExecutionPolicy.from_json(TABLES / "h100-rtiled-m6-20261014.json")` 加载。身份为 `{gpu: "NVIDIA H100", capability: [9, 0], triton: "3.6.0", tilelang: "0.1.15"}`，任何不同的身份都会被 `select` 拒绝；表外形状保持 `default_config(D)`。`tests/test_execution_policy.py` 检查这个文件（12 个测试通过）。查表经由 `ExecutionPolicy.select → KernelConfig → PreparedSequence(config=…)` 生效：库里只有 `PreparedSequence` 按 `KernelConfig.family` 分派，公开的一次性 recurrence 函数不读查表。表文件已作为包数据打包（`"flashrnn.flashrnn2" = ["tables/*.json"]`），在集群上用 setuptools 80.9.0 构建的 wheel 中确认存在；原先写在 `"*"` 下的写法打不进去。
+
+副产品（v1，运行 M6 v1）：TileLang 资格因测试工具 bug 中止后，驱动仍只在 Triton 配置之间选择并计时。Triton 按形状调参对保守默认 33/33 更快（1.003×–1.374×，几何平均 1.10×）；另外 7 行选中的就是默认配置，相当于 A/A 对照，结果 0.998×–1.001×，区间都覆盖 1。这张表只有 Triton，不是 G4 结果，没有作为注册表提交。
+
+详细数据见 `docs/flashrnn2/rtiled-m6.md`。
+
+## D = 768：TileLang grid 同步（M7）
+
+D = 768 在 S = 32 时需要 k = 24 个 CTA（每个 CTA 的 R 切片占 192 KiB 共享内存），S = 16 时需要 48 个，都超出 thread-block cluster 最多 16 个 CTA 的上限。`build_grid`（`tilelang_cluster.py`，开发提交 da2deba）保留 cluster 内核的每 CTA 计算（R 切片作 WGMMA A 操作数、hᵀ 作 B、相同 epilogue），只换交换方式：每个 CTA 把舍入后的 h 切片写进全局双缓冲 `XBUF[t % 2]`，每步一次 `T.sync_grid()`，再整块读回本组的 hᵀ。TileLang 检测到 `sync_grid` 后给函数加 `use_cooperative_groups`，TVM 用 `cuLaunchCooperativeKernel` 启动；超出同驻上限的组按 slot 串行，所有 CTA 执行相同次数的屏障。
+
+资格（运行 M7，15 分 42 秒）：
+
+| 门槛 | 结果 |
+| --- | --- |
+| E1，fixture_math `CELL_BUDGET` | 20/20 配置，80/80 用例，最差占预算 0.34%（D = 768 为 0.29%） |
+| 逐位协议 | 720/720 |
+| 压力（含 4–32 个 slot） | 40/40 |
+| grid = cluster 逐位（D = 256 S16/S32、D = 512 S32，四种输出，三种形状） | 144/144，最大差 0 |
+| compute-sanitizer（LSTM FP16 D768 S32 小用例） | memcheck、synccheck 0 错误；racecheck 0 hazard |
+
+计时（split 0 选择、冻结表、split 1 5 次启动 × 20 配对块）：查表在 10 个形状上全部选 TileLang grid（B ≤ 32 用 S = 16，B = 64 用 S = 32）；最优 Triton 全部是 S32、4 warps。
+
+| 对比 | 行数 | 加速比范围 | 几何平均 | 区间高于 1 |
+| --- | ---: | --- | ---: | ---: |
+| 内核级，查表 vs 保守默认 | 4 | 1.35×–2.06× | 1.67× | 4/4 |
+| 分类器，查表 vs 保守默认 | 6 | 1.30×–1.80× | 1.51× | 6/6 |
+| 内核级，TileLang grid vs 最优 Triton | 4 | 1.15×–1.73× | 1.41× | 4/4 |
+| 分类器，TileLang grid vs 最优 Triton | 6 | 1.05×–1.56× | 1.27× | 6/6 |
+
+代价是 SM：S = 16 时每组占 48 个 SM，B = 32 时两组同驻共 96 个；B = 64 选 S = 32，四组共 96 个。单路请求独占 GPU 时这是对的选择，高并发下是否仍然合算，是下一阶段要回答的问题；每个条目的 SM 占用已写进表文件（`sm_footprint`）。
+
+注册表：`h100-rtiled-m7-20261014.json` 与 M6 表身份相同，`ExecutionPolicy.from_json(m6, m7)` 只在身份一致、形状不重叠时合并，得到 D = 192–768 共 50 个精确形状。详见 `docs/flashrnn2/rtiled-m7.md`。
+
+## 高并发多数据面（HC 第 0–3 轮）
+
+目标（2026-10-14 用户提出）：D = 768 完成后，把放置和资源问题当作数据面（例：NUMA 亲和、拥堵度、SM 代价）反复迭代，直到高并发下有大幅提升。
+
+负载：现有分类器（4 层、FP16），C 个 T = 128 的请求同时到达。两个基线走同一公开内核路径：
+
+* **s0**：按 B = 32 分组串行（原有方式），每组用 M6 + M7 查表的配置；
+* **s0′**：所有请求一次调用，配置为 `default_config`（查表无此形状）。
+
+停止标准（第 0 轮前定下）：C = 1024 时 D = 256 与 768、LSTM 与 sLSTM 的吞吐都 ≥ max(s0, s0′) 的 2 倍，且 P90 不差于 s0；或所有数据面都已尝试。
+
+| 轮次（作业） | 数据面 / 手段 | C = 1024 结果 |
+| --- | --- | --- |
+| 0（HC0） | 分解 | s0′ 是更强基线（D768 50.0 ms，D256 6.2 ms）；递推占 75–92% |
+| 1（HC1 v1、HC1 v2） | SM 代价：batch tile BM > 16 | 无效：最优仍为 BM 16（对 s0′ 1.00–1.16×）；cluster BM 128 因 TileLang swizzle 拷贝缺陷被排除 |
+| 2（HC2） | ncu 剖析；启动开销：整段前向 CUDA Graph；占用：每 CTA 两个 warpgroup（筛选） | 所有内核受延迟限制（长记分板停顿 40–55%，占用 6–25%）；Graph 0.99–1.00×；cluster 双 warpgroup 结果错误而被禁用 |
+| 3（HC3 v1 驱动 bug，HC3 v2） | 延迟：输入投影预取；占用：grid 双 warpgroup | 预取反而更慢（D256 因寄存器增加每 SM 少一个 CTA）；grid S16 BM64 双 warpgroup 在 D768 上对 s0′ **1.455× / 1.482×**，对 s0 1.97× |
+| 4（HC4） | 结构消融（只计时）；NUMA 整节点 | 去掉单个环节只快 1.05×–1.74×（D768 的 h 交换最大），只留 GEMM 则快 3.8×–4.0×（D256）/ 15.7×–16×（D768）；NUMA 本地/远端 1.0004×–1.0024×，无效 |
+
+当前结论（所有新配置都通过资格认证，且与参考内核逐位一致）：
+
+| C = 1024 | 最优 | 对 s0′ | 对 s0 | P90 最优 / s0 |
+| --- | --- | --- | --- | --- |
+| LSTM D768 | TileLang grid S16 BM64，256 线程 | 1.455 | 1.975 | 34.4 / 61.5 ms |
+| sLSTM D768 | 同上 | 1.482 | 1.970 | 34.0 / 60.6 ms |
+| LSTM D256 | Triton S64 w8（默认） | 0.999 | 7.03 | 6.20 / 39.5 ms |
+| sLSTM D256 | Triton S64 w4 | 1.011 | 6.63 | 6.31 / 37.9 ms |
+
+停止标准**尚未达到**。NUMA 面已用整节点实验关闭（4 卡 × C = 1024，本地/远端/不绑定，numa_maps 确认绑定生效，吞吐差 ≤ 0.25%）；拥堵度只有单流 ncu 推断（L2 ≤ 18%，DRAM ≤ 17%）。
+
+消融给出的上限：时间分散在每步的串行链上（交换与同步、FP32 中转、输入投影读取、epilogue 依次等待），单独去掉任何一项只有 1.05×–1.74×，但只留 GEMM 时快 4×（D256）和 16×（D768）。要拿到这部分空间，需要让这些环节**重叠**而不是逐个优化：例如每个 CTA 两个 warpgroup 各自处理一个独立 batch tile 交替推进（ping-pong），或 producer/consumer warp 特化；D768 先从避开全局往返和网格屏障的 h 交换入手（单项上限 1.6×–1.7×）。这是多日的内核工作。详见 `docs/flashrnn2/hc-rounds.md`。
+
+## 训练路径：R 切分反向
+
+* **梯度约定**沿用 FlashRNN v1：sLSTM 的稳定项 m 不传梯度（含初始 m0 及 log f 里的 m_{t-1}），归一化截断 n = max(f·n + i, 1) 直通。从零归一化器或 n0 ≥ 1 起步时截断在精确算术下不会生效，此时这个约定就是对 h 的损失的真实梯度（m0 除外）。
+* **FP64 参照**（`grad_reference.py`）：前向与 `reference.recurrence` 逐位一致；梯度与 v1 原版反向（`vanilla_fwbw.bw`）完全相同（差 0.0）；gradcheck 通过（LSTM 全部输出，sLSTM 对 h）。
+* **内核**（`triton_rtiled_bw.py`）：与前向对称。CTA s 持有 R 在本单元上的列切片和本单元的 c/n 梯度；每步用组内所有 CTA 交换来的取整 dG_{t+1} 做一次 GEMM 得到本单元的 dh_t，再做逐点反向，dG_t 以 FP32 存储并以输入精度发布。门预激活用一次 FP32 GEMM 从保存的状态重算；dR、dbias 由存储的 dG 做确定性 FP32 规约（无原子操作）。逐步启动模式是常驻模式的逐位对照。D ≤ 128 用同一内核、每组一个 CTA。
+* **训练入口**：`training.recurrence`（整次调用，LSTM/sLSTM）；`dispatch` 遇到需要梯度的调用自动转过去；续跑块求导会被拒绝。
+* **无 GPU 的检查**：登录节点编译全部计划配置（最大溢出 260 B）；Triton 解释器下逐步启动模式 12/12 与 FP64 参照一致（最差 1.7e-4）。
+* **GPU 资格**（运行 backward qualification，30.9 分钟，归档已校验）：168/168 用例全部通过——梯度对 FP64 参照（FP16 最差相对误差 2.1e-4–3.2e-4，BF16 1.7e-3–2.8e-3，预算 1e-2 / 5e-2）、常驻与逐步启动逐位一致、20 次完整训练步逐位一致；compute-sanitizer memcheck/synccheck 8/8 为 0 错误。同输入同损失下，我们的梯度误差只有 FlashRNN1 cuda_fused 的 0.20–0.40 倍。
+* **训练步对 v1 的配对计时**（运行 training-step timing，FP16、T = 256，一次调用 = 前向 + 反向，28 个比较，140/140 次启动）：B = 64 时 FlashRNN2 在 D ≥ 192 全部更快（LSTM 1.18–1.37×，sLSTM 1.10–1.31×），LSTM D = 64/128 为 1.19× / 1.02×，sLSTM D = 64/128 打平；B = 16 时全部更慢（LSTM 0.68–0.96×，sLSTM 0.65–0.75×）。小 batch 时每步是延迟链，FlashRNN2 多了前向的 FP32 历史写出、单独的预激活与 dR GEMM、以及每步交换 4D 个值，是下一轮的优化对象（先在 B = 16 做剖析）。训练步里的前向只用 Triton：TileLang 需要 CUDA 12.8，而固定的 FlashRNN1 扩展用 CUDA 11.8 编译，两者在同一进程里不兼容。
+
+## B = 16 训练步修复（运行 training-step breakdown 分解，fix confirmation 确认）
+
+* **时间去向**：串行链并不慢——反向内核每步约 8.8 µs，FlashRNN1 整个反向每步约 8.4 µs；TileLang 前向每步约 3.4 µs，比 FlashRNN1 前向的 4.8 µs 快。B = 16 的差距来自与 T 成正比、在内核之外的部分：预激活矩阵乘 0.25–0.7 ms、dR 矩阵乘 0.15–0.5 ms，以及约 0.7 ms 的拷贝和分配。另外，固定的 FlashRNN1 扩展在 TileLang 环境里无法加载（它看到 nvcc 12.8 后改变构建键并试图重编译），所以之前没法和 TileLang 前向一起计时。
+* **改动**：反向快速路径（复用上一步读入的 c/n/m、下一步输入提前到屏障前加载、跳过为零的历史梯度读取；与原内核逐位一致）；单 head 的预激活与 dR 改成直接 `addmm`/`mm`，并可选 TF32（FP16/BF16 预激活的乘积在 TF32 下精确）；FlashRNN1 在 TileLang 环境里加载模块环境编译好的产物。
+* **重新资格**：64/64 通过（快速路径与原内核逐位一致、常驻 = 逐步、20 次重复一致、梯度预算内；TF32 梯度误差 FP16 3.2e-4、BF16 2.4e-3，不超过 FlashRNN1 误差的 0.35 倍）。快速路径的竞态检查：正确内核全部干净，单缓冲和跳过屏障对照都被抓到；sLSTM 的"先到达后写入"只抓到 9/21 和 1/21（弱对照，输出从未改变）。
+* **事先写定的标准**：B = 16 在至少一种环境里、D ≥ 192 每个形状两种 cell 的 95% 下界都 ≥ 1.0 才算修好；B = 64 不得退化。**结论：B = 16 按此标准未修好；B = 64 没有退化而且明显更快。**
+  * B = 16（最佳环境：TileLang 前向 + 快速反向 + TF32）：LSTM 在 D ≥ 192 为 0.875–1.058（D = 256 更快，D = 192/768 差 2–3%，D = 384/512 差 9–13%），sLSTM 0.882–0.980；D = 128 两种 cell 都已更快（1.07× / 1.06×）。修复前 LSTM 0.68–0.96、sLSTM 0.65–0.75。
+  * B = 64：全部更快，LSTM 1.24–1.91×，sLSTM 1.19–1.90×（修复前 0.98–1.37×）。
+  * 剩余差距集中在 D = 384/512；把预激活重算融合进反向内核能去掉其中最大的一块。
+* 训练默认改为快速路径 + TF32、8 warps、反向切片 32（D ≤ 128）/ 16（D ≤ 512）/ 32（D = 768）。计时里多数选中的是 4 warps，它们在计时形状上通过了梯度检查，但不在 168 用例的资格集里，所以没设为默认。详见 `docs/flashrnn2/backward.md`。
+
+## 预激活重算融合进反向内核（运行 fused backward）
+
+* **改动**：`backward(..., fuse_pre=1|2)`（需快速路径）不再单独做预激活 GEMM。每个 CTA 额外在共享内存里放 R 的行切片 R[:, p, :]，在分段屏障的"到达"和"等待"之间，为下一步重算 Wx_t + R·round(h_{t-1}) + b。round(h_{t-1})（输入精度，同时也是 dR GEMM 的操作数）和偏置放在交换缓冲区后面，内核签名不变；`FUSE=0` 编译出的 PTX 与已认证内核逐位相同（基础版和快速版都验证过）。`FUSE=1` 每个门一次 [BM, S] MMA；`FUSE=2` 把四个门交错拼成一次 [BM, 4S] MMA，消除了 N = 16 小块在多个 warp 上的四倍重复计算和共用操作数，D = 384/512、S16、8 warps 时步循环内的溢出指令从第一版的 234/83 条降到 0/5。两份 R 切片都要放进共享内存：S32 只到 D = 384，D = 512/768 只能用 S16。
+* **资格与准入**（事先写定：某一级别的资格用例全部通过、正确内核的竞态检查干净、sanitizer 全部 0 错误，才能参加选择）：FUSE=1 60/60、FUSE=2 126/126 全部通过；梯度对 FP64 参照最差 FP16 3.2e-4、BF16 2.4e-3，FUSE=2 不超过 FlashRNN1 误差的 0.375 倍；常驻 = 逐步启动逐位一致，20 次完整训练步逐位一致；sanitizer 16/16 干净；正确内核竞态检查 8/8 配置 0/21 违例且输出逐位一致。两个级别都准入。
+* **时间去向**（D = 384/512、B = 16、T = 256，TileLang 前向）：融合去掉了预激活 GEMM（每次调用省 0.12–0.17 ms，每步约 0.5–0.65 µs），但反向内核每步多出 0.8–1.45 µs。B = 16 时每组只有一个 batch tile，重算没能藏进交换的等待里，而是拉长了串行链；B = 64 时被替换掉的 GEMM 大四倍，融合就划算了。
+* **配对计时**（FP16、T = 256，60 个比较、300/300 次启动；frnn2 角色 = 未融合 + 已准入的融合候选；每次融合选择都是 FUSE=2 胜出）：
+  * B = 16、TileLang 前向，对 FlashRNN1：LSTM 0.985 / **1.048** / 0.911 / 0.888 / 0.971，sLSTM 0.986 / 0.984 / 0.897 / 0.892 / 0.971（D = 192 / 256 / 384 / 512 / 768）。Triton 前向 0.785–0.917。
+  * B = 64：LSTM 1.39–1.91×，sLSTM 1.49–1.89×（D = 192–512 选中了融合），比上一轮更快。
+  * 融合对未融合：B = 16、TileLang 前向时只有 D = 256 更快（LSTM 1.044×，sLSTM 1.024×），D = 512 打平，其余慢 1–6%；B = 64 时 D = 192–512 快 1.02–1.15×，D = 768 慢到 0.78× / 0.77×（那里融合只能用 S16）。
+* **事先写定的标准：B = 16 仍未修好**（TileLang 环境下只有 LSTM D = 256 下界 ≥ 1，D = 384/512 仍落后 9–14%）；B = 64 没有退化，反而更快（下界 1.35–1.91）。**默认规则**（B = 16、TileLang 环境下两种 cell 的融合对未融合下界都 ≥ 1；若 B = 64 也不更慢则对所有 batch 生效）只在 D = 256 成立，所以 `training.backward_defaults` 只在 D = 256 默认用 `fuse_pre=2`、切片 16、4 warps，其余宽度仍是未融合快速路径 + TF32。数据也支持 B = 64 时在 D = 192–512 用融合，但这不是规则检验的内容，没有设成默认。
+* **剩余差距在哪里**：去掉预激活 GEMM 后，D = 384/512 的训练步主要耗在反向内核的串行链上（T = 256 时 2.8–3.3 ms 中占 1.5–1.8 ms）。每步对四个门规约求 dh 时，输出只有 N = 16 宽，MMA 布局会在多个 warp 上重复计算；按 warp 做 split-K、或者每个 CTA 输出更宽的块，是下一步的候选。本轮未尝试。
+* **竞态检查补充**：分段屏障下，单缓冲和跳过屏障两种对照 8/8 配置都是 21/21 被抓到；"先到达后写入"对照 0/21 被抓、也从未改变输出——这个变体只是把到达提前到紧随其后的四次写入之前，而对方要等所有到达、再做完重算才读，注入的延迟又在到达之前，这个窗口从未被打开。所以这个对照对融合路径没有信息量；没有任何一次运行在输出改变时未被抓到。详见 `docs/flashrnn2/backward.md`、`docs/flashrnn2/race-verification.md`。
+
+## 交换路径的竞态检查
+
+compute-sanitizer 的 racecheck 只覆盖 CTA 内共享内存，不覆盖对等 CTA 的 TMA/DSMEM 拷贝、mbarrier 事务计数和经网格屏障排序的全局内存交换。新增的验证构建（默认编译掉，已证明关闭时 PTX 与 CUDA 源码不变）在每次等待之后和 GEMM 之后，把收到的整块操作数与发送方实际写出的值比对；注入按种子的随机延迟；并用故意改坏的变体（单缓冲、跳过等待/屏障、先到达后写入、发送前不做块同步）和 256 线程 cluster 内核作对照。判定规则事先写定：正确内核 21 次运行违例为 0 且输出逐位一致；改坏的变体至少 80% 的运行被抓到，且不得出现输出错误却未被抓到的情况。两轮结果（运行 race verification、race verification round 2，归档均已校验）：16 种正确配置在两轮共 672 次运行中违例均为 0、输出与未插桩内核逐位一致；没有任何一次运行在输出改变时未被抓到。第 2 轮（延迟加大到 0–65 µs、cluster 消费方延迟放到等待之后、每个变体单独进程）66 个任务 65 个按规则通过：单缓冲 20–21/21、跳过屏障 21/21、先到达后写入 21/21（唯一例外是单 warpgroup 的 grid LSTM 只抓到 11/21，其余 10 次竞态没有真正发生、输出也没变）。256 线程 cluster 内核两轮都是 21/21 被抓到，说明它的错误出在交换（消费到的数据和对方写的不一致）。cluster 去掉显式块同步的变体并没有坏（TileLang 自己插了 `__syncthreads()`），只记录不判定；cluster 跳过等待会把 CUDA 上下文搞崩，已完成的运行都被抓到。详见 `docs/flashrnn2/race-verification.md`。
+
+## HC 第 5 轮（尽力而为）
+
+D = 256 的 TileLang grid 路径此前没有筛选过多行 batch tile 和两个 warpgroup（第 3 轮里这种组合让 D = 768 到了 1.46–1.48×）。第 5 轮资格认证 BM 32/64、一或两个 warpgroup 的 6 种配置（LSTM/sLSTM、FP16/BF16），再在全部已资格的 D = 256 配置中按 split 0 选择，split 1 配对计时对 s0′、第 1 轮最优和 s0。结果（运行 HC5，13 分 45 秒，归档已校验）：24/24 新配置资格通过，sanitizer 0 错误。C = 1024 时最优变成 grid S32 BM64 两个 warpgroup：对 s0′ LSTM **1.163×** [1.160, 1.166]、sLSTM **1.245×** [1.243, 1.246]（此前 D = 256 一直是 1.00×），对 s0 8.27× / 8.22×；C = 256 仍是 cluster S16 BM16（对第 1 轮最优 1.00×）。2× 的停止条件仍未达到：D = 768 为 1.455× / 1.482×，D = 256 为 1.163× / 1.245×。
+
+## 失败与修复记录
+
+| 作业 | 现象 | 原因 | 修复 |
+| --- | --- | --- | --- |
+| M0 v1 | 四路 canary 全部异常，62 秒结束，无 kernel 执行 | module 激活设置 `CC=nvc`，Triton 启动器 C 模块需要 gcc | runtime 导出 `CC=/usr/bin/gcc`；登录节点 dry run 实际构建启动器（无修复时复现原错误） |
+| M4 v1 | phase 0 前几个 v1 构建失败，2 分 47 秒后由本人取消，未计时 | 并发构建争用共享 `gpu_info` 模块；缺少外部基线队列已有的 `torch.amp` 命名空间适配 | 首个 v1 检查单独运行；沿用原适配；未修改任何钉住的 v1 文件 |
+
+| M5a | TileLang v2 首检 `CUDA_ERROR_LAUNCH_FAILED`，其余 TileLang 检查跳过；ThunderKittens 对 Triton 正常完成 | TileLang 的 `tma_store_cluster` 自己会在接收方远程装填屏障，内核又按计数 1 装填了一次，到达数和字节数对不上，等待超时被捕获（调试运行 M5 debug 1 用 compute-sanitizer 定位） | 接收方计数改为 k − 1、不再自行装填；调试运行 M5 debug 2 全部用例通过、memcheck 干净 |
+| M5b | 数值检查全过，但选择阶段 TileLang 角色全部为空，没有计时 | 驱动按臂名 `tilelang` 判断是否加载 TileLang 环境，新臂名是 `tilelang_v2` | 选择阶段一律加载；重跑为运行 M5c |
+| M6 v1 | M6 首个资格配置 E1 与压力通过，protocol 阶段报 ERROR，其余 39 个未跑；sanitizer 实际没有执行；phase 1/2 只在 Triton 配置间选择 | 测试工具在 T = 17 时生成了长度为 0 的尾块；runtime.sh 忽略了 `FRNN_PREFIX`；驱动在没有合格 TileLang 配置时没有停止 | 尾块恒为正（T = 1–299 本地检查，旧写法复现 0 尾块）；恢复前缀并加登录节点对照（v1 runtime 复现缺失）；sanitizer 以工具退出码和汇总行判定；phase 0 不合格即停止；重跑为运行 M6 v2 |
+| fused backward v1 (stopped: storage quota) | 融合批次开始 6 分钟后在 FlashRNN1 预构建阶段写结果失败，无计时 | 组的 scratch 配额已到硬上限（`df` 仍显示有空闲；配额表里的 4.4 GB 是'in doubt' 列，不是余量），封存检查只看了 `df` | 同一份封存源码与计划改放 home，封存检查改为解析配额余量并实际写入 50 MB；重跑为运行 fused backward |
+
+每次失败的原始输出都已归档并独立校验。
+
+## 偏离计划之处
+
+* E2 在 D = 96 上用 k = 2（S = 64，最后一片半满）和 k = 3（S = 32）：2 的幂切片宽度给不出 k = 4。
+* 分支之间不比较最终状态（FP32 compute carry 与输入 dtype 快照的 dtype 不同），改为比较 logits 和每层 hidden 历史。
+* 保存的资格张量只含 logits 与每层最后一步 hidden（体积原因）；完整历史只在 GPU 上检查。
+* 四个 GPU 通道并发计时，各自绑定本地 NUMA 核；此前的外部基线队列是单 GPU 串行。
+* E4 的 TileLang 分支是未优化的 M3 spike（逐元素 SIMT 远程写 + 每步 cluster_sync），不代表 TileLang 上限；M5 的 TileLang v2 换了算法。
+* M5 的 ThunderKittens 与 TileLang 只实现 spike 契约（一次完整调用、hidden 与 FP32 carry），只在 FP16 下资格认证。
+* 计划中的 D/B/T 网格尚未与原作者确认；本次用计划暂定的 D = 192–768 与现有分类器负载。
+* M6 的 sanitizer 检查（memcheck、synccheck 阻断，racecheck 记录）是 M0 标准之外新增的，只覆盖一个小形状。
+* TileLang 的 BF16 已资格认证，但只计时并登记 FP16；查表只含 h = 1 的 40 个精确形状。
+
+## 下一步
+
+* G1–G4 已全部达成，D = 768 也已由 TileLang grid 覆盖（M7）。剩下的都是扩展：
+* **高并发多数据面。** 以 SM 代价、拥堵度、NUMA 亲和等数据面为轴，在高并发负载下迭代（方案另述）。
+* **扩大查表（已完成）。** 按作者的网格 D ∈ {192, 256, 384, 512, 768} × B ∈ {1, 8, 32, 128} × T ∈ {64, 512} × {LSTM, sLSTM}、FP16 与 BF16 各一批（运行 table fill FP16、table fill BF16）：160 个形状中 150 个按事先定的入表规则进入 `h100-rtiled-grid-20261015.json`（对默认配置几何平均 1.34×，最高 2.28×；每个入表形状都通过了公开 `dispatch` 契约检查）；10 个 D = 384/512 的 sLSTM 形状不比默认快，保留默认。`dispatch` 现在服务 M6 + M7 + 新表共 200 个形状。详见 `docs/flashrnn2/rtiled-grid.md`。
+* **公开接口接入（已完成）。** `flashrnn2.dispatch` 让一次性调用也按表选后端（身份不符时退回默认配置；分块续跑须沿用整次调用选出的配置）。运行 dispatch check 的契约检查 12/12 形状 + 单元检查全部通过：选中配置正确，与后端直调、与 PreparedSequence、与公开分块续跑均逐位一致，E1 最差 0.31% 预算。详见 `docs/flashrnn2/dispatch.md`。
+* D ≤ 128 保持单 CTA；如需再探索，应在预分配的 PreparedSequence 路径上单独配对计时。
+* 与原作者确认目标 D、B、T 网格，并回复原作者、更新 PR。
+* B = 16 训练步：预激活融合之后剩下的是反向串行链本身（dh 规约的 N = 16 输出在 warp 间重复），可试 split-K 或更宽的每 CTA 输出块；B = 64 在 D = 192–512 可考虑按 batch 默认启用融合（需单独检验）。

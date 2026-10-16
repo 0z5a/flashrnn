@@ -1,0 +1,188 @@
+{
+ "mode": "select",
+ "case": {
+  "name": "m5-lstm-d512-b16-c32-t32",
+  "lane": 2,
+  "cell": "lstm",
+  "width": 512,
+  "batch": 16,
+  "concurrency": 32,
+  "steps": 32,
+  "roles": {
+   "tk": [
+    {
+     "kind": "tk",
+     "slice_width": 32
+    }
+   ],
+   "tilelang_v2": [
+    {
+     "kind": "tilelang_v2",
+     "slice_width": 32
+    }
+   ],
+   "triton": [
+    {
+     "kind": "rtiled",
+     "slice_width": 16,
+     "warps": 4,
+     "pad_k": false
+    },
+    {
+     "kind": "rtiled",
+     "slice_width": 16,
+     "warps": 8,
+     "pad_k": false
+    },
+    {
+     "kind": "rtiled",
+     "slice_width": 32,
+     "warps": 4,
+     "pad_k": false
+    },
+    {
+     "kind": "rtiled",
+     "slice_width": 32,
+     "warps": 8,
+     "pad_k": false
+    }
+   ]
+  }
+ },
+ "identity": {
+  "gpu": "NVIDIA H100",
+  "capability": [
+   9,
+   0
+  ],
+  "triton": "3.6.0",
+  "torch": "2.4.0a0+gite3b9b71",
+  "cuda": "11.8",
+  "source": {
+   "tools/rtiled_m4.py": "e3c5089456a40ff6078728ee111d133d81d04e6bcd9ed3c09c73fd4e76d1cefd",
+   "flashrnn/flashrnn2/triton_rtiled.py": "5e822255adcd00c00c19c5aa217dfff268634e3b4e3c8ccb4ba5cc76b97eed12",
+   "flashrnn/flashrnn2/triton_persistent.py": "c83a6255f01e1db30e5ea6bc9a50f5f7a6d24cffe26b7bd8a89faffe7b2148e1",
+   "flashrnn/flashrnn2/tilelang_rtiled.py": "e907cd33389524878ba534354e68fddc026ff6c29f572e020754de9809775f27",
+   "flashrnn/flashrnn2/reference.py": "9b6351ded119b071f6d7bc749e9a20269dde09c9a536cb6094afd6961c1d8260",
+   "flashrnn/flashrnn2/tk_rtiled.cu": "b4a98ae0e42aa1132470f0f18d257c0bdfd6b2346d31606a2b1c2204e040c9b0",
+   "flashrnn/flashrnn2/tk_rtiled.py": "88fbdd79e775866a05ae7b0ce90e8eb0d1c9cb63f92ef0003cf86d45dd6fc4ce",
+   "flashrnn/flashrnn2/execution_policy.py": "ccf7e487dfc106c14aa07e38ba46ab18361f5893d4c979c928a62b0adf0cdc45",
+   "flashrnn/flashrnn2/state_contract.py": "b99311ca231c478860b55ecae216e88ecb3a55f9d8aa212428b82157f8b9485e"
+  },
+  "tilelang": "0.1.15"
+ },
+ "split": 0,
+ "candidates": {
+  "tk": {
+   "qualification": {
+    "{\"kind\": \"tk\", \"slice_width\": 32}": "PASS"
+   },
+   "median_ms": {
+    "{\"kind\": \"tk\", \"slice_width\": 32}": 1.566659
+   },
+   "raw_ms": {
+    "{\"kind\": \"tk\", \"slice_width\": 32}": [
+     1.570474,
+     1.566659,
+     1.570117,
+     1.565974,
+     1.563952,
+     1.568179,
+     1.566412,
+     1.566005
+    ]
+   },
+   "selected": {
+    "kind": "tk",
+    "slice_width": 32
+   }
+  },
+  "tilelang_v2": {
+   "qualification": {
+    "{\"kind\": \"tilelang_v2\", \"slice_width\": 32}": "PASS"
+   },
+   "median_ms": {
+    "{\"kind\": \"tilelang_v2\", \"slice_width\": 32}": 1.353459
+   },
+   "raw_ms": {
+    "{\"kind\": \"tilelang_v2\", \"slice_width\": 32}": [
+     1.361332,
+     1.352413,
+     1.345086,
+     1.356186,
+     1.349515,
+     1.355102,
+     1.349699,
+     1.353459
+    ]
+   },
+   "selected": {
+    "kind": "tilelang_v2",
+    "slice_width": 32
+   }
+  },
+  "triton": {
+   "qualification": {
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 16, \"warps\": 4}": "PASS",
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 16, \"warps\": 8}": "PASS",
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 4}": "PASS",
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 8}": "PASS"
+   },
+   "median_ms": {
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 16, \"warps\": 4}": 1.706737,
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 16, \"warps\": 8}": 2.05992,
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 4}": 1.463951,
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 8}": 1.61182
+   },
+   "raw_ms": {
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 16, \"warps\": 4}": [
+     1.705441,
+     1.712776,
+     1.711358,
+     1.710854,
+     1.704917,
+     1.70621,
+     1.706737,
+     1.698652
+    ],
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 16, \"warps\": 8}": [
+     2.051489,
+     2.054286,
+     2.049482,
+     2.062174,
+     2.061919,
+     2.05992,
+     2.06282,
+     2.051597
+    ],
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 4}": [
+     1.460856,
+     1.461359,
+     1.46985,
+     1.465955,
+     1.463951,
+     1.459471,
+     1.465765,
+     1.447322
+    ],
+    "{\"kind\": \"rtiled\", \"pad_k\": false, \"slice_width\": 32, \"warps\": 8}": [
+     1.623199,
+     1.607707,
+     1.610469,
+     1.618214,
+     1.61133,
+     1.621542,
+     1.610217,
+     1.61182
+    ]
+   },
+   "selected": {
+    "kind": "rtiled",
+    "pad_k": false,
+    "slice_width": 32,
+    "warps": 4
+   }
+  }
+ },
+ "status": "SELECTED"
+}

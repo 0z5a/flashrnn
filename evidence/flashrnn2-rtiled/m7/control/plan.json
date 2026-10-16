@@ -1,0 +1,1693 @@
+{
+ "purpose": "D = 768 with the TileLang cooperative-grid path (T.sync_grid, k = 24 or 48 CTAs per group): full-contract qualification at the M0 + M6 standard, bitwise agreement with the cluster path where both exist, then split-0 selection and split-1 paired timing against the conservative default and against the best Triton R-tiled configuration",
+ "protocol": "phase 0: fixture_math CELL_BUDGET E1 (FP16/BF16; full/hidden/last; sLSTM zero/mixed/warm), bitwise per-step launches = ragged chunks = public chunked calls = one call, hidden/last = full, 20 repeats, side stream with producer, prepared CUDA Graph replay and bound-initial tracking, 50-repeat stress with grid slots, grid = cluster bitwise at D = 256/512; compute-sanitizer memcheck and synccheck blocking, racecheck recorded; phase 0 stops the batch when the first configuration ERRORs, a blocking sanitizer is not clean, or no FP16 D = 768 TileLang configuration qualifies; phase 1: split-0 selection; frozen comparison + policy tables; phase 2: split-1 5 starts x 20 ABBA/BAAB blocks, policy served through ExecutionPolicy.select",
+ "minutes": 160,
+ "starts": 5,
+ "blocks": 20,
+ "qualification_timeout_s": 2400,
+ "qualifications": [
+  [
+   "lstm",
+   "bfloat16",
+   768,
+   32,
+   "grid",
+   "e1,protocol,stress"
+  ],
+  [
+   "lstm",
+   "bfloat16",
+   768,
+   16,
+   "grid",
+   "e1,protocol,stress"
+  ],
+  [
+   "lstm",
+   "float16",
+   768,
+   32,
+   "grid",
+   "e1,protocol,stress"
+  ],
+  [
+   "lstm",
+   "float16",
+   768,
+   16,
+   "grid",
+   "e1,protocol,stress"
+  ],
+  [
+   "slstm",
+   "bfloat16",
+   768,
+   32,
+   "grid",
+   "e1,protocol,stress"
+  ],
+  [
+   "slstm",
+   "bfloat16",
+   768,
+   16,
+   "grid",
+   "e1,protocol,stress"
+  ],
+  [
+   "slstm",
+   "float16",
+   768,
+   32,
+   "grid",
+   "e1,protocol,stress"
+  ],
+  [
+   "slstm",
+   "float16",
+   768,
+   16,
+   "grid",
+   "e1,protocol,stress"
+  ],
+  [
+   "lstm",
+   "bfloat16",
+   256,
+   32,
+   "grid",
+   "e1,protocol,stress,vs_cluster"
+  ],
+  [
+   "lstm",
+   "bfloat16",
+   512,
+   32,
+   "grid",
+   "e1,protocol,stress,vs_cluster"
+  ],
+  [
+   "lstm",
+   "bfloat16",
+   256,
+   16,
+   "grid",
+   "e1,protocol,stress,vs_cluster"
+  ],
+  [
+   "lstm",
+   "float16",
+   256,
+   32,
+   "grid",
+   "e1,protocol,stress,vs_cluster"
+  ],
+  [
+   "lstm",
+   "float16",
+   512,
+   32,
+   "grid",
+   "e1,protocol,stress,vs_cluster"
+  ],
+  [
+   "lstm",
+   "float16",
+   256,
+   16,
+   "grid",
+   "e1,protocol,stress,vs_cluster"
+  ],
+  [
+   "slstm",
+   "bfloat16",
+   256,
+   32,
+   "grid",
+   "e1,protocol,stress,vs_cluster"
+  ],
+  [
+   "slstm",
+   "bfloat16",
+   512,
+   32,
+   "grid",
+   "e1,protocol,stress,vs_cluster"
+  ],
+  [
+   "slstm",
+   "bfloat16",
+   256,
+   16,
+   "grid",
+   "e1,protocol,stress,vs_cluster"
+  ],
+  [
+   "slstm",
+   "float16",
+   256,
+   32,
+   "grid",
+   "e1,protocol,stress,vs_cluster"
+  ],
+  [
+   "slstm",
+   "float16",
+   512,
+   32,
+   "grid",
+   "e1,protocol,stress,vs_cluster"
+  ],
+  [
+   "slstm",
+   "float16",
+   256,
+   16,
+   "grid",
+   "e1,protocol,stress,vs_cluster"
+  ]
+ ],
+ "sanitizer_case": [
+  "lstm",
+  "float16",
+  768,
+  32,
+  "grid"
+ ],
+ "sanitizer_runs": [
+  {
+   "tool": "memcheck",
+   "prefix": "CUDA 12.8 compute-sanitizer --target-processes application-only --error-exitcode 99 --tool memcheck",
+   "stages": "sanity",
+   "blocking": true
+  },
+  {
+   "tool": "synccheck",
+   "prefix": "CUDA 12.8 compute-sanitizer --target-processes application-only --error-exitcode 99 --tool synccheck",
+   "stages": "sanity",
+   "blocking": true
+  },
+  {
+   "tool": "racecheck",
+   "prefix": "CUDA 12.8 compute-sanitizer --target-processes application-only --error-exitcode 99 --tool racecheck --racecheck-report all",
+   "stages": "sanity",
+   "blocking": false
+  }
+ ],
+ "select_cases": [
+  {
+   "name": "k7-lstm-d768-b16-t1024",
+   "lane": 0,
+   "cell": "lstm",
+   "width": 768,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "roles": {
+    "default": [
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ],
+    "policy": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 16,
+      "sync": "grid"
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 32,
+      "sync": "grid"
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ],
+    "tilelang": [
+     {
+      "kind": "tilelang_full",
+      "slice_width": 16,
+      "sync": "grid"
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 32,
+      "sync": "grid"
+     }
+    ]
+   },
+   "level": "kernel"
+  },
+  {
+   "name": "k7-lstm-d768-b64-t1024",
+   "lane": 1,
+   "cell": "lstm",
+   "width": 768,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "roles": {
+    "default": [
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ],
+    "policy": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 16,
+      "sync": "grid"
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 32,
+      "sync": "grid"
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ],
+    "tilelang": [
+     {
+      "kind": "tilelang_full",
+      "slice_width": 16,
+      "sync": "grid"
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 32,
+      "sync": "grid"
+     }
+    ]
+   },
+   "level": "kernel"
+  },
+  {
+   "name": "m7-lstm-d768-b1-c8-t32",
+   "lane": 2,
+   "cell": "lstm",
+   "width": 768,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "roles": {
+    "default": [
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ],
+    "policy": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 16,
+      "sync": "grid"
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 32,
+      "sync": "grid"
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ],
+    "tilelang": [
+     {
+      "kind": "tilelang_full",
+      "slice_width": 16,
+      "sync": "grid"
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 32,
+      "sync": "grid"
+     }
+    ]
+   }
+  },
+  {
+   "name": "m7-lstm-d768-b16-c32-t32",
+   "lane": 3,
+   "cell": "lstm",
+   "width": 768,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "roles": {
+    "default": [
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ],
+    "policy": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 16,
+      "sync": "grid"
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 32,
+      "sync": "grid"
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ],
+    "tilelang": [
+     {
+      "kind": "tilelang_full",
+      "slice_width": 16,
+      "sync": "grid"
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 32,
+      "sync": "grid"
+     }
+    ]
+   }
+  },
+  {
+   "name": "m7-lstm-d768-b32-c64-t128",
+   "lane": 0,
+   "cell": "lstm",
+   "width": 768,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "roles": {
+    "default": [
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ],
+    "policy": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 16,
+      "sync": "grid"
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 32,
+      "sync": "grid"
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ],
+    "tilelang": [
+     {
+      "kind": "tilelang_full",
+      "slice_width": 16,
+      "sync": "grid"
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 32,
+      "sync": "grid"
+     }
+    ]
+   }
+  },
+  {
+   "name": "k7-slstm-d768-b16-t1024",
+   "lane": 1,
+   "cell": "slstm",
+   "width": 768,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "roles": {
+    "default": [
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ],
+    "policy": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 16,
+      "sync": "grid"
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 32,
+      "sync": "grid"
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ],
+    "tilelang": [
+     {
+      "kind": "tilelang_full",
+      "slice_width": 16,
+      "sync": "grid"
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 32,
+      "sync": "grid"
+     }
+    ]
+   },
+   "level": "kernel"
+  },
+  {
+   "name": "k7-slstm-d768-b64-t1024",
+   "lane": 2,
+   "cell": "slstm",
+   "width": 768,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "roles": {
+    "default": [
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ],
+    "policy": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 16,
+      "sync": "grid"
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 32,
+      "sync": "grid"
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ],
+    "tilelang": [
+     {
+      "kind": "tilelang_full",
+      "slice_width": 16,
+      "sync": "grid"
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 32,
+      "sync": "grid"
+     }
+    ]
+   },
+   "level": "kernel"
+  },
+  {
+   "name": "m7-slstm-d768-b1-c8-t32",
+   "lane": 3,
+   "cell": "slstm",
+   "width": 768,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "roles": {
+    "default": [
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ],
+    "policy": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 16,
+      "sync": "grid"
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 32,
+      "sync": "grid"
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ],
+    "tilelang": [
+     {
+      "kind": "tilelang_full",
+      "slice_width": 16,
+      "sync": "grid"
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 32,
+      "sync": "grid"
+     }
+    ]
+   }
+  },
+  {
+   "name": "m7-slstm-d768-b16-c32-t32",
+   "lane": 0,
+   "cell": "slstm",
+   "width": 768,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "roles": {
+    "default": [
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ],
+    "policy": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 16,
+      "sync": "grid"
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 32,
+      "sync": "grid"
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ],
+    "tilelang": [
+     {
+      "kind": "tilelang_full",
+      "slice_width": 16,
+      "sync": "grid"
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 32,
+      "sync": "grid"
+     }
+    ]
+   }
+  },
+  {
+   "name": "m7-slstm-d768-b32-c64-t128",
+   "lane": 1,
+   "cell": "slstm",
+   "width": 768,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "roles": {
+    "default": [
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ],
+    "policy": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 16,
+      "sync": "grid"
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 32,
+      "sync": "grid"
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ],
+    "tilelang": [
+     {
+      "kind": "tilelang_full",
+      "slice_width": 16,
+      "sync": "grid"
+     },
+     {
+      "kind": "tilelang_full",
+      "slice_width": 32,
+      "sync": "grid"
+     }
+    ]
+   }
+  }
+ ],
+ "comparisons": [
+  {
+   "cell": "lstm",
+   "width": 768,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "select_case": "k7-lstm-d768-b16-t1024",
+   "lane": 0,
+   "level": "kernel",
+   "name": "k7-lstm-d768-b16-t1024-policy-vs-default",
+   "experiment": "K_POLICY_VS_DEFAULT",
+   "baseline": {
+    "from_role": "default"
+   },
+   "candidate_role": "policy"
+  },
+  {
+   "cell": "lstm",
+   "width": 768,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "select_case": "k7-lstm-d768-b16-t1024",
+   "lane": 0,
+   "level": "kernel",
+   "name": "k7-lstm-d768-b16-t1024-tlgrid-vs-triton",
+   "experiment": "K_TLGRID_VS_TRITON",
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang"
+  },
+  {
+   "cell": "lstm",
+   "width": 768,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "select_case": "k7-lstm-d768-b64-t1024",
+   "lane": 1,
+   "level": "kernel",
+   "name": "k7-lstm-d768-b64-t1024-policy-vs-default",
+   "experiment": "K_POLICY_VS_DEFAULT",
+   "baseline": {
+    "from_role": "default"
+   },
+   "candidate_role": "policy"
+  },
+  {
+   "cell": "lstm",
+   "width": 768,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "select_case": "k7-lstm-d768-b64-t1024",
+   "lane": 1,
+   "level": "kernel",
+   "name": "k7-lstm-d768-b64-t1024-tlgrid-vs-triton",
+   "experiment": "K_TLGRID_VS_TRITON",
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang"
+  },
+  {
+   "cell": "lstm",
+   "width": 768,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "select_case": "m7-lstm-d768-b1-c8-t32",
+   "lane": 2,
+   "name": "m7-lstm-d768-b1-c8-t32-policy-vs-default",
+   "experiment": "POLICY_VS_DEFAULT",
+   "baseline": {
+    "from_role": "default"
+   },
+   "candidate_role": "policy"
+  },
+  {
+   "cell": "lstm",
+   "width": 768,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "select_case": "m7-lstm-d768-b1-c8-t32",
+   "lane": 2,
+   "name": "m7-lstm-d768-b1-c8-t32-tlgrid-vs-triton",
+   "experiment": "TLGRID_VS_TRITON",
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang"
+  },
+  {
+   "cell": "lstm",
+   "width": 768,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "select_case": "m7-lstm-d768-b16-c32-t32",
+   "lane": 3,
+   "name": "m7-lstm-d768-b16-c32-t32-policy-vs-default",
+   "experiment": "POLICY_VS_DEFAULT",
+   "baseline": {
+    "from_role": "default"
+   },
+   "candidate_role": "policy"
+  },
+  {
+   "cell": "lstm",
+   "width": 768,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "select_case": "m7-lstm-d768-b16-c32-t32",
+   "lane": 3,
+   "name": "m7-lstm-d768-b16-c32-t32-tlgrid-vs-triton",
+   "experiment": "TLGRID_VS_TRITON",
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang"
+  },
+  {
+   "cell": "lstm",
+   "width": 768,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "select_case": "m7-lstm-d768-b32-c64-t128",
+   "lane": 0,
+   "name": "m7-lstm-d768-b32-c64-t128-policy-vs-default",
+   "experiment": "POLICY_VS_DEFAULT",
+   "baseline": {
+    "from_role": "default"
+   },
+   "candidate_role": "policy"
+  },
+  {
+   "cell": "lstm",
+   "width": 768,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "select_case": "m7-lstm-d768-b32-c64-t128",
+   "lane": 0,
+   "name": "m7-lstm-d768-b32-c64-t128-tlgrid-vs-triton",
+   "experiment": "TLGRID_VS_TRITON",
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang"
+  },
+  {
+   "cell": "slstm",
+   "width": 768,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "select_case": "k7-slstm-d768-b16-t1024",
+   "lane": 1,
+   "level": "kernel",
+   "name": "k7-slstm-d768-b16-t1024-policy-vs-default",
+   "experiment": "K_POLICY_VS_DEFAULT",
+   "baseline": {
+    "from_role": "default"
+   },
+   "candidate_role": "policy"
+  },
+  {
+   "cell": "slstm",
+   "width": 768,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "select_case": "k7-slstm-d768-b16-t1024",
+   "lane": 1,
+   "level": "kernel",
+   "name": "k7-slstm-d768-b16-t1024-tlgrid-vs-triton",
+   "experiment": "K_TLGRID_VS_TRITON",
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang"
+  },
+  {
+   "cell": "slstm",
+   "width": 768,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "select_case": "k7-slstm-d768-b64-t1024",
+   "lane": 2,
+   "level": "kernel",
+   "name": "k7-slstm-d768-b64-t1024-policy-vs-default",
+   "experiment": "K_POLICY_VS_DEFAULT",
+   "baseline": {
+    "from_role": "default"
+   },
+   "candidate_role": "policy"
+  },
+  {
+   "cell": "slstm",
+   "width": 768,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "select_case": "k7-slstm-d768-b64-t1024",
+   "lane": 2,
+   "level": "kernel",
+   "name": "k7-slstm-d768-b64-t1024-tlgrid-vs-triton",
+   "experiment": "K_TLGRID_VS_TRITON",
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang"
+  },
+  {
+   "cell": "slstm",
+   "width": 768,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "select_case": "m7-slstm-d768-b1-c8-t32",
+   "lane": 3,
+   "name": "m7-slstm-d768-b1-c8-t32-policy-vs-default",
+   "experiment": "POLICY_VS_DEFAULT",
+   "baseline": {
+    "from_role": "default"
+   },
+   "candidate_role": "policy"
+  },
+  {
+   "cell": "slstm",
+   "width": 768,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "select_case": "m7-slstm-d768-b1-c8-t32",
+   "lane": 3,
+   "name": "m7-slstm-d768-b1-c8-t32-tlgrid-vs-triton",
+   "experiment": "TLGRID_VS_TRITON",
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang"
+  },
+  {
+   "cell": "slstm",
+   "width": 768,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "select_case": "m7-slstm-d768-b16-c32-t32",
+   "lane": 0,
+   "name": "m7-slstm-d768-b16-c32-t32-policy-vs-default",
+   "experiment": "POLICY_VS_DEFAULT",
+   "baseline": {
+    "from_role": "default"
+   },
+   "candidate_role": "policy"
+  },
+  {
+   "cell": "slstm",
+   "width": 768,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "select_case": "m7-slstm-d768-b16-c32-t32",
+   "lane": 0,
+   "name": "m7-slstm-d768-b16-c32-t32-tlgrid-vs-triton",
+   "experiment": "TLGRID_VS_TRITON",
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang"
+  },
+  {
+   "cell": "slstm",
+   "width": 768,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "select_case": "m7-slstm-d768-b32-c64-t128",
+   "lane": 1,
+   "name": "m7-slstm-d768-b32-c64-t128-policy-vs-default",
+   "experiment": "POLICY_VS_DEFAULT",
+   "baseline": {
+    "from_role": "default"
+   },
+   "candidate_role": "policy"
+  },
+  {
+   "cell": "slstm",
+   "width": 768,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "select_case": "m7-slstm-d768-b32-c64-t128",
+   "lane": 1,
+   "name": "m7-slstm-d768-b32-c64-t128-tlgrid-vs-triton",
+   "experiment": "TLGRID_VS_TRITON",
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang"
+  }
+ ],
+ "node_reason": "One H100 node (4 H100): a D = 768 group needs 24 or 48 SMs of one GPU; qualification lanes in parallel, then selection and paired timing pinned to GPU-local cores",
+ "deviations": [
+  "racecheck counts as clean when its RACECHECK SUMMARY reports 0 errors and 0 warnings (M6 v2 receipt mislabelled it because the rule only looked for ERROR SUMMARY)"
+ ],
+ "not_claimed": [
+  "E2E model quality",
+  "backward",
+  "multi-GPU",
+  "shapes outside the timed set"
+ ]
+}

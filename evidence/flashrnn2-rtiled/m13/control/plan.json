@@ -1,0 +1,48 @@
+{
+ "purpose": "M1 PreparedSequence R-tiling checks (eager/chunks/CUDA Graph bitwise), M3 TileLang cluster+DSMEM spike numerics vs FP64 oracle and vs Triton R tiling, exploratory prepared-graph candidate screening",
+ "lane_minutes": 120,
+ "lanes": [
+  {
+   "gpu": 0,
+   "tasks": [
+    {
+     "name": "m1_prepared"
+    }
+   ]
+  },
+  {
+   "gpu": 1,
+   "tasks": [
+    {
+     "name": "m3_lstm"
+    }
+   ]
+  },
+  {
+   "gpu": 2,
+   "tasks": [
+    {
+     "name": "m3_slstm"
+    }
+   ]
+  },
+  {
+   "gpu": 3,
+   "tasks": [
+    {
+     "name": "explore_lstm"
+    },
+    {
+     "name": "explore_slstm"
+    }
+   ]
+  }
+ ],
+ "node_reason": "One H100 node (4 H100): four independent single-GPU lanes (M1 checks, TileLang LSTM, TileLang sLSTM, exploratory timing); no cross-GPU requirement",
+ "frozen_configs": "configs.json copied unchanged from flashrnn2-rtiled-m0-20261014-v2/control/configs.json (M0 compile sweep, 140 configs)",
+ "not_claimed": [
+  "E2E PASS",
+  "paired speedup",
+  "E3 v1 comparison"
+ ]
+}

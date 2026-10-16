@@ -1,0 +1,5493 @@
+{
+ "purpose": "ThunderKittens vs TileLang R splitting on H100: same algorithm in both (cluster of k CTAs, WGMMA with the R slice as operand A, h slices exchanged by bulk shared::cluster copies completing on the receiver's mbarrier, no per-step cluster barrier); each also against Triton R tiling (L2 barrier); kernel-level comparison at T=1024 isolates the R-splitting kernels from each framework's launch path, the classifier rows include it",
+ "workload": "external-baseline classifier as in M4: 4 layers, vocab 512, FP16, (B,C,T) in (1,8,32),(16,32,32),(32,64,128); D in 192,256,384,512",
+ "protocol": "phase 0 cell checks (hidden + FP32 carry vs FP64 GPU oracle, CELL_BUDGET, FP16, LSTM warm / sLSTM zero,mixed,warm, (3,17,2),(16,128,1)); split-0 selection among passing configurations -> frozen hashed table -> split-1 timing 5 starts x 20 ABBA/BAAB blocks; model-budget checks of every arm vs FP64 model oracle and arm-vs-arm before timing; hierarchical bootstrap seed 20261013+index",
+ "minutes": 160,
+ "starts": 5,
+ "blocks": 20,
+ "cellcheck_timeout_s": 300,
+ "cell_checks": [
+  [
+   "tk",
+   "lstm",
+   128,
+   32
+  ],
+  [
+   "tk",
+   "lstm",
+   128,
+   64
+  ],
+  [
+   "tk",
+   "lstm",
+   192,
+   16
+  ],
+  [
+   "tk",
+   "lstm",
+   192,
+   32
+  ],
+  [
+   "tk",
+   "lstm",
+   192,
+   64
+  ],
+  [
+   "tk",
+   "lstm",
+   256,
+   16
+  ],
+  [
+   "tk",
+   "lstm",
+   256,
+   32
+  ],
+  [
+   "tk",
+   "lstm",
+   256,
+   64
+  ],
+  [
+   "tk",
+   "lstm",
+   384,
+   32
+  ],
+  [
+   "tk",
+   "lstm",
+   512,
+   32
+  ],
+  [
+   "tk",
+   "slstm",
+   128,
+   32
+  ],
+  [
+   "tk",
+   "slstm",
+   128,
+   64
+  ],
+  [
+   "tk",
+   "slstm",
+   192,
+   16
+  ],
+  [
+   "tk",
+   "slstm",
+   192,
+   32
+  ],
+  [
+   "tk",
+   "slstm",
+   192,
+   64
+  ],
+  [
+   "tk",
+   "slstm",
+   256,
+   16
+  ],
+  [
+   "tk",
+   "slstm",
+   256,
+   32
+  ],
+  [
+   "tk",
+   "slstm",
+   256,
+   64
+  ],
+  [
+   "tk",
+   "slstm",
+   384,
+   32
+  ],
+  [
+   "tk",
+   "slstm",
+   512,
+   32
+  ],
+  [
+   "tilelang_v2",
+   "lstm",
+   128,
+   32
+  ],
+  [
+   "tilelang_v2",
+   "lstm",
+   128,
+   64
+  ],
+  [
+   "tilelang_v2",
+   "lstm",
+   192,
+   16
+  ],
+  [
+   "tilelang_v2",
+   "lstm",
+   192,
+   32
+  ],
+  [
+   "tilelang_v2",
+   "lstm",
+   192,
+   64
+  ],
+  [
+   "tilelang_v2",
+   "lstm",
+   256,
+   16
+  ],
+  [
+   "tilelang_v2",
+   "lstm",
+   256,
+   32
+  ],
+  [
+   "tilelang_v2",
+   "lstm",
+   256,
+   64
+  ],
+  [
+   "tilelang_v2",
+   "lstm",
+   384,
+   32
+  ],
+  [
+   "tilelang_v2",
+   "lstm",
+   512,
+   32
+  ],
+  [
+   "tilelang_v2",
+   "slstm",
+   128,
+   32
+  ],
+  [
+   "tilelang_v2",
+   "slstm",
+   128,
+   64
+  ],
+  [
+   "tilelang_v2",
+   "slstm",
+   192,
+   16
+  ],
+  [
+   "tilelang_v2",
+   "slstm",
+   192,
+   32
+  ],
+  [
+   "tilelang_v2",
+   "slstm",
+   192,
+   64
+  ],
+  [
+   "tilelang_v2",
+   "slstm",
+   256,
+   16
+  ],
+  [
+   "tilelang_v2",
+   "slstm",
+   256,
+   32
+  ],
+  [
+   "tilelang_v2",
+   "slstm",
+   256,
+   64
+  ],
+  [
+   "tilelang_v2",
+   "slstm",
+   384,
+   32
+  ],
+  [
+   "tilelang_v2",
+   "slstm",
+   512,
+   32
+  ]
+ ],
+ "select_cases": [
+  {
+   "name": "k5-lstm-d192-b16-t1024",
+   "level": "kernel",
+   "lane": 0,
+   "cell": "lstm",
+   "width": 192,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 16
+     },
+     {
+      "kind": "tk",
+      "slice_width": 32
+     },
+     {
+      "kind": "tk",
+      "slice_width": 64
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 16
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 64
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 128,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 128,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "k5-lstm-d192-b64-t1024",
+   "level": "kernel",
+   "lane": 1,
+   "cell": "lstm",
+   "width": 192,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 16
+     },
+     {
+      "kind": "tk",
+      "slice_width": 32
+     },
+     {
+      "kind": "tk",
+      "slice_width": 64
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 16
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 64
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 128,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 128,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "k5-lstm-d256-b16-t1024",
+   "level": "kernel",
+   "lane": 2,
+   "cell": "lstm",
+   "width": 256,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 16
+     },
+     {
+      "kind": "tk",
+      "slice_width": 32
+     },
+     {
+      "kind": "tk",
+      "slice_width": 64
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 16
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 64
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "k5-lstm-d256-b64-t1024",
+   "level": "kernel",
+   "lane": 3,
+   "cell": "lstm",
+   "width": 256,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 16
+     },
+     {
+      "kind": "tk",
+      "slice_width": 32
+     },
+     {
+      "kind": "tk",
+      "slice_width": 64
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 16
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 64
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "k5-lstm-d384-b16-t1024",
+   "level": "kernel",
+   "lane": 0,
+   "cell": "lstm",
+   "width": 384,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 32
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "k5-lstm-d384-b64-t1024",
+   "level": "kernel",
+   "lane": 1,
+   "cell": "lstm",
+   "width": 384,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 32
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "k5-lstm-d512-b16-t1024",
+   "level": "kernel",
+   "lane": 2,
+   "cell": "lstm",
+   "width": 512,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 32
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "k5-lstm-d512-b64-t1024",
+   "level": "kernel",
+   "lane": 3,
+   "cell": "lstm",
+   "width": 512,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 32
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "k5-slstm-d192-b16-t1024",
+   "level": "kernel",
+   "lane": 0,
+   "cell": "slstm",
+   "width": 192,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 16
+     },
+     {
+      "kind": "tk",
+      "slice_width": 32
+     },
+     {
+      "kind": "tk",
+      "slice_width": 64
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 16
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 64
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 128,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 128,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "k5-slstm-d192-b64-t1024",
+   "level": "kernel",
+   "lane": 1,
+   "cell": "slstm",
+   "width": 192,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 16
+     },
+     {
+      "kind": "tk",
+      "slice_width": 32
+     },
+     {
+      "kind": "tk",
+      "slice_width": 64
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 16
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 64
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 128,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 128,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "k5-slstm-d256-b16-t1024",
+   "level": "kernel",
+   "lane": 2,
+   "cell": "slstm",
+   "width": 256,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 16
+     },
+     {
+      "kind": "tk",
+      "slice_width": 32
+     },
+     {
+      "kind": "tk",
+      "slice_width": 64
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 16
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 64
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "k5-slstm-d256-b64-t1024",
+   "level": "kernel",
+   "lane": 3,
+   "cell": "slstm",
+   "width": 256,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 16
+     },
+     {
+      "kind": "tk",
+      "slice_width": 32
+     },
+     {
+      "kind": "tk",
+      "slice_width": 64
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 16
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 64
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "k5-slstm-d384-b16-t1024",
+   "level": "kernel",
+   "lane": 0,
+   "cell": "slstm",
+   "width": 384,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 32
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "k5-slstm-d384-b64-t1024",
+   "level": "kernel",
+   "lane": 1,
+   "cell": "slstm",
+   "width": 384,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 32
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "k5-slstm-d512-b16-t1024",
+   "level": "kernel",
+   "lane": 2,
+   "cell": "slstm",
+   "width": 512,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 32
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "k5-slstm-d512-b64-t1024",
+   "level": "kernel",
+   "lane": 3,
+   "cell": "slstm",
+   "width": 512,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 32
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "m5-lstm-d192-b1-c8-t32",
+   "lane": 0,
+   "cell": "lstm",
+   "width": 192,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 16
+     },
+     {
+      "kind": "tk",
+      "slice_width": 32
+     },
+     {
+      "kind": "tk",
+      "slice_width": 64
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 16
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 64
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 128,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 128,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "m5-lstm-d192-b16-c32-t32",
+   "lane": 1,
+   "cell": "lstm",
+   "width": 192,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 16
+     },
+     {
+      "kind": "tk",
+      "slice_width": 32
+     },
+     {
+      "kind": "tk",
+      "slice_width": 64
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 16
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 64
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 128,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 128,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "m5-lstm-d192-b32-c64-t128",
+   "lane": 2,
+   "cell": "lstm",
+   "width": 192,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 16
+     },
+     {
+      "kind": "tk",
+      "slice_width": 32
+     },
+     {
+      "kind": "tk",
+      "slice_width": 64
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 16
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 64
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 128,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 128,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "m5-lstm-d256-b1-c8-t32",
+   "lane": 3,
+   "cell": "lstm",
+   "width": 256,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 16
+     },
+     {
+      "kind": "tk",
+      "slice_width": 32
+     },
+     {
+      "kind": "tk",
+      "slice_width": 64
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 16
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 64
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "m5-lstm-d256-b16-c32-t32",
+   "lane": 0,
+   "cell": "lstm",
+   "width": 256,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 16
+     },
+     {
+      "kind": "tk",
+      "slice_width": 32
+     },
+     {
+      "kind": "tk",
+      "slice_width": 64
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 16
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 64
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "m5-lstm-d256-b32-c64-t128",
+   "lane": 1,
+   "cell": "lstm",
+   "width": 256,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 16
+     },
+     {
+      "kind": "tk",
+      "slice_width": 32
+     },
+     {
+      "kind": "tk",
+      "slice_width": 64
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 16
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 64
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "m5-lstm-d384-b1-c8-t32",
+   "lane": 2,
+   "cell": "lstm",
+   "width": 384,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 32
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "m5-lstm-d384-b16-c32-t32",
+   "lane": 3,
+   "cell": "lstm",
+   "width": 384,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 32
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "m5-lstm-d384-b32-c64-t128",
+   "lane": 0,
+   "cell": "lstm",
+   "width": 384,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 32
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "m5-lstm-d512-b1-c8-t32",
+   "lane": 1,
+   "cell": "lstm",
+   "width": 512,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 32
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "m5-lstm-d512-b16-c32-t32",
+   "lane": 2,
+   "cell": "lstm",
+   "width": 512,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 32
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "m5-lstm-d512-b32-c64-t128",
+   "lane": 3,
+   "cell": "lstm",
+   "width": 512,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 32
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "m5-slstm-d192-b1-c8-t32",
+   "lane": 0,
+   "cell": "slstm",
+   "width": 192,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 16
+     },
+     {
+      "kind": "tk",
+      "slice_width": 32
+     },
+     {
+      "kind": "tk",
+      "slice_width": 64
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 16
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 64
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 128,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 128,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "m5-slstm-d192-b16-c32-t32",
+   "lane": 1,
+   "cell": "slstm",
+   "width": 192,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 16
+     },
+     {
+      "kind": "tk",
+      "slice_width": 32
+     },
+     {
+      "kind": "tk",
+      "slice_width": 64
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 16
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 64
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 128,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 128,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "m5-slstm-d192-b32-c64-t128",
+   "lane": 2,
+   "cell": "slstm",
+   "width": 192,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 16
+     },
+     {
+      "kind": "tk",
+      "slice_width": 32
+     },
+     {
+      "kind": "tk",
+      "slice_width": 64
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 16
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 64
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 128,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 128,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "m5-slstm-d256-b1-c8-t32",
+   "lane": 3,
+   "cell": "slstm",
+   "width": 256,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 16
+     },
+     {
+      "kind": "tk",
+      "slice_width": 32
+     },
+     {
+      "kind": "tk",
+      "slice_width": 64
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 16
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 64
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "m5-slstm-d256-b16-c32-t32",
+   "lane": 0,
+   "cell": "slstm",
+   "width": 256,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 16
+     },
+     {
+      "kind": "tk",
+      "slice_width": 32
+     },
+     {
+      "kind": "tk",
+      "slice_width": 64
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 16
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 64
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "m5-slstm-d256-b32-c64-t128",
+   "lane": 1,
+   "cell": "slstm",
+   "width": 256,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 16
+     },
+     {
+      "kind": "tk",
+      "slice_width": 32
+     },
+     {
+      "kind": "tk",
+      "slice_width": 64
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 16
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     },
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 64
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "m5-slstm-d384-b1-c8-t32",
+   "lane": 2,
+   "cell": "slstm",
+   "width": 384,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 32
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "m5-slstm-d384-b16-c32-t32",
+   "lane": 3,
+   "cell": "slstm",
+   "width": 384,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 32
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "m5-slstm-d384-b32-c64-t128",
+   "lane": 0,
+   "cell": "slstm",
+   "width": 384,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 32
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": true
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 64,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "m5-slstm-d512-b1-c8-t32",
+   "lane": 1,
+   "cell": "slstm",
+   "width": 512,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 32
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "m5-slstm-d512-b16-c32-t32",
+   "lane": 2,
+   "cell": "slstm",
+   "width": 512,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 32
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "m5-slstm-d512-b32-c64-t128",
+   "lane": 3,
+   "cell": "slstm",
+   "width": 512,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "roles": {
+    "tk": [
+     {
+      "kind": "tk",
+      "slice_width": 32
+     }
+    ],
+    "tilelang_v2": [
+     {
+      "kind": "tilelang_v2",
+      "slice_width": 32
+     }
+    ],
+    "triton": [
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 16,
+      "warps": 8,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 4,
+      "pad_k": false
+     },
+     {
+      "kind": "rtiled",
+      "slice_width": 32,
+      "warps": 8,
+      "pad_k": false
+     }
+    ]
+   }
+  }
+ ],
+ "comparisons": [
+  {
+   "cell": "lstm",
+   "width": 192,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "select_case": "k5-lstm-d192-b16-t1024",
+   "level": "kernel",
+   "name": "k5-lstm-d192-b16-t1024-tk-vs-tl",
+   "experiment": "K_TK_VS_TL",
+   "lane": 0,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 192,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "select_case": "k5-lstm-d192-b16-t1024",
+   "level": "kernel",
+   "name": "k5-lstm-d192-b16-t1024-tk-vs-triton",
+   "experiment": "K_TK_VS_TRITON",
+   "lane": 1,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 192,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "select_case": "k5-lstm-d192-b16-t1024",
+   "level": "kernel",
+   "name": "k5-lstm-d192-b16-t1024-tl-vs-triton",
+   "experiment": "K_TL_VS_TRITON",
+   "lane": 2,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "lstm",
+   "width": 192,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "select_case": "k5-lstm-d192-b64-t1024",
+   "level": "kernel",
+   "name": "k5-lstm-d192-b64-t1024-tk-vs-tl",
+   "experiment": "K_TK_VS_TL",
+   "lane": 3,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 192,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "select_case": "k5-lstm-d192-b64-t1024",
+   "level": "kernel",
+   "name": "k5-lstm-d192-b64-t1024-tk-vs-triton",
+   "experiment": "K_TK_VS_TRITON",
+   "lane": 0,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 192,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "select_case": "k5-lstm-d192-b64-t1024",
+   "level": "kernel",
+   "name": "k5-lstm-d192-b64-t1024-tl-vs-triton",
+   "experiment": "K_TL_VS_TRITON",
+   "lane": 1,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "lstm",
+   "width": 256,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "select_case": "k5-lstm-d256-b16-t1024",
+   "level": "kernel",
+   "name": "k5-lstm-d256-b16-t1024-tk-vs-tl",
+   "experiment": "K_TK_VS_TL",
+   "lane": 2,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 256,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "select_case": "k5-lstm-d256-b16-t1024",
+   "level": "kernel",
+   "name": "k5-lstm-d256-b16-t1024-tk-vs-triton",
+   "experiment": "K_TK_VS_TRITON",
+   "lane": 3,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 256,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "select_case": "k5-lstm-d256-b16-t1024",
+   "level": "kernel",
+   "name": "k5-lstm-d256-b16-t1024-tl-vs-triton",
+   "experiment": "K_TL_VS_TRITON",
+   "lane": 0,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "lstm",
+   "width": 256,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "select_case": "k5-lstm-d256-b64-t1024",
+   "level": "kernel",
+   "name": "k5-lstm-d256-b64-t1024-tk-vs-tl",
+   "experiment": "K_TK_VS_TL",
+   "lane": 1,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 256,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "select_case": "k5-lstm-d256-b64-t1024",
+   "level": "kernel",
+   "name": "k5-lstm-d256-b64-t1024-tk-vs-triton",
+   "experiment": "K_TK_VS_TRITON",
+   "lane": 2,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 256,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "select_case": "k5-lstm-d256-b64-t1024",
+   "level": "kernel",
+   "name": "k5-lstm-d256-b64-t1024-tl-vs-triton",
+   "experiment": "K_TL_VS_TRITON",
+   "lane": 3,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "lstm",
+   "width": 384,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "select_case": "k5-lstm-d384-b16-t1024",
+   "level": "kernel",
+   "name": "k5-lstm-d384-b16-t1024-tk-vs-tl",
+   "experiment": "K_TK_VS_TL",
+   "lane": 0,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 384,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "select_case": "k5-lstm-d384-b16-t1024",
+   "level": "kernel",
+   "name": "k5-lstm-d384-b16-t1024-tk-vs-triton",
+   "experiment": "K_TK_VS_TRITON",
+   "lane": 1,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 384,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "select_case": "k5-lstm-d384-b16-t1024",
+   "level": "kernel",
+   "name": "k5-lstm-d384-b16-t1024-tl-vs-triton",
+   "experiment": "K_TL_VS_TRITON",
+   "lane": 2,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "lstm",
+   "width": 384,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "select_case": "k5-lstm-d384-b64-t1024",
+   "level": "kernel",
+   "name": "k5-lstm-d384-b64-t1024-tk-vs-tl",
+   "experiment": "K_TK_VS_TL",
+   "lane": 3,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 384,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "select_case": "k5-lstm-d384-b64-t1024",
+   "level": "kernel",
+   "name": "k5-lstm-d384-b64-t1024-tk-vs-triton",
+   "experiment": "K_TK_VS_TRITON",
+   "lane": 0,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 384,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "select_case": "k5-lstm-d384-b64-t1024",
+   "level": "kernel",
+   "name": "k5-lstm-d384-b64-t1024-tl-vs-triton",
+   "experiment": "K_TL_VS_TRITON",
+   "lane": 1,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "lstm",
+   "width": 512,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "select_case": "k5-lstm-d512-b16-t1024",
+   "level": "kernel",
+   "name": "k5-lstm-d512-b16-t1024-tk-vs-tl",
+   "experiment": "K_TK_VS_TL",
+   "lane": 2,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 512,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "select_case": "k5-lstm-d512-b16-t1024",
+   "level": "kernel",
+   "name": "k5-lstm-d512-b16-t1024-tk-vs-triton",
+   "experiment": "K_TK_VS_TRITON",
+   "lane": 3,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 512,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "select_case": "k5-lstm-d512-b16-t1024",
+   "level": "kernel",
+   "name": "k5-lstm-d512-b16-t1024-tl-vs-triton",
+   "experiment": "K_TL_VS_TRITON",
+   "lane": 0,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "lstm",
+   "width": 512,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "select_case": "k5-lstm-d512-b64-t1024",
+   "level": "kernel",
+   "name": "k5-lstm-d512-b64-t1024-tk-vs-tl",
+   "experiment": "K_TK_VS_TL",
+   "lane": 1,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 512,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "select_case": "k5-lstm-d512-b64-t1024",
+   "level": "kernel",
+   "name": "k5-lstm-d512-b64-t1024-tk-vs-triton",
+   "experiment": "K_TK_VS_TRITON",
+   "lane": 2,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 512,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "select_case": "k5-lstm-d512-b64-t1024",
+   "level": "kernel",
+   "name": "k5-lstm-d512-b64-t1024-tl-vs-triton",
+   "experiment": "K_TL_VS_TRITON",
+   "lane": 3,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "slstm",
+   "width": 192,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "select_case": "k5-slstm-d192-b16-t1024",
+   "level": "kernel",
+   "name": "k5-slstm-d192-b16-t1024-tk-vs-tl",
+   "experiment": "K_TK_VS_TL",
+   "lane": 0,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 192,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "select_case": "k5-slstm-d192-b16-t1024",
+   "level": "kernel",
+   "name": "k5-slstm-d192-b16-t1024-tk-vs-triton",
+   "experiment": "K_TK_VS_TRITON",
+   "lane": 1,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 192,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "select_case": "k5-slstm-d192-b16-t1024",
+   "level": "kernel",
+   "name": "k5-slstm-d192-b16-t1024-tl-vs-triton",
+   "experiment": "K_TL_VS_TRITON",
+   "lane": 2,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "slstm",
+   "width": 192,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "select_case": "k5-slstm-d192-b64-t1024",
+   "level": "kernel",
+   "name": "k5-slstm-d192-b64-t1024-tk-vs-tl",
+   "experiment": "K_TK_VS_TL",
+   "lane": 3,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 192,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "select_case": "k5-slstm-d192-b64-t1024",
+   "level": "kernel",
+   "name": "k5-slstm-d192-b64-t1024-tk-vs-triton",
+   "experiment": "K_TK_VS_TRITON",
+   "lane": 0,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 192,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "select_case": "k5-slstm-d192-b64-t1024",
+   "level": "kernel",
+   "name": "k5-slstm-d192-b64-t1024-tl-vs-triton",
+   "experiment": "K_TL_VS_TRITON",
+   "lane": 1,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "slstm",
+   "width": 256,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "select_case": "k5-slstm-d256-b16-t1024",
+   "level": "kernel",
+   "name": "k5-slstm-d256-b16-t1024-tk-vs-tl",
+   "experiment": "K_TK_VS_TL",
+   "lane": 2,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 256,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "select_case": "k5-slstm-d256-b16-t1024",
+   "level": "kernel",
+   "name": "k5-slstm-d256-b16-t1024-tk-vs-triton",
+   "experiment": "K_TK_VS_TRITON",
+   "lane": 3,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 256,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "select_case": "k5-slstm-d256-b16-t1024",
+   "level": "kernel",
+   "name": "k5-slstm-d256-b16-t1024-tl-vs-triton",
+   "experiment": "K_TL_VS_TRITON",
+   "lane": 0,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "slstm",
+   "width": 256,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "select_case": "k5-slstm-d256-b64-t1024",
+   "level": "kernel",
+   "name": "k5-slstm-d256-b64-t1024-tk-vs-tl",
+   "experiment": "K_TK_VS_TL",
+   "lane": 1,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 256,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "select_case": "k5-slstm-d256-b64-t1024",
+   "level": "kernel",
+   "name": "k5-slstm-d256-b64-t1024-tk-vs-triton",
+   "experiment": "K_TK_VS_TRITON",
+   "lane": 2,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 256,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "select_case": "k5-slstm-d256-b64-t1024",
+   "level": "kernel",
+   "name": "k5-slstm-d256-b64-t1024-tl-vs-triton",
+   "experiment": "K_TL_VS_TRITON",
+   "lane": 3,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "slstm",
+   "width": 384,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "select_case": "k5-slstm-d384-b16-t1024",
+   "level": "kernel",
+   "name": "k5-slstm-d384-b16-t1024-tk-vs-tl",
+   "experiment": "K_TK_VS_TL",
+   "lane": 0,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 384,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "select_case": "k5-slstm-d384-b16-t1024",
+   "level": "kernel",
+   "name": "k5-slstm-d384-b16-t1024-tk-vs-triton",
+   "experiment": "K_TK_VS_TRITON",
+   "lane": 1,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 384,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "select_case": "k5-slstm-d384-b16-t1024",
+   "level": "kernel",
+   "name": "k5-slstm-d384-b16-t1024-tl-vs-triton",
+   "experiment": "K_TL_VS_TRITON",
+   "lane": 2,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "slstm",
+   "width": 384,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "select_case": "k5-slstm-d384-b64-t1024",
+   "level": "kernel",
+   "name": "k5-slstm-d384-b64-t1024-tk-vs-tl",
+   "experiment": "K_TK_VS_TL",
+   "lane": 3,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 384,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "select_case": "k5-slstm-d384-b64-t1024",
+   "level": "kernel",
+   "name": "k5-slstm-d384-b64-t1024-tk-vs-triton",
+   "experiment": "K_TK_VS_TRITON",
+   "lane": 0,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 384,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "select_case": "k5-slstm-d384-b64-t1024",
+   "level": "kernel",
+   "name": "k5-slstm-d384-b64-t1024-tl-vs-triton",
+   "experiment": "K_TL_VS_TRITON",
+   "lane": 1,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "slstm",
+   "width": 512,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "select_case": "k5-slstm-d512-b16-t1024",
+   "level": "kernel",
+   "name": "k5-slstm-d512-b16-t1024-tk-vs-tl",
+   "experiment": "K_TK_VS_TL",
+   "lane": 2,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 512,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "select_case": "k5-slstm-d512-b16-t1024",
+   "level": "kernel",
+   "name": "k5-slstm-d512-b16-t1024-tk-vs-triton",
+   "experiment": "K_TK_VS_TRITON",
+   "lane": 3,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 512,
+   "batch": 16,
+   "concurrency": 16,
+   "steps": 1024,
+   "select_case": "k5-slstm-d512-b16-t1024",
+   "level": "kernel",
+   "name": "k5-slstm-d512-b16-t1024-tl-vs-triton",
+   "experiment": "K_TL_VS_TRITON",
+   "lane": 0,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "slstm",
+   "width": 512,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "select_case": "k5-slstm-d512-b64-t1024",
+   "level": "kernel",
+   "name": "k5-slstm-d512-b64-t1024-tk-vs-tl",
+   "experiment": "K_TK_VS_TL",
+   "lane": 1,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 512,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "select_case": "k5-slstm-d512-b64-t1024",
+   "level": "kernel",
+   "name": "k5-slstm-d512-b64-t1024-tk-vs-triton",
+   "experiment": "K_TK_VS_TRITON",
+   "lane": 2,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 512,
+   "batch": 64,
+   "concurrency": 64,
+   "steps": 1024,
+   "select_case": "k5-slstm-d512-b64-t1024",
+   "level": "kernel",
+   "name": "k5-slstm-d512-b64-t1024-tl-vs-triton",
+   "experiment": "K_TL_VS_TRITON",
+   "lane": 3,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "lstm",
+   "width": 192,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "select_case": "m5-lstm-d192-b1-c8-t32",
+   "name": "m5-lstm-d192-b1-c8-t32-tk-vs-tl",
+   "experiment": "TK_VS_TL",
+   "lane": 0,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 192,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "select_case": "m5-lstm-d192-b1-c8-t32",
+   "name": "m5-lstm-d192-b1-c8-t32-tk-vs-triton",
+   "experiment": "TK_VS_TRITON",
+   "lane": 1,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 192,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "select_case": "m5-lstm-d192-b1-c8-t32",
+   "name": "m5-lstm-d192-b1-c8-t32-tl-vs-triton",
+   "experiment": "TL_VS_TRITON",
+   "lane": 2,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "lstm",
+   "width": 192,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "select_case": "m5-lstm-d192-b16-c32-t32",
+   "name": "m5-lstm-d192-b16-c32-t32-tk-vs-tl",
+   "experiment": "TK_VS_TL",
+   "lane": 3,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 192,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "select_case": "m5-lstm-d192-b16-c32-t32",
+   "name": "m5-lstm-d192-b16-c32-t32-tk-vs-triton",
+   "experiment": "TK_VS_TRITON",
+   "lane": 0,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 192,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "select_case": "m5-lstm-d192-b16-c32-t32",
+   "name": "m5-lstm-d192-b16-c32-t32-tl-vs-triton",
+   "experiment": "TL_VS_TRITON",
+   "lane": 1,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "lstm",
+   "width": 192,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "select_case": "m5-lstm-d192-b32-c64-t128",
+   "name": "m5-lstm-d192-b32-c64-t128-tk-vs-tl",
+   "experiment": "TK_VS_TL",
+   "lane": 2,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 192,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "select_case": "m5-lstm-d192-b32-c64-t128",
+   "name": "m5-lstm-d192-b32-c64-t128-tk-vs-triton",
+   "experiment": "TK_VS_TRITON",
+   "lane": 3,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 192,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "select_case": "m5-lstm-d192-b32-c64-t128",
+   "name": "m5-lstm-d192-b32-c64-t128-tl-vs-triton",
+   "experiment": "TL_VS_TRITON",
+   "lane": 0,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "lstm",
+   "width": 256,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "select_case": "m5-lstm-d256-b1-c8-t32",
+   "name": "m5-lstm-d256-b1-c8-t32-tk-vs-tl",
+   "experiment": "TK_VS_TL",
+   "lane": 1,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 256,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "select_case": "m5-lstm-d256-b1-c8-t32",
+   "name": "m5-lstm-d256-b1-c8-t32-tk-vs-triton",
+   "experiment": "TK_VS_TRITON",
+   "lane": 2,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 256,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "select_case": "m5-lstm-d256-b1-c8-t32",
+   "name": "m5-lstm-d256-b1-c8-t32-tl-vs-triton",
+   "experiment": "TL_VS_TRITON",
+   "lane": 3,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "lstm",
+   "width": 256,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "select_case": "m5-lstm-d256-b16-c32-t32",
+   "name": "m5-lstm-d256-b16-c32-t32-tk-vs-tl",
+   "experiment": "TK_VS_TL",
+   "lane": 0,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 256,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "select_case": "m5-lstm-d256-b16-c32-t32",
+   "name": "m5-lstm-d256-b16-c32-t32-tk-vs-triton",
+   "experiment": "TK_VS_TRITON",
+   "lane": 1,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 256,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "select_case": "m5-lstm-d256-b16-c32-t32",
+   "name": "m5-lstm-d256-b16-c32-t32-tl-vs-triton",
+   "experiment": "TL_VS_TRITON",
+   "lane": 2,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "lstm",
+   "width": 256,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "select_case": "m5-lstm-d256-b32-c64-t128",
+   "name": "m5-lstm-d256-b32-c64-t128-tk-vs-tl",
+   "experiment": "TK_VS_TL",
+   "lane": 3,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 256,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "select_case": "m5-lstm-d256-b32-c64-t128",
+   "name": "m5-lstm-d256-b32-c64-t128-tk-vs-triton",
+   "experiment": "TK_VS_TRITON",
+   "lane": 0,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 256,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "select_case": "m5-lstm-d256-b32-c64-t128",
+   "name": "m5-lstm-d256-b32-c64-t128-tl-vs-triton",
+   "experiment": "TL_VS_TRITON",
+   "lane": 1,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "lstm",
+   "width": 384,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "select_case": "m5-lstm-d384-b1-c8-t32",
+   "name": "m5-lstm-d384-b1-c8-t32-tk-vs-tl",
+   "experiment": "TK_VS_TL",
+   "lane": 2,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 384,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "select_case": "m5-lstm-d384-b1-c8-t32",
+   "name": "m5-lstm-d384-b1-c8-t32-tk-vs-triton",
+   "experiment": "TK_VS_TRITON",
+   "lane": 3,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 384,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "select_case": "m5-lstm-d384-b1-c8-t32",
+   "name": "m5-lstm-d384-b1-c8-t32-tl-vs-triton",
+   "experiment": "TL_VS_TRITON",
+   "lane": 0,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "lstm",
+   "width": 384,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "select_case": "m5-lstm-d384-b16-c32-t32",
+   "name": "m5-lstm-d384-b16-c32-t32-tk-vs-tl",
+   "experiment": "TK_VS_TL",
+   "lane": 1,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 384,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "select_case": "m5-lstm-d384-b16-c32-t32",
+   "name": "m5-lstm-d384-b16-c32-t32-tk-vs-triton",
+   "experiment": "TK_VS_TRITON",
+   "lane": 2,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 384,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "select_case": "m5-lstm-d384-b16-c32-t32",
+   "name": "m5-lstm-d384-b16-c32-t32-tl-vs-triton",
+   "experiment": "TL_VS_TRITON",
+   "lane": 3,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "lstm",
+   "width": 384,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "select_case": "m5-lstm-d384-b32-c64-t128",
+   "name": "m5-lstm-d384-b32-c64-t128-tk-vs-tl",
+   "experiment": "TK_VS_TL",
+   "lane": 0,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 384,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "select_case": "m5-lstm-d384-b32-c64-t128",
+   "name": "m5-lstm-d384-b32-c64-t128-tk-vs-triton",
+   "experiment": "TK_VS_TRITON",
+   "lane": 1,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 384,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "select_case": "m5-lstm-d384-b32-c64-t128",
+   "name": "m5-lstm-d384-b32-c64-t128-tl-vs-triton",
+   "experiment": "TL_VS_TRITON",
+   "lane": 2,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "lstm",
+   "width": 512,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "select_case": "m5-lstm-d512-b1-c8-t32",
+   "name": "m5-lstm-d512-b1-c8-t32-tk-vs-tl",
+   "experiment": "TK_VS_TL",
+   "lane": 3,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 512,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "select_case": "m5-lstm-d512-b1-c8-t32",
+   "name": "m5-lstm-d512-b1-c8-t32-tk-vs-triton",
+   "experiment": "TK_VS_TRITON",
+   "lane": 0,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 512,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "select_case": "m5-lstm-d512-b1-c8-t32",
+   "name": "m5-lstm-d512-b1-c8-t32-tl-vs-triton",
+   "experiment": "TL_VS_TRITON",
+   "lane": 1,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "lstm",
+   "width": 512,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "select_case": "m5-lstm-d512-b16-c32-t32",
+   "name": "m5-lstm-d512-b16-c32-t32-tk-vs-tl",
+   "experiment": "TK_VS_TL",
+   "lane": 2,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 512,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "select_case": "m5-lstm-d512-b16-c32-t32",
+   "name": "m5-lstm-d512-b16-c32-t32-tk-vs-triton",
+   "experiment": "TK_VS_TRITON",
+   "lane": 3,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 512,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "select_case": "m5-lstm-d512-b16-c32-t32",
+   "name": "m5-lstm-d512-b16-c32-t32-tl-vs-triton",
+   "experiment": "TL_VS_TRITON",
+   "lane": 0,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "lstm",
+   "width": 512,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "select_case": "m5-lstm-d512-b32-c64-t128",
+   "name": "m5-lstm-d512-b32-c64-t128-tk-vs-tl",
+   "experiment": "TK_VS_TL",
+   "lane": 1,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 512,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "select_case": "m5-lstm-d512-b32-c64-t128",
+   "name": "m5-lstm-d512-b32-c64-t128-tk-vs-triton",
+   "experiment": "TK_VS_TRITON",
+   "lane": 2,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "lstm",
+   "width": 512,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "select_case": "m5-lstm-d512-b32-c64-t128",
+   "name": "m5-lstm-d512-b32-c64-t128-tl-vs-triton",
+   "experiment": "TL_VS_TRITON",
+   "lane": 3,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "slstm",
+   "width": 192,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "select_case": "m5-slstm-d192-b1-c8-t32",
+   "name": "m5-slstm-d192-b1-c8-t32-tk-vs-tl",
+   "experiment": "TK_VS_TL",
+   "lane": 0,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 192,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "select_case": "m5-slstm-d192-b1-c8-t32",
+   "name": "m5-slstm-d192-b1-c8-t32-tk-vs-triton",
+   "experiment": "TK_VS_TRITON",
+   "lane": 1,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 192,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "select_case": "m5-slstm-d192-b1-c8-t32",
+   "name": "m5-slstm-d192-b1-c8-t32-tl-vs-triton",
+   "experiment": "TL_VS_TRITON",
+   "lane": 2,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "slstm",
+   "width": 192,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "select_case": "m5-slstm-d192-b16-c32-t32",
+   "name": "m5-slstm-d192-b16-c32-t32-tk-vs-tl",
+   "experiment": "TK_VS_TL",
+   "lane": 3,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 192,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "select_case": "m5-slstm-d192-b16-c32-t32",
+   "name": "m5-slstm-d192-b16-c32-t32-tk-vs-triton",
+   "experiment": "TK_VS_TRITON",
+   "lane": 0,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 192,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "select_case": "m5-slstm-d192-b16-c32-t32",
+   "name": "m5-slstm-d192-b16-c32-t32-tl-vs-triton",
+   "experiment": "TL_VS_TRITON",
+   "lane": 1,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "slstm",
+   "width": 192,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "select_case": "m5-slstm-d192-b32-c64-t128",
+   "name": "m5-slstm-d192-b32-c64-t128-tk-vs-tl",
+   "experiment": "TK_VS_TL",
+   "lane": 2,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 192,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "select_case": "m5-slstm-d192-b32-c64-t128",
+   "name": "m5-slstm-d192-b32-c64-t128-tk-vs-triton",
+   "experiment": "TK_VS_TRITON",
+   "lane": 3,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 192,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "select_case": "m5-slstm-d192-b32-c64-t128",
+   "name": "m5-slstm-d192-b32-c64-t128-tl-vs-triton",
+   "experiment": "TL_VS_TRITON",
+   "lane": 0,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "slstm",
+   "width": 256,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "select_case": "m5-slstm-d256-b1-c8-t32",
+   "name": "m5-slstm-d256-b1-c8-t32-tk-vs-tl",
+   "experiment": "TK_VS_TL",
+   "lane": 1,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 256,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "select_case": "m5-slstm-d256-b1-c8-t32",
+   "name": "m5-slstm-d256-b1-c8-t32-tk-vs-triton",
+   "experiment": "TK_VS_TRITON",
+   "lane": 2,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 256,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "select_case": "m5-slstm-d256-b1-c8-t32",
+   "name": "m5-slstm-d256-b1-c8-t32-tl-vs-triton",
+   "experiment": "TL_VS_TRITON",
+   "lane": 3,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "slstm",
+   "width": 256,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "select_case": "m5-slstm-d256-b16-c32-t32",
+   "name": "m5-slstm-d256-b16-c32-t32-tk-vs-tl",
+   "experiment": "TK_VS_TL",
+   "lane": 0,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 256,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "select_case": "m5-slstm-d256-b16-c32-t32",
+   "name": "m5-slstm-d256-b16-c32-t32-tk-vs-triton",
+   "experiment": "TK_VS_TRITON",
+   "lane": 1,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 256,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "select_case": "m5-slstm-d256-b16-c32-t32",
+   "name": "m5-slstm-d256-b16-c32-t32-tl-vs-triton",
+   "experiment": "TL_VS_TRITON",
+   "lane": 2,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "slstm",
+   "width": 256,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "select_case": "m5-slstm-d256-b32-c64-t128",
+   "name": "m5-slstm-d256-b32-c64-t128-tk-vs-tl",
+   "experiment": "TK_VS_TL",
+   "lane": 3,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 256,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "select_case": "m5-slstm-d256-b32-c64-t128",
+   "name": "m5-slstm-d256-b32-c64-t128-tk-vs-triton",
+   "experiment": "TK_VS_TRITON",
+   "lane": 0,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 256,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "select_case": "m5-slstm-d256-b32-c64-t128",
+   "name": "m5-slstm-d256-b32-c64-t128-tl-vs-triton",
+   "experiment": "TL_VS_TRITON",
+   "lane": 1,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "slstm",
+   "width": 384,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "select_case": "m5-slstm-d384-b1-c8-t32",
+   "name": "m5-slstm-d384-b1-c8-t32-tk-vs-tl",
+   "experiment": "TK_VS_TL",
+   "lane": 2,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 384,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "select_case": "m5-slstm-d384-b1-c8-t32",
+   "name": "m5-slstm-d384-b1-c8-t32-tk-vs-triton",
+   "experiment": "TK_VS_TRITON",
+   "lane": 3,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 384,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "select_case": "m5-slstm-d384-b1-c8-t32",
+   "name": "m5-slstm-d384-b1-c8-t32-tl-vs-triton",
+   "experiment": "TL_VS_TRITON",
+   "lane": 0,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "slstm",
+   "width": 384,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "select_case": "m5-slstm-d384-b16-c32-t32",
+   "name": "m5-slstm-d384-b16-c32-t32-tk-vs-tl",
+   "experiment": "TK_VS_TL",
+   "lane": 1,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 384,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "select_case": "m5-slstm-d384-b16-c32-t32",
+   "name": "m5-slstm-d384-b16-c32-t32-tk-vs-triton",
+   "experiment": "TK_VS_TRITON",
+   "lane": 2,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 384,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "select_case": "m5-slstm-d384-b16-c32-t32",
+   "name": "m5-slstm-d384-b16-c32-t32-tl-vs-triton",
+   "experiment": "TL_VS_TRITON",
+   "lane": 3,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "slstm",
+   "width": 384,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "select_case": "m5-slstm-d384-b32-c64-t128",
+   "name": "m5-slstm-d384-b32-c64-t128-tk-vs-tl",
+   "experiment": "TK_VS_TL",
+   "lane": 0,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 384,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "select_case": "m5-slstm-d384-b32-c64-t128",
+   "name": "m5-slstm-d384-b32-c64-t128-tk-vs-triton",
+   "experiment": "TK_VS_TRITON",
+   "lane": 1,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 384,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "select_case": "m5-slstm-d384-b32-c64-t128",
+   "name": "m5-slstm-d384-b32-c64-t128-tl-vs-triton",
+   "experiment": "TL_VS_TRITON",
+   "lane": 2,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "slstm",
+   "width": 512,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "select_case": "m5-slstm-d512-b1-c8-t32",
+   "name": "m5-slstm-d512-b1-c8-t32-tk-vs-tl",
+   "experiment": "TK_VS_TL",
+   "lane": 3,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 512,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "select_case": "m5-slstm-d512-b1-c8-t32",
+   "name": "m5-slstm-d512-b1-c8-t32-tk-vs-triton",
+   "experiment": "TK_VS_TRITON",
+   "lane": 0,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 512,
+   "batch": 1,
+   "concurrency": 8,
+   "steps": 32,
+   "select_case": "m5-slstm-d512-b1-c8-t32",
+   "name": "m5-slstm-d512-b1-c8-t32-tl-vs-triton",
+   "experiment": "TL_VS_TRITON",
+   "lane": 1,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "slstm",
+   "width": 512,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "select_case": "m5-slstm-d512-b16-c32-t32",
+   "name": "m5-slstm-d512-b16-c32-t32-tk-vs-tl",
+   "experiment": "TK_VS_TL",
+   "lane": 2,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 512,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "select_case": "m5-slstm-d512-b16-c32-t32",
+   "name": "m5-slstm-d512-b16-c32-t32-tk-vs-triton",
+   "experiment": "TK_VS_TRITON",
+   "lane": 3,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 512,
+   "batch": 16,
+   "concurrency": 32,
+   "steps": 32,
+   "select_case": "m5-slstm-d512-b16-c32-t32",
+   "name": "m5-slstm-d512-b16-c32-t32-tl-vs-triton",
+   "experiment": "TL_VS_TRITON",
+   "lane": 0,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  },
+  {
+   "cell": "slstm",
+   "width": 512,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "select_case": "m5-slstm-d512-b32-c64-t128",
+   "name": "m5-slstm-d512-b32-c64-t128-tk-vs-tl",
+   "experiment": "TK_VS_TL",
+   "lane": 1,
+   "baseline": {
+    "from_role": "tilelang_v2"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 512,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "select_case": "m5-slstm-d512-b32-c64-t128",
+   "name": "m5-slstm-d512-b32-c64-t128-tk-vs-triton",
+   "experiment": "TK_VS_TRITON",
+   "lane": 2,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tk"
+  },
+  {
+   "cell": "slstm",
+   "width": 512,
+   "batch": 32,
+   "concurrency": 64,
+   "steps": 128,
+   "select_case": "m5-slstm-d512-b32-c64-t128",
+   "name": "m5-slstm-d512-b32-c64-t128-tl-vs-triton",
+   "experiment": "TL_VS_TRITON",
+   "lane": 3,
+   "baseline": {
+    "from_role": "triton"
+   },
+   "candidate_role": "tilelang_v2"
+  }
+ ],
+ "node_reason": "One H100 node (4 H100): four single-GPU lanes pinned to GPU-local cores; checks and selection behind barriers before timing",
+ "deviations": [
+  "ThunderKittens and TileLang paths implement the spike contract (one full logical call, hidden history and FP32 final carry), not chunk continuation or full-state output",
+  "FP16 only for ThunderKittens",
+  "lanes time concurrently",
+  "TileLang v2 issues two block barriers before the exchange copies (one explicit, one inserted by TileLang); ThunderKittens issues one"
+ ],
+ "not_claimed": [
+  "E2E model quality",
+  "backward",
+  "multi-GPU",
+  "TileLang or ThunderKittens ceiling beyond this algorithm"
+ ],
+ "kernel_level": "primary R-splitting comparison: preallocated FP16 inputs, H=1, T=1024, B in 16,64, D in 192,256,384,512; CUDA-event time per call; 5 starts x 20 ABBA/BAAB blocks; CELL_BUDGET vs FP64 and arm-vs-arm; repeated outputs must stay bit-identical"
+}
