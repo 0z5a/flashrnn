@@ -52,18 +52,14 @@ def _wait(SYNCS, rank, offset, target, ERR, SPIN: tl.constexpr):
 
 
 @triton.jit
-def _forward_block(PEERS, SYNCS, rank, dest, xrow, col0, local, split, slot, rnd, bars, splits_per, ERR,
-                   BM: tl.constexpr, D: tl.constexpr, S: tl.constexpr, ROUNDS: tl.constexpr, SPIN: tl.constexpr,
-                   dtype: tl.constexpr):
+def _forward_block(PEERS, rank, dest, xrow, col0, split, S: tl.constexpr, dtype: tl.constexpr):
     """Store-and-forward: this CTA's S-wide sub-slice of the block starting at column col0, from the local exchange
-    buffer to ``dest``'s, then one arrival on dest's counter of round ``rnd``."""
+    buffer into ``dest``'s. The caller signals once per round after all of the round's blocks."""
     cols = col0 + split * S + tl.arange(0, S)
     src = _peer(PEERS, rank, dtype)
     dst = _peer(PEERS, dest, dtype)
-    v = tl.load(src + xrow[:, None] + cols[None, :], cache_modifier=".cg")
-    tl.store(dst + xrow[:, None] + cols[None, :], v)
-    tl.debug_barrier()
-    _signal(SYNCS, dest, slot * ROUNDS + rnd)
+    v = tl.load(src + xrow + cols[None, :], cache_modifier=".cg")
+    tl.store(dst + xrow + cols[None, :], v)
 
 
 @triton.jit(do_not_specialize=["B", "T", "GROUPS", "SLOTS", "RANK", "COL0", "SPLITS_PER", "TOTAL_SPLITS"])
@@ -221,17 +217,17 @@ def _rtiled_mg(
                     for rnd in tl.static_range(ROUNDS):
                         if SCHED == 1:
                             # Ring: forward the block received last round (own block first) to the next GPU.
-                            nxt = (RANK + 1) % NP
+                            dest = (RANK + 1) % NP
                             origin = (RANK - rnd + NP) % NP
-                            _forward_block(PEERS, SYNCS, RANK, nxt, wrow, origin * DG, local, split, slot, rnd, bars,
-                                           SPLITS_PER, ERR, BM, D, S, ROUNDS, SPIN, dtype)
+                            _forward_block(PEERS, RANK, dest, wrow, origin * DG, split, S, dtype)
                         else:
                             # Recursive doubling: forward every block owned so far to the partner of this round.
-                            partner = RANK ^ (1 << rnd)
+                            dest = RANK ^ (1 << rnd)
                             low = RANK - (RANK % (1 << rnd))
                             for b in tl.static_range(1 << rnd):
-                                _forward_block(PEERS, SYNCS, RANK, partner, wrow, (low + b) * DG, local, split, slot,
-                                               rnd, bars, SPLITS_PER, ERR, BM, D, S, ROUNDS, SPIN, dtype)
+                                _forward_block(PEERS, RANK, dest, wrow, (low + b) * DG, split, S, dtype)
+                        tl.debug_barrier()
+                        _signal(SYNCS, dest, slot * ROUNDS + rnd)  # one arrival per CTA per round, after its blocks
                         if PROF:
                             if rnd == 0:
                                 t_c = _now()
