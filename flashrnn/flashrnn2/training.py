@@ -78,7 +78,9 @@ def backward_slice_width(width):
         return 32
     if width <= 512:
         return 16
-    return 32
+    if width <= 768:
+        return 32
+    return 16  # S = 32 exceeds shared memory above D = 768 (328 KB at D = 1024); S = 16 fits up to D = 1280
 
 
 class _Recurrence(torch.autograd.Function):

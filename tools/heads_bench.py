@@ -8,6 +8,9 @@ Arms (case JSON "arms")
               host launch overhead
   v1          pinned FlashRNN1 cuda_fused with num_heads = H, hidden_dim = H * D (FRNN_V1_BASE / FRNN_V1_BUILD_ROOT);
               a failure to build or run is recorded as the arm's result
+  v1cuda      the same pinned FlashRNN1 with backend "cuda" (alternating: one recurrent GEMM and one pointwise kernel
+              per step, any D)
+A case may pin the FlashRNN2 configuration ("config": KernelConfig dict) instead of the library selection.
 Kinds: "forward" (no grad, hidden output) and "train" (forward + backward of <cot_h, h history>).
 
 Modes
@@ -56,6 +59,8 @@ def head_slice(x, dim, h):
 
 
 def config_for(case):
+    if case.get("config"):
+        return KernelConfig(**case["config"]), "pinned"
     cell, dtype = case["cell"], DT[case["dtype"]]
     args = (cell, dtype, case["batch"], case["steps"], case["heads"], case["width"])
     if case["kind"] == "train":
@@ -103,11 +108,11 @@ def make_arm(name, case, leaves, cot_h, cfg):
             graph.replay()
             return static
         return replay
-    if name == "v1":
+    if name in ("v1", "v1cuda"):
         import rtiled_m4
         v1 = rtiled_m4.v1_module()
-        config = v1["config"](function=cell, backend="cuda_fused", dtype=case["dtype"], batch_size=case["batch"],
-                              hidden_dim=heads * case["width"], num_heads=heads)
+        config = v1["config"](function=cell, backend="cuda_fused" if name == "v1" else "cuda", dtype=case["dtype"],
+                              batch_size=case["batch"], hidden_dim=heads * case["width"], num_heads=heads)
         if kind == "forward":
             def run():
                 with torch.no_grad():
