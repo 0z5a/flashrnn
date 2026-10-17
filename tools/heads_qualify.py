@@ -80,11 +80,11 @@ class per_head_gemms:
                               history[:, :, :, h:h + 1].contiguous(), tf32) for h in range(heads)]
             return torch.cat([p[0] for p in parts], dim=3), torch.cat([p[1] for p in parts], dim=2)
 
-        def wg(dg, h_prev, tf32=False):
+        def wg(dg, h_prev, tf32=False, method="bmm"):
             heads = dg.shape[3]
             if heads == 1:
-                return orig_wg(dg, h_prev, tf32)
-            parts = [orig_wg(dg[:, :, :, h:h + 1].contiguous(), h_prev[:, :, h:h + 1].contiguous(), tf32)
+                return orig_wg(dg, h_prev, tf32, method)
+            parts = [orig_wg(dg[:, :, :, h:h + 1].contiguous(), h_prev[:, :, h:h + 1].contiguous(), tf32, method)
                      for h in range(heads)]
             return torch.cat([p[0] for p in parts], dim=1), torch.cat([p[1] for p in parts], dim=1)
 
