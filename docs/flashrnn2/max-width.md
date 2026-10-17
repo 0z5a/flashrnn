@@ -73,3 +73,18 @@ Runs (separate batch "maxd hybrid"):
 * **Paired timing** (W3/W4-hybrid): forward at D ∈ {1536, 1792, 1920, 1984}, B ∈ {16, 64}, LSTM/sLSTM, FP16/BF16,
   T = 256, FlashRNN2 hybrid against FlashRNN1 `cuda_fused` and `cuda`, same protocol and rule as section 3 (a
   FlashRNN1 build or run failure at a D is reported as such).
+
+## 5. Two warpgroups for D = 2048 (addendum, 2026-10-17, before any run of it)
+
+`build_grid_hybrid2` (`KernelConfig(family="tilelang", sync="grid", slice_width=16, warps=8, reg_k=896)`): 256
+threads per CTA; warpgroup w owns K rows [wD/2, (w+1)D/2) of the CTA's R slice, the first reg_k/2 = 448 in its
+register fragment and 576 in shared memory, and runs two WGMMAs (A from registers, A from shared memory) into its own
+accumulator; each warpgroup writes its partial gates to its own shared stage, and after a block barrier all 256
+threads sum the two stages in the epilogue. Exchange and epilogue as in the grid kernel. D = 2048: 128 CTAs, 216 KB
+shared memory; ptxas (FP16 and BF16, LSTM and sLSTM): 242 registers, 0 spill. Login-node inspection of the
+generated code: both branches issue `wgmma_rs`, and the second warpgroup's addressing is offset by its 128 threads.
+Larger D: D = 2176 would need 136 CTAs (more than 132 SMs) at S = 16.
+
+Runs (batch "maxd 2048"): qualification at D = 2048 (forward, FP64 budget; LSTM/sLSTM, FP16/BF16, B = 16, T = 24)
+and paired forward timing at D = 2048, B ∈ {16, 64}, LSTM/sLSTM, FP16/BF16 against FlashRNN1 `cuda_fused` and
+`cuda`, with the protocol and rule of section 3.
