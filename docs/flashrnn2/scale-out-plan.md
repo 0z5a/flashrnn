@@ -505,3 +505,13 @@ Kernel times (slowest PE, unpaired against the one-process reference, report onl
 * Ring and doubling signal a per-GPU counter once a CTA's slice of the own block is stored, and wait after the rounds
   until every CTA of the GPU has done so. That one barrier gives visibility of the own block for the next step, and also
   guarantees that the half overwritten next was read completely. It replaces the section 10 barrier.
+
+## 15. Batch "mg3" (pre-registration, 2026-10-18, before any run of it)
+
+With the section 14 repairs:
+* **F4**, the section 13 rule, uva buffers, no NCCL communicator, all 17 configurations × 2 cells.
+* **F5**, the section 9 qualification rule (uva and symmetric, cross-P digests, one run).
+* **N2**, NVSHMEM at P = 2 / 3 / 4, the section 11 cases, rule of N1.
+
+Prediction: F4, F5 and N2 pass in full. A failure of any ring/doubling configuration means the per-GPU barrier is
+still not enough. In that case ring and doubling are withdrawn and only the direct schedule is reported.
