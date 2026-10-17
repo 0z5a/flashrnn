@@ -88,3 +88,33 @@ Larger D: D = 2176 would need 136 CTAs (more than 132 SMs) at S = 16.
 Runs (batch "maxd 2048"): qualification at D = 2048 (forward, FP64 budget; LSTM/sLSTM, FP16/BF16, B = 16, T = 24)
 and paired forward timing at D = 2048, B ∈ {16, 64}, LSTM/sLSTM, FP16/BF16 against FlashRNN1 `cuda_fused` and
 `cuda`, with the protocol and rule of section 3.
+
+## 6. Backward to D = 2048 (addendum, 2026-10-17, before any run of it)
+
+The Triton backward keeps R[:, :, p] (4 gates × D × S) as loop-invariant shared memory and fits only up to D = 1280.
+Its dh reduction has a 16 × 16 output per CTA (batch tile × S columns), below WGMMA's M = 64, so the large-D
+backward is a CUDA kernel with mma.sync m16n8k16 (`flashrnn/flashrnn2/hybrid_bw.cu`, loaded by `hybrid_bw.py`
+through ctypes, CUDA 12.8, static cudart):
+
+* 256 threads per CTA; the K = 4D reduction is split evenly over the 8 warps (D/2 rows each); warp w keeps the first
+  KRW rows of its range of R[:, :, p] as mma B fragments in registers and the rest in shared memory in fragment
+  order (32 bytes per row); the rounded dG_{t+1} operand is read from the exchange buffer straight into A fragments
+  with L2-only loads; the 8 partial sums meet in shared memory.
+* Pointwise backward, stores, exchange and the initial-state gradient follow the Triton kernel's plain persistent
+  variant line by line (FlashRNN1 gradient convention); one cooperative grid barrier per step; the preactivation
+  recompute and the dR / dbias GEMMs are the Triton backward's.
+* Register rows per warp (fewest that let shared memory fit): D = 1024, 1280, 1536: 0; 1792: 32; 2048: 160.
+  ptxas (FP16/BF16, LSTM/sLSTM): 64 registers up to D = 1536, 96 at 1792, 181-185 at 2048, 0 spill.
+* The training path uses it above D = 1280 (or with `backward_options={"backend": "hybrid"}`); the forward above
+  D = 1280 is the TileLang path of sections 4-5 (`default_config` now selects it).
+
+Runs (batch "bw 2048"):
+* **Qualification** (W1-train): training step (forward + backward) within the FP64 gradient budget of
+  `tools/bw_qualify.py` and the FP64 forward budget: D = 1024 with the hybrid backward forced (and the Triton
+  backward at the same D as a control), and D = 1536, 1792, 2048 (library choice); LSTM/sLSTM, FP16/BF16, B = 16,
+  T = 24.
+* **Paired timing** (W3/W4-train): training step at D ∈ {1536, 1792, 2048}, B ∈ {16, 64}, LSTM/sLSTM, FP16/BF16,
+  T = 256, against FlashRNN1 `cuda_fused` and `cuda`, protocol and rule of section 3 (a FlashRNN1 build or run
+  failure is reported as such).
+* Not covered by this batch: race verification of the CUDA kernel's exchange (delay injection and broken-variant
+  controls, as done for the Triton and TileLang kernels).

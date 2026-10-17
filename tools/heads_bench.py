@@ -80,7 +80,8 @@ def make_arm(name, case, leaves, cot_h, cfg):
 
     def trn(xs, cot):
         xs = [x.detach().requires_grad_(True) for x in xs]
-        y, _ = training.recurrence(*xs, cell, output_mode="hidden", config=cfg, backward_options={})
+        y, _ = training.recurrence(*xs, cell, output_mode="hidden", config=cfg,
+                                   backward_options=dict(case.get("backward") or {}))
         return torch.autograd.grad((y.float() * cot).sum(), xs)[0]
 
     if name == "one":

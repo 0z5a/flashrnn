@@ -79,10 +79,26 @@ def default_config(width):
     """
     if width <= 128:
         return KernelConfig()
+    if width > 1280:
+        return large_width_config(width)
     # S = 32 needs about 290 KB of shared memory per CTA at D = 1024; above D = 768 only S = 16 fits (compile
     # records: 164 KB at D = 1024, 205 KB at D = 1280, 246 KB at D = 1536 against the 227 KB opt-in limit).
     slice_width = 64 if width <= 256 else 32 if width <= 768 else 16
     return KernelConfig(family="mma_rtiled", warps=8, slice_width=slice_width, sync="grid")
+
+
+def large_width_config(width):
+    """D > 1280 (no Triton path fits): TileLang grid S = 16 up to D = 1424, register + shared-memory residency of R
+    with one warpgroup up to D = 1984, two warpgroups splitting K at D = 2048 (flashrnn2.tilelang_cluster)."""
+    if width % 16 or width > 2048:
+        raise ValueError("no FlashRNN2 path for this width")
+    if width <= 1424:
+        return KernelConfig(family="tilelang", slice_width=16, sync="grid")
+    if width <= 1984:
+        smem = lambda r: 4 * 16 * (width - r) * 2 + width * 16 * 2 + 4 * 16 * 16 * 4  # noqa: E731
+        reg_k = next(r for r in range(64, 769, 64) if smem(r) <= 232448)
+        return KernelConfig(family="tilelang", slice_width=16, sync="grid", reg_k=reg_k)
+    return KernelConfig(family="tilelang", slice_width=16, sync="grid", warps=8, reg_k=896)
 
 
 def runtime_identity():

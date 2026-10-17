@@ -55,9 +55,9 @@ def forward(leaves, cell, config):
     return out, carry
 
 
-def train(leaves, cot_h, cell, config):
+def train(leaves, cot_h, cell, config, backward=None):
     xs = [x.detach().clone().requires_grad_(True) for x in leaves]
-    y, _ = training.recurrence(*xs, cell, output_mode="hidden", config=config, backward_options={})
+    y, _ = training.recurrence(*xs, cell, output_mode="hidden", config=config, backward_options=dict(backward or {}))
     grads = torch.autograd.grad((y.float() * cot_h).sum(), xs)
     torch.cuda.synchronize()
     return y.detach(), list(grads)
@@ -121,12 +121,13 @@ def mode_qualify(args):
         ok = fwd_ok and rec["forward"]["bitwise_ok"]
         # Training.
         if case.get("train"):
-            _, grads = train(leaves, cot_h, cell, cfg)  # library path
+            bw = case.get("backward")  # e.g. {"backend": "hybrid"}; default: the library's choice for the width
+            _, grads = train(leaves, cot_h, cell, cfg, bw)  # library path
             with per_head_gemms():
-                _, hooked = train(leaves, cot_h, cell, cfg)
+                _, hooked = train(leaves, cot_h, cell, cfg, bw)
             heads_rec = []
             for h in subset:
-                _, g1 = train(head_slice(leaves, h), cot_h[:, :, h:h + 1].contiguous(), cell, cfg)
+                _, g1 = train(head_slice(leaves, h), cot_h[:, :, h:h + 1].contiguous(), cell, cfg, bw)
                 heads_rec.append(dict(
                     head=h, d_wx_bitwise=torch.equal(hooked[0][:, :, :, h:h + 1], g1[0]),
                     d_init_bitwise=torch.equal(hooked[3][:, :, :, h:h + 1], g1[3]),

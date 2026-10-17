@@ -72,6 +72,9 @@ def training_forward(cell, dtype, batch, steps, heads, width, *, policy=None):
     return config, source
 
 
+HYBRID_BACKWARD_ABOVE = 1280  # widest D the Triton backward fits (S = 16, 224 KB of shared memory)
+
+
 def backward_slice_width(width):
     """Qualified backward slice width per D (eight warps; shared memory fits, spill-light)."""
     if width <= 128:
@@ -118,6 +121,17 @@ class _Recurrence(torch.autograd.Function):
         if d_carry is not None:
             d_final += d_carry.float()
         options = dict(ctx.backward_options)
+        backend = options.pop("backend", None)
+        if backend == "hybrid" or (backend is None and wx.shape[-1] > HYBRID_BACKWARD_ABOVE):
+            # D > 1280: R does not fit the Triton kernel's shared memory; the CUDA kernel keeps part of it in registers.
+            from . import hybrid_bw
+
+            dg, d_recurrent, d_bias, d_initial = hybrid_bw.backward(
+                wx, recurrent, bias, initial, history, d_history, d_final, ctx.cell,
+                reg_rows_per_warp=options.get("reg_rows_per_warp"), tf32=options.get("tf32", False),
+                diagnostics=options.get("diagnostics"))
+            return (dg.to(wx.dtype), d_recurrent.to(recurrent.dtype), d_bias.to(bias.dtype),
+                    d_initial.to(initial.dtype), None, None, None, None, None)
         if options.get("fast") and "history_grad_components" not in options:
             full = ctx.output_mode == "full" and d_output is not None
             options["history_grad_components"] = (True, full, full)
