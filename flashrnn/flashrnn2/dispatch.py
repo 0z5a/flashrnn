@@ -84,7 +84,7 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context=No
         return tilelang_cluster.recurrence(
             wx, recurrent, bias, initial, cell, sequence_context=sequence_context, slice_width=config.slice_width,
             output_mode=output_mode, snapshot_dtype=snapshot_dtype, sync=config.sync, batch_tile=config.batch_tile,
-            threads=32 * config.warps, prefetch=config.prefetch)
+            threads=32 * config.warps, prefetch=config.prefetch, reg_k=config.reg_k)
     if config.family == "mma_rtiled":
         from . import triton_rtiled
         return triton_rtiled.recurrence(

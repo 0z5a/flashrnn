@@ -22,6 +22,9 @@ class KernelConfig:
     pad_k: bool = False
     # TileLang only: load the next step's input projections into registers after each step's epilogue.
     prefetch: bool = False
+    # TileLang grid only (large D): rows [0, reg_k) of every CTA's R slice live in registers, the rest in shared
+    # memory (flashrnn2.tilelang_cluster.build_grid_hybrid; S = 16, one warpgroup, BM = 16).
+    reg_k: int = 0
 
     def __post_init__(self):
         if self.family not in ("mma", "simt", "mma_rtiled", "tilelang"):
@@ -41,12 +44,17 @@ class KernelConfig:
             if not ((self.sync == "cluster" and self.slice_width in (16, 32, 64))
                     or (self.sync == "grid" and self.slice_width in (16, 32))):
                 raise ValueError("TileLang needs cluster sync with a slice of 16/32/64 or grid sync with 16/32")
+            if self.reg_k and (self.sync != "grid" or self.slice_width != 16 or self.warps != 4 or self.batch_tile != 16
+                               or self.prefetch or self.reg_k % 64):
+                raise ValueError("register residency (reg_k) is the TileLang grid path with S = 16, four warps, BM = 16")
         elif self.family == "mma_rtiled":
             if self.batch_tile != 16 or self.weight_operand != "b":
                 raise ValueError("R tiling uses MMA16 batch tiles and weight operand b")
             if self.slice_width not in (16, 32, 64, 128) or self.sync != "grid":
                 raise ValueError("R tiling needs a power-of-two slice in [16, 128] and grid sync")
-        elif self.slice_width or self.sync != "none" or self.pad_k:
+        if self.reg_k and self.family != "tilelang":
+            raise ValueError("register residency (reg_k) exists only on the TileLang grid path")
+        if self.family in ("mma", "simt") and (self.slice_width or self.sync != "none" or self.pad_k):
             raise ValueError("slice width, sync and K padding apply only to R tiling")
         if self.warps not in (4, 8):
             raise ValueError("supported warp counts are 4 and 8")
