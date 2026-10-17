@@ -381,3 +381,33 @@ The four W6 misses are D = 1024 (0.93-1.00x), where two 16-row groups were alrea
 `cuda` at B = 64 (sections 7-8) are gone: 1.30-1.85x. The library now selects this kernel by default for B > 32 at
 D = 1280-1792 (`execution_policy.wide_batch_config`); D = 1024 and D = 2048 keep their previous defaults.
 
+
+## 17. Results of the B = 64 training batch (job "train64", 2026-10-17)
+
+**Race verification (section 12 rule, new kernel)**: 8/8 tasks pass — D ∈ {1536, 2048} × LSTM/sLSTM × BM ∈ {16, 64}: the correct kernel counts zero violations in 21/21 runs with outputs bitwise equal to the uninstrumented kernel; the single-buffer variant is flagged in 21/21 runs, the no-barrier variant in 21/21 (outputs changed in all 21, never silently).
+
+**W1-train64**: 32/32. **W6-train64** (previous 16-row tiles / new) holds 12/12, **W3-train64** (`cuda_fused`) 12/12, **W4-train64** (`cuda`) 0/12. Training step, B = 64, T = 256.
+
+| cell | dtype | D | vs previous | vs cuda_fused | vs cuda |
+| --- | --- | --- | --- | --- | --- |
+| lstm | bflo | 1536 | 1.28 [1.28, 1.28] | 1.37 [1.37, 1.38] | 0.47 [0.47, 0.47] (no) |
+| lstm | bflo | 1792 | 1.35 [1.34, 1.35] | 1.51 [1.51, 1.51] | 0.43 [0.43, 0.43] (no) |
+| lstm | bflo | 2048 | 1.11 [1.10, 1.16] | 1.47 [1.46, 1.47] | 0.64 [0.63, 0.64] (no) |
+| lstm | floa | 1536 | 1.27 [1.27, 1.27] | 1.40 [1.40, 1.40] | 0.51 [0.50, 0.52] (no) |
+| lstm | floa | 1792 | 1.35 [1.35, 1.35] | 1.83 [1.79, 1.89] | 0.48 [0.48, 0.48] (no) |
+| lstm | floa | 2048 | 1.10 [1.10, 1.10] | 1.71 [1.71, 1.71] | 0.66 [0.65, 0.66] (no) |
+| slstm | bflo | 1536 | 1.26 [1.26, 1.26] | 1.60 [1.60, 1.60] | 0.51 [0.51, 0.52] (no) |
+| slstm | bflo | 1792 | 1.33 [1.32, 1.34] | 1.61 [1.61, 1.61] | 0.49 [0.48, 0.50] (no) |
+| slstm | bflo | 2048 | 1.22 [1.22, 1.22] | 1.57 [1.57, 1.57] | 0.71 [0.70, 0.71] (no) |
+| slstm | floa | 1536 | 1.26 [1.26, 1.26] | 1.48 [1.47, 1.48] | 0.56 [0.56, 0.57] (no) |
+| slstm | floa | 1792 | 1.34 [1.33, 1.34] | 1.91 [1.88, 1.92] | 0.55 [0.54, 0.55] (no) |
+| slstm | floa | 2048 | 1.22 [1.22, 1.22] | 1.88 [1.88, 1.88] | 0.71 [0.71, 0.71] (no) |
+
+Reading (post hoc): the wide tiles help training by 1.10-1.35x, but the step still loses to the alternating backend at
+B = 64 (0.43-0.71x). Bytes moved per step explain it: with R resident and split over k = D/16 CTAs, every CTA reads the
+whole exchanged operand, k·B·D elements in the forward (h) and k·B·4D in the backward (dG), while the alternating
+backend streams R once, 4D² elements. The ratio is B/64 in the forward and B/16 in the backward, so at B = 64 the
+backward's broadcast moves four times what streaming R does. Reducing it needs the exchange to be loaded once per
+cluster (TMA multicast within thread-block clusters) or a backward that reduces partial dh instead of broadcasting dG;
+neither is built.
+
