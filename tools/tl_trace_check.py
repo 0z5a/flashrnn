@@ -49,8 +49,16 @@ def main():
         t0 = time.time()
         rec = dict(key=json.loads(key))
         try:
-            build(*args)
-            rec["ok"] = True
+            k = build(*args)
+            # The launch must keep the configured block size: an automatically added warpgroup (warp specialization)
+            # would not take part in the cooperative grid barrier.
+            import re
+            m = re.search(r"__launch_bounds__\((\d+)", k.get_kernel_source())
+            want = 128 if args[0].stream_h else 32 * args[0].warps
+            rec.update(launch_threads=int(m.group(1)) if m else None, expected_threads=want)
+            rec["ok"] = rec["launch_threads"] == want
+            if not rec["ok"]:
+                rec["error"] = f"block size {rec['launch_threads']} != configured {want} (warp specialization?)"
         except Exception:
             rec.update(ok=False, error=traceback.format_exc()[-1200:])
         rec["seconds"] = round(time.time() - t0, 1)

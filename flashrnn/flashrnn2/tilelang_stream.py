@@ -227,5 +227,8 @@ def kernel(batch, total_steps, heads, width, reg_k, bm, *, cell, dtype, mode, sn
     if key not in _KERNELS:
         func = build(batch, total_steps, heads, width, reg_k, bm, sms=sms, cell=cell, dtype=dtype, mode=mode,
                      snapshot=snapshot)
-        _KERNELS[key] = tilelang.compile(func, target={"kind": "cuda", "arch": "sm_90a"})
+        # No automatic warp specialization: it adds a producer warpgroup that never reaches the per-step grid barrier
+        # (job "bm64 v2" deadlocked at its first case).
+        _KERNELS[key] = tilelang.compile(func, target={"kind": "cuda", "arch": "sm_90a"},
+                                         pass_configs={"tl.disable_warp_specialized": True})
     return _KERNELS[key]

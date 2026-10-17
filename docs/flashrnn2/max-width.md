@@ -287,3 +287,13 @@ the initial-state gradient) compared bitwise with the uninstrumented kernel. Rul
 run counts zero violations and its outputs are bitwise equal to the uninstrumented reference; a broken variant is
 detected when violations are counted in at least 80% of its runs and no run changes the outputs without counting a
 violation.
+
+## 13. B = 64 rerun ("bm64 v2", 2026-10-17): deadlock, and the third run
+
+The first qualification case hung for its full 1800 s timeout (the batch stopped at the canary, as designed). Cause,
+found in the generated CUDA: TileLang lowered the pipelined h-chunk loop with automatic warp specialization — block
+size 256 instead of the configured 128, a TMA producer warpgroup (threads 0-127) and the 128 consumer threads — and
+only the consumer branch reaches the per-step cooperative grid barrier, so the grid never completes a step. The
+login-node trace check compiled the kernel but did not compare the block size. Fixes: `tilelang_stream` compiles with
+`tl.disable_warp_specialized`; `tl_trace_check.py` now fails any kernel whose `__launch_bounds__` differs from the
+configured thread count. The batch is rerun unchanged otherwise ("bm64 v3").
