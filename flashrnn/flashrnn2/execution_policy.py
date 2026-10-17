@@ -77,7 +77,7 @@ class KernelConfig:
         return asdict(self)
 
 
-def default_config(width):
+def default_config(width, batch=None):
     """Conservative unmeasured default: single CTA up to D=128, else R tiling.
 
     The R-tiled default is spill-light at eight warps in the M0 compile sweep
@@ -85,12 +85,23 @@ def default_config(width):
     """
     if width <= 128:
         return KernelConfig()
+    if batch is not None and batch > 32 and 1280 <= width <= 1792 and width % 64 == 0:
+        # Wide batch tiles with streamed h (job "bm64 v3": 1.6-1.9x over 16-row tiles at B = 64, D = 1280-1792).
+        return wide_batch_config(width)
     if width > 1280:
         return large_width_config(width)
     # S = 32 needs about 290 KB of shared memory per CTA at D = 1024; above D = 768 only S = 16 fits (compile
     # records: 164 KB at D = 1024, 205 KB at D = 1280, 246 KB at D = 1536 against the 227 KB opt-in limit).
     slice_width = 64 if width <= 256 else 32 if width <= 768 else 16
     return KernelConfig(family="mma_rtiled", warps=8, slice_width=slice_width, sync="grid")
+
+
+def wide_batch_config(width):
+    """TileLang grid with 64-row batch tiles and h^T streamed in 64-row chunks (flashrnn2.tilelang_stream); reg_k is the
+    fewest register rows for which shared memory fits (D = 1280: 0, 1536: 128, 1792: 384)."""
+    smem = lambda r: 4 * 16 * (width - r) * 2 + 4 * 64 * 64 * 2 + 4 * 16 * 64 * 4  # noqa: E731 (tilelang_stream)
+    reg_k = next(r for r in range(0, 1025, 64) if smem(r) <= 232448)
+    return KernelConfig(family="tilelang", slice_width=16, sync="grid", batch_tile=64, stream_h=True, reg_k=reg_k)
 
 
 def large_width_config(width):
@@ -163,7 +174,7 @@ class ExecutionPolicy:
         if self.table and (not self.identity or identity != self.identity):
             raise ValueError("a measured table requires its matching execution identity")
         key = shape_key(cell, dtype, batch, steps, heads, width)
-        config = self.table.get(key, default_config(width))
+        config = self.table.get(key, default_config(width, batch))
         if config.family == "tilelang" and not (identity or {}).get("tilelang"):
             # A table entry is chosen before the call; it never falls back to another backend.
             raise ValueError("the table selects the TileLang backend but this runtime has no TileLang")

@@ -353,3 +353,31 @@ Runs (batch "train64"):
 * **Paired timing**, training step, B = 64, T = 256, D ∈ {1536, 1792, 2048}, LSTM/sLSTM, FP16/BF16: **W6-train64** against
   the previous configuration (BM = 16 forward and backward), **W3-train64** against FlashRNN1 `cuda_fused`,
   **W4-train64** against `cuda`; protocol and rule of section 3.
+
+## 16. Results of the B = 64 wide-tile forward (job "bm64 v3", 2026-10-17)
+
+**W1-bm64**: 32/32 (D = 1024-1792, B = 64 and 40, LSTM/sLSTM, FP16/BF16). **W6** (previous 16-row-tile configuration / BM = 64) holds 12/16, **W4-bm64** (FlashRNN1 `cuda`) 16/16, **W3-bm64** (`cuda_fused`) 16/16. Forward, B = 64, T = 256.
+
+| cell | dtype | D | vs previous BM = 16 | vs cuda | vs cuda_fused |
+| --- | --- | --- | --- | --- | --- |
+| lstm | bflo | 1024 | 0.93 [0.93, 0.93] (no) | 1.42 [1.40, 1.44] | 3.89 [3.88, 3.89] |
+| lstm | bflo | 1280 | 1.87 [1.87, 1.88] | 1.43 [1.41, 1.44] | 4.18 [4.18, 4.19] |
+| lstm | bflo | 1536 | 1.70 [1.70, 1.70] | 1.34 [1.34, 1.35] | 4.90 [4.89, 4.91] |
+| lstm | bflo | 1792 | 1.62 [1.62, 1.62] | 1.30 [1.29, 1.31] | 5.40 [5.40, 5.41] |
+| lstm | floa | 1024 | 0.93 [0.93, 0.94] (no) | 1.39 [1.37, 1.41] | 3.83 [3.82, 3.85] |
+| lstm | floa | 1280 | 1.86 [1.84, 1.86] | 1.73 [1.71, 1.75] | 4.49 [4.38, 4.78] |
+| lstm | floa | 1536 | 1.70 [1.70, 1.70] | 1.73 [1.71, 1.74] | 5.34 [5.32, 5.36] |
+| lstm | floa | 1792 | 1.62 [1.61, 1.62] | 1.46 [1.45, 1.47] | 8.61 [8.59, 8.63] |
+| slstm | bflo | 1024 | 1.00 [1.00, 1.01] (no) | 1.55 [1.55, 1.56] | 2.88 [2.87, 2.90] |
+| slstm | bflo | 1280 | 1.91 [1.90, 1.92] | 1.54 [1.54, 1.55] | 6.34 [6.31, 6.37] |
+| slstm | bflo | 1536 | 1.72 [1.72, 1.72] | 1.41 [1.40, 1.43] | 6.63 [6.63, 6.64] |
+| slstm | bflo | 1792 | 1.68 [1.68, 1.69] | 1.38 [1.36, 1.39] | 7.32 [7.31, 7.33] |
+| slstm | floa | 1024 | 1.00 [1.00, 1.01] (no) | 1.49 [1.48, 1.50] | 3.04 [2.88, 3.52] |
+| slstm | floa | 1280 | 1.92 [1.92, 1.92] | 1.85 [1.83, 1.86] | 4.75 [4.72, 4.76] |
+| slstm | floa | 1536 | 1.72 [1.72, 1.72] | 1.84 [1.82, 1.85] | 4.96 [4.95, 4.97] |
+| slstm | floa | 1792 | 1.68 [1.68, 1.68] | 1.54 [1.52, 1.56] | 9.26 [9.23, 9.29] |
+
+The four W6 misses are D = 1024 (0.93-1.00x), where two 16-row groups were already resident. The losses to FlashRNN1
+`cuda` at B = 64 (sections 7-8) are gone: 1.30-1.85x. The library now selects this kernel by default for B > 32 at
+D = 1280-1792 (`execution_policy.wide_batch_config`); D = 1024 and D = 2048 keep their previous defaults.
+
