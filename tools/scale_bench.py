@@ -133,9 +133,9 @@ def mode_qualify(a, devices):
                 hist, _ = reference.recurrence(wx64, r64, b64, i64, cell)
                 ref64 = hist[0].float().to(out.device)
                 row["max_rel_vs_fp64"] = ((out - ref64).abs().max() / ref64.abs().max().clamp_min(1e-30)).item()
-                if a.allocs != "uva":  # section 9 rule: the single-GPU kernel comparison is reported, not gating
+                if a.rule9:  # section 9 rule: the single-GPU kernel comparison is reported, not gating
                     row["pass_"] = (row["finite"] and row["bitwise_vs_p1"] is not False and row["max_rel_vs_fp64"] < 2e-2
-                                    and row.get("symm", {}).get("bitwise_vs_uva", True))
+                                    and row.get("symm", {}).get("bitwise_vs_uva", False))
                 else:
                     row["pass_"] = (row["finite"] and row["bitwise_vs_p1"] and row["bitwise_vs_single_gpu"] is not False
                                     and row["max_rel_vs_fp64"] < 2e-2)
@@ -372,6 +372,7 @@ def main():
     devices = [int(x) for x in a.devices.split(",")]
     if a.mode != "heads" or len(devices) > 1:
         multi_gpu.enable_peer_access(devices)
+    a.rule9 = "nccl_symm" in a.allocs  # section 9 qualification rule, also if the symmetric session fails below
     if "nccl_symm" in a.allocs or a.mode == "paired":
         from flashrnn.flashrnn2 import symm_mem
         try:
