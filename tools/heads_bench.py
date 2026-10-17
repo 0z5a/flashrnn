@@ -198,7 +198,8 @@ def profile(case, leaves, cot_h, cfg, calls=5):
                 ts.append(e0.elapsed_time(e1))
                 phases.append(dict(diag.get("ms", {})))
             rec.update(step_ms=sorted(ts)[len(ts) // 2],
-                       phases_ms={k: sorted(p[k] for p in phases)[len(phases) // 2] for k in phases[0]} if phases[0] else {})
+                       phases_ms={k: sorted(p[k] for p in phases)[len(phases) // 2] for k in phases[0]} if phases[0] else {},
+                       kernel_phases_us_per_step=diag.get("phases_us_per_step"))
         except Exception:
             rec["error"] = traceback.format_exc()[-1500:]
         out[f"variant{i}"] = rec

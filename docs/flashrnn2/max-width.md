@@ -411,3 +411,61 @@ backward's broadcast moves four times what streaming R does. Reducing it needs t
 cluster (TMA multicast within thread-block clusters) or a backward that reduces partial dh instead of broadcasting dG;
 neither is built.
 
+
+## 18. Distributed-shared-memory exchange in the CUDA backward, and a diagnosis of the B = 64 loss (pre-registration, 2026-10-17, before any run of it)
+
+**Change.** `hybrid_bw.cu` gains `FRNN_CLUSTER = 8` (`hybrid_bw.backward(cluster=8)`, training option `cluster`; the
+default stays 0). Eight neighbouring CTAs (column slices) form a thread-block cluster; all of them need the same
+exchanged dG operand of their batch tile, and warp w of every CTA reads the same K range. Per round of 64 rows of each
+warp's K range, cluster rank q loads warp q's [BM × 64] chunk from L2 with 128-bit loads into its shared stage (same
+offset in every CTA, double buffered, aliasing the partial-sum buffer, row stride 72 elements so the fragment reads are
+conflict-free), the cluster synchronizes, and warp w of every CTA reads its A fragments from rank w's stage through
+distributed shared memory. L2 reads of the exchange drop eightfold; the price is one cluster barrier per round (KW/64 =
+16 per step at D = 2048, 12 at 1536) and remote shared loads. The MMAs run in the same order as before (register rows
+first, then shared rows, ascending), so the outputs must be bitwise equal to the plain kernel's. The launch is
+`cudaLaunchKernelEx` with the cluster-dimension and cooperative attributes; co-resident groups are capped by
+`cudaOccupancyMaxActiveClusters`. ptxas (FP16, sm_90a): BM = 64 at D = 1536 152-172 registers, D = 1792 228-250, D = 2048
+255 with 4-36 bytes of spill (the verification builds 350-430 bytes; they are not timed), BM = 16 at D = 2048 192, no
+other spill. This changes two things at once, the load width (32-bit fragment loads from L2 become 128-bit staged
+loads) and the volume (one L2 read per cluster instead of per CTA); the profile below is there to separate them.
+
+Also in this source: phase timers (`prof`, verification bit 16: globaltimer around the reduction, the pointwise update
+plus publish, and the grid barrier, thread 0 of each CTA), used only in the report-only profile runs; paired timings run
+without them.
+
+**Runs (batch "dsmem")**, single GPU, B = 64, T = 256 unless stated:
+* **C0, feasibility** (first, report only): per D ∈ {1024, 1280, 1536, 1792, 2048} and BM ∈ {16, 64}, the number of
+  co-resident clusters the GPU accepts and whether a cluster launch (cooperative + cluster attributes) runs; a one-call
+  backward (T = 4) bitwise against the plain kernel. A shape where the cluster launch does not fit or is rejected is a
+  reported outcome, not an error: its cluster cases fail qualification and are not timed; the plain-kernel runs below
+  are unaffected.
+* **R-dsmem, race verification** (rule of section 12) of the cluster kernel: D ∈ {1536, 2048} × LSTM/sLSTM at BM = 64
+  (B = 100) and D = 2048 × LSTM/sLSTM at BM = 16 (B = 40), T = 48, 21 runs per variant. Two broken variants are added for
+  the new synchronization, a single stage buffer and no cluster barrier between rounds (the last round's stays); the
+  content check also covers the A operands as read through distributed shared memory. Pass also needs the
+  uninstrumented outputs bitwise equal to the plain kernel's.
+* **W1-dsmem, qualification**: training step within the FP64 budgets with the cluster backward, D ∈ {1536, 1792, 2048},
+  B ∈ {64, 40}, LSTM/sLSTM, FP16/BF16, T = 24 (24 cases; forward as in section 15). The plain BM = 64 backward is
+  re-qualified first on this source (D ∈ {1536, 2048}, B = 64, 8 cases; the first of them is the batch's canary).
+* **Paired timing**, training step, D ∈ {1536, 1792, 2048} × LSTM/sLSTM × FP16/BF16, cluster backward against
+  **W6-dsmem** the plain BM = 64 backward (same forward) and **W4-dsmem** FlashRNN1 `cuda`; protocol and rule of
+  section 3 (holds when the lower bound of other / cluster is ≥ 1). A slowdown is a legitimate outcome: it would mean the
+  cluster barriers and remote loads cost more than the L2 traffic they remove.
+* **Profile, report only.** (a) Step breakdown at D ∈ {1536, 2048}, LSTM FP16 and sLSTM BF16: training forward, and per
+  backward variant (plain, cluster; each with and without the phase timers) the preactivation recompute, the kernel and
+  the dR/dbias GEMMs (CUDA events), the in-kernel phases per step, next to FlashRNN1 `cuda`'s step. (b) Nsight Systems
+  timelines at D ∈ {1536, 2048}, LSTM FP16: plain, cluster, FlashRNN1 `cuda`. (c) Nsight Compute (kernel replay) of the
+  first backward launch, plain and cluster at D ∈ {1536, 2048}, LSTM FP16, T = 32: SpeedOfLight,
+  MemoryWorkloadAnalysis (+ tables), WarpStateStats, SchedulerStats, SourceCounters, plus L2 read sectors / requests. If
+  Nsight Compute is not permitted on the node, the in-kernel phase timers of (a) are the fallback.
+* **H > 1 follow-up** (heads.md section 8.1): qualification of the R-tiled path at D = 768 with the corrected H > 1
+  default (H ∈ {2, 3, 16}, LSTM/sLSTM, FP16/BF16, 12 cases); step breakdown with the new default at D = 64, H = 256 and
+  D = 128, H = 1024 (LSTM FP16, against FlashRNN1), and Nsight Systems of both at D = 64, H = 1024 (report only).
+
+**Reading rule for the profile (fixed now).** For the plain kernel: (i) L2 throughput ≥ 70% of peak with ≥ 80% of the
+requested sectors used → the exchange broadcast is bandwidth-bound, and the cluster's volume cut is the lever; (ii)
+sector use near 50% and long-scoreboard the largest stall → the load width is the limiter (the 128-bit staging alone
+would help); (iii) non-kernel phases > 30% of the step → the FP32 passes around the kernel are the lever. Attribution of
+any cluster gain: the ratio of L2 read sectors (plain / cluster; about 8 for the exchange part if the volume cut acts),
+sectors per request, and the stall mix (long scoreboard against barrier / membar) of both kernels at the same shape. A
+gain with an L2 read-sector ratio near 1 would contradict the volume explanation.

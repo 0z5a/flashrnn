@@ -73,6 +73,7 @@ def training_forward(cell, dtype, batch, steps, heads, width, *, policy=None):
 
 
 HYBRID_BACKWARD_ABOVE = 1280  # widest D the Triton backward fits (S = 16, 224 KB of shared memory)
+FUSED_HEADS_MAX_WIDTH = 256  # largest D at which the H > 1 fused-recompute default is qualified (heads v4)
 
 
 def backward_slice_width(width):
@@ -129,7 +130,8 @@ class _Recurrence(torch.autograd.Function):
             dg, d_recurrent, d_bias, d_initial = hybrid_bw.backward(
                 wx, recurrent, bias, initial, history, d_history, d_final, ctx.cell,
                 reg_rows_per_warp=options.get("reg_rows_per_warp"), batch_rows=options.get("batch_rows"),
-                wgrad=options.get("wgrad", "bmm"),
+                wgrad=options.get("wgrad", "bmm"), prof=options.get("prof_phases", False),
+                cluster=options.get("cluster", 0),
                 tf32=options.get("tf32", False),
                 diagnostics=options.get("diagnostics"))
             return (dg.to(wx.dtype), d_recurrent.to(recurrent.dtype), d_bias.to(bias.dtype),
@@ -139,9 +141,11 @@ class _Recurrence(torch.autograd.Function):
             options["history_grad_components"] = (True, full, full)
         if options.get("slice_width") is None:
             options["slice_width"] = backward_slice_width(wx.shape[-1])
-        if wx.shape[3] > 1 and not options.pop("legacy_heads", False):
+        legacy_heads = options.pop("legacy_heads", False)
+        if wx.shape[3] > 1 and not legacy_heads and wx.shape[-1] <= FUSED_HEADS_MAX_WIDTH:
             # H > 1: recompute the gate preactivations inside the kernel (no [B, T, 4, H, D] FP32 preactivation
-            # tensor and its permuted copies; heads profiling, docs/flashrnn2/heads.md section 8).
+            # tensor and its permuted copies; heads profiling, docs/flashrnn2/heads.md section 8). Above D = 256 the
+            # fused variant does not fit shared memory (heads v4: D = 768 needs 320-416 KB), so the default stays.
             options.setdefault("fast", True)
             options.setdefault("fuse_pre", 2 if options["fast"] else 0)
         dg, d_recurrent, d_bias, d_initial = triton_rtiled_bw.backward(

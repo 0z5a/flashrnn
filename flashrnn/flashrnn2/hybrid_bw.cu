@@ -14,8 +14,11 @@
 // Race verification (FRNN_VERIFY, compiled out when 0): bit 1 content check (every A-fragment element read from the
 // exchange buffer is compared with the sender's stored FP32 dG, rounded the same way, after the read and again after
 // the MMAs: counters err[1], err[2]); bit 2 seeded delays of 0-4 us before the publish and after the grid barrier;
-// bit 4 broken: single buffer; bit 8 broken: no grid barrier (except before the tail).
+// bit 4 broken: single buffer; bit 8 broken: no grid barrier (except before the tail); bit 16 phase timing
+// (globaltimer, thread 0 of every CTA, units of 64 ns summed into err[4..7]: reduction = exchange loads + MMAs + partial
+// sums, pointwise + dG stores + publish, grid barrier, steps).
 #include <cooperative_groups.h>
+#include <type_traits>
 #include <cuda_bf16.h>
 #include <cuda_fp16.h>
 #include <cstdint>
@@ -36,7 +39,7 @@ __device__ __forceinline__ elem_t to_elem(float x) { return __float2half_rn(x); 
 #define FRNN_VERIFY 0
 #endif
 constexpr int VERIFY = FRNN_VERIFY;
-constexpr int V_CHECK = 1, V_DELAY = 2, V_SINGLE = 4, V_NO_SYNC = 8;
+constexpr int V_CHECK = 1, V_DELAY = 2, V_SINGLE = 4, V_NO_SYNC = 8, V_PROF = 16, V_CL_SINGLE = 32, V_CL_NO_SYNC = 64;
 constexpr int D = FRNN_D;
 constexpr int KRW = FRNN_KRW;
 constexpr bool SLSTM = FRNN_SLSTM != 0;
@@ -47,6 +50,16 @@ constexpr bool SLSTM = FRNN_SLSTM != 0;
 // threads runs PE = BM * 16 / 256 pointwise elements (rows pb + 16 e, column pj).
 constexpr int S = 16, BM = FRNN_BM, WARPS = 8, THREADS = 256, MT = BM / 16, PE = BM * S / THREADS;
 static_assert(BM == 16 || BM == 32 || BM == 64, "BM must be 16, 32 or 64");
+#ifndef FRNN_CLUSTER
+#define FRNN_CLUSTER 0
+#endif
+// FRNN_CLUSTER = 8: thread-block clusters of 8 neighbouring CTAs share the exchanged dG operand through distributed
+// shared memory. Per round of KC_STAGE rows of every warp's K range, cluster rank q loads warp q's [BM x KC_STAGE]
+// chunk from L2 with 128-bit loads into its shared stage (a symmetric buffer: same offset in every CTA, double
+// buffered, aliasing the partial-sum buffer), the cluster synchronizes once, and warp w of every CTA reads its A
+// fragments from rank w's stage. L2 reads of the exchange drop by 8; one cluster barrier per round.
+constexpr int CLUSTER = FRNN_CLUSTER, KC_STAGE = 64, LDS_STAGE = KC_STAGE + 8;
+static_assert(CLUSTER == 0 || CLUSTER == WARPS, "cluster rank q stages warp q's chunk");
 constexpr int K = 4 * D;
 constexpr int KW = K / WARPS;
 constexpr int KSW = KW - KRW;
@@ -68,6 +81,12 @@ __device__ __forceinline__ void mma(float (&c)[4], uint32_t a0, uint32_t a1, uin
 }
 
 __device__ __forceinline__ float sigmoid(float x) { return 1.0f / (1.0f + expf(-x)); }
+
+__device__ __forceinline__ unsigned long long gtime() {
+  unsigned long long t;
+  asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t));
+  return t;
+}
 
 __device__ __forceinline__ void delay(int seed, int a, int b, int c) {
   uint32_t h = (uint32_t)seed * 2654435761u ^ (uint32_t)a * 40503u ^ (uint32_t)b * 2246822519u ^ (uint32_t)c * 3266489917u;
@@ -102,7 +121,8 @@ struct Args {
   float* dg;             // [B, T, 4, H, D] FP32 out
   float* dinit;          // [S, B, 1, H, D] FP32 out
   elem_t* xbuf;          // [RESIDENT, 2, BM, 4D] exchange
-  int* err;              // verification: [0] unused, [1] after read, [2] after MMA, [3] delay seed
+  int* err;              // verification: [0] unused, [1] after read, [2] after MMA, [3] delay seed, [4..7] phase
+                         // timers, [8] cluster stage reads (A operands read through distributed shared memory)
   int B, T, H, groups, resident, slots, tiles;
 };
 
@@ -180,6 +200,73 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw_kernel(Args a) {
         int bad = check(xa, t1);
         if (bad) atomicAdd(a.err + 1, bad);
       }
+#if FRNN_CLUSTER
+      {
+        cg::cluster_group cl = cg::this_cluster();
+        const int rank = (int)cl.block_rank();
+        elem_t* stage = reinterpret_cast<elem_t*>(red);  // [2][BM][LDS_STAGE], symmetric across the cluster
+        const elem_t* src = a.xbuf + ((size_t)(gy * 2 + par) * BM) * K + rank * KW;  // warp `rank`'s K range
+        constexpr int R = KW / KC_STAGE, J = KC_STAGE / 16;
+        static_assert(KW % KC_STAGE == 0, "KW must be a multiple of the stage chunk");
+        auto load = [&](int r, int buf) {
+          for (int i = tid; i < BM * KC_STAGE / 8; i += THREADS) {
+            int row = i / (KC_STAGE / 8), col8 = i % (KC_STAGE / 8);
+            uint4 v = __ldcg(reinterpret_cast<const uint4*>(src + (size_t)row * K + r * KC_STAGE) + col8);
+            *reinterpret_cast<uint4*>(stage + ((size_t)buf * BM + row) * LDS_STAGE + col8 * 8) = v;
+          }
+        };
+        const uint2* sb = reinterpret_cast<const uint2*>(sr) + (size_t)warp * CS * 2 * 32 + lane;
+        const elem_t* remote = cl.map_shared_rank(stage, warp);
+        // One round: prefetch round r+1 into the other buffer, MMA round r from rank `warp`'s stage, cluster barrier
+        // (round r+1 staged everywhere, and every CTA is done reading round r's buffer). Rounds that touch register
+        // rows of R are unrolled (static register indices); the shared-memory rounds stay rolled (register pressure).
+        constexpr bool ONE_BUF = (VERIFY & V_CL_SINGLE) != 0;  // broken variant: one stage buffer
+        int stage_bad = 0;
+        auto round = [&](int r, auto in_regs) {
+          if (VERIFY & V_DELAY) delay(a.err[3], s + 3001 + 17 * r, gy, t1);
+          if (r + 1 < R) load(r + 1, ONE_BUF ? 0 : (r + 1) & 1);
+          if (VERIFY & V_DELAY) delay(a.err[3], s + 5003 + 17 * r, gy, t1);
+          const elem_t* tile = remote + (size_t)(ONE_BUF ? 0 : (r & 1)) * BM * LDS_STAGE;
+#pragma unroll
+          for (int jj = 0; jj < J; ++jj) {
+            const int c = r * J + jj;
+            uint32_t b00, b01, b10, b11;
+            if (decltype(in_regs)::value && c < CR) {
+              const int cc = decltype(in_regs)::value ? (c < CR ? c : 0) : 0;
+              b00 = rreg[cc][0][0]; b01 = rreg[cc][0][1]; b10 = rreg[cc][1][0]; b11 = rreg[cc][1][1];
+            } else {
+              uint2 x0 = sb[((c - CR) * 2) * 32], x1 = sb[((c - CR) * 2 + 1) * 32];
+              b00 = x0.x; b01 = x0.y; b10 = x1.x; b11 = x1.y;
+            }
+#pragma unroll
+            for (int mt = 0; mt < MT; ++mt) {
+              const elem_t* r0 = tile + (size_t)(mt * 16 + fg) * LDS_STAGE + jj * 16 + 2 * ft;
+              const elem_t* r8 = r0 + 8 * LDS_STAGE;
+              uint32_t a0 = *reinterpret_cast<const uint32_t*>(r0), a1 = *reinterpret_cast<const uint32_t*>(r8);
+              uint32_t a2 = *reinterpret_cast<const uint32_t*>(r0 + 8), a3 = *reinterpret_cast<const uint32_t*>(r8 + 8);
+              if (VERIFY & V_CHECK) {  // the operands as read through DSMEM against the stored dG of step t1
+                const int row0 = bt * BM + mt * 16 + fg, k = warp * KW + c * 16 + 2 * ft;
+                stage_bad += check_pair(a0, a.dg, a.B, a.T, a.H, head, row0, t1, k) +
+                             check_pair(a1, a.dg, a.B, a.T, a.H, head, row0 + 8, t1, k) +
+                             check_pair(a2, a.dg, a.B, a.T, a.H, head, row0, t1, k + 8) +
+                             check_pair(a3, a.dg, a.B, a.T, a.H, head, row0 + 8, t1, k + 8);
+              }
+              mma(acc[mt][0], a0, a1, a2, a3, b00, b01);
+              mma(acc[mt][1], a0, a1, a2, a3, b10, b11);
+            }
+          }
+          if (!(VERIFY & V_CL_NO_SYNC) || r == R - 1) cl.sync();  // broken variant: only the last round's barrier
+        };
+        constexpr int RREG = (CR + J - 1) / J;  // rounds with at least one register row
+        load(0, 0);
+        cl.sync();
+#pragma unroll
+        for (int r = 0; r < RREG; ++r) round(r, std::true_type{});
+#pragma unroll 1
+        for (int r = RREG; r < R; ++r) round(r, std::false_type{});
+        if ((VERIFY & V_CHECK) && stage_bad) atomicAdd(a.err + 8, stage_bad);
+      }
+#else
 #pragma unroll
       for (int c = 0; c < CR; ++c) {
 #pragma unroll
@@ -205,6 +292,7 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw_kernel(Args a) {
           mma(acc[mt][1], a0, a1, a2, a3, b1.x, b1.y);
         }
       }
+#endif
       if (VERIFY & V_CHECK) {
         int bad = check(xa, t1);
         if (bad) atomicAdd(a.err + 2, bad);
@@ -244,10 +332,13 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw_kernel(Args a) {
             if (SLSTM) dn[e] = a.dfinal[2 * state_stride + unit];
           }
         }
-      } else if (active) {
+      }
+      unsigned long long t_a = (VERIFY & V_PROF) ? gtime() : 0;
+      if (idx > 0 && active) {
         if (VERIFY & V_DELAY) delay(a.err[3], s, g, t);
         reduce((VERIFY & V_SINGLE) ? 0 : (cnt - 1) & 1, t + 1);
       }
+      unsigned long long t_b = (VERIFY & V_PROF) ? gtime() : 0;
       if (VERIFY & V_DELAY) delay(a.err[3], s + 977, g, t);
 #pragma unroll
       for (int e = 0; e < PE; ++e) {
@@ -304,7 +395,15 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw_kernel(Args a) {
         }
       }
       ++cnt;
+      unsigned long long t_c = (VERIFY & V_PROF) ? gtime() : 0;
       if (!(VERIFY & V_NO_SYNC) || idx == a.T - 1) grid.sync();
+      if ((VERIFY & V_PROF) && tid == 0 && active) {
+        unsigned long long t_d = gtime();
+        atomicAdd(a.err + 4, (int)((t_b - t_a) >> 6));
+        atomicAdd(a.err + 5, (int)((t_c - t_b) >> 6));
+        atomicAdd(a.err + 6, (int)((t_d - t_c) >> 6));
+        atomicAdd(a.err + 7, 1);
+      }
     }
     // Tail: gradient of the initial state from dG_0.
     if (active) {
@@ -329,6 +428,30 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw_kernel(Args a) {
 
 extern "C" int frnn_hybrid_bw_smem() { return WARPS * CS * 2 * 32 * 2 * 4 + WARPS * BM * 16 * 4; }
 
+// Clusters of FRNN_CLUSTER CTAs that can be co-resident (0 without clusters); the caller caps the resident groups.
+extern "C" int frnn_hybrid_bw_max_clusters() {
+#if FRNN_CLUSTER
+  int smem = frnn_hybrid_bw_smem(), n = 0;
+  if (cudaFuncSetAttribute(frnn_hybrid_bw_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem) != cudaSuccess)
+    return -1;
+  cudaLaunchConfig_t cfg = {};
+  cfg.gridDim = dim3(D / S, 1);
+  cfg.blockDim = dim3(THREADS);
+  cfg.dynamicSmemBytes = smem;
+  cudaLaunchAttribute attr[1];
+  attr[0].id = cudaLaunchAttributeClusterDimension;
+  attr[0].val.clusterDim.x = FRNN_CLUSTER;
+  attr[0].val.clusterDim.y = 1;
+  attr[0].val.clusterDim.z = 1;
+  cfg.attrs = attr;
+  cfg.numAttrs = 1;
+  if (cudaOccupancyMaxActiveClusters(&n, frnn_hybrid_bw_kernel, &cfg) != cudaSuccess) return -1;
+  return n;
+#else
+  return 0;
+#endif
+}
+
 extern "C" int frnn_hybrid_bw(const float* pre, const float* states, const float* initial, const float* dstates,
                               const float* dfinal, const void* R, float* dg, float* dinit, void* xbuf, int* err,
                               int B, int T, int H, int groups, int resident, int slots, int tiles, void* stream) {
@@ -337,8 +460,27 @@ extern "C" int frnn_hybrid_bw(const float* pre, const float* states, const float
   int smem = frnn_hybrid_bw_smem();
   cudaError_t e = cudaFuncSetAttribute(frnn_hybrid_bw_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem);
   if (e != cudaSuccess) return (int)e;
+#if FRNN_CLUSTER
+  static_assert((D / S) % (FRNN_CLUSTER > 0 ? FRNN_CLUSTER : 1) == 0, "D / 16 CTAs must split into whole clusters");
+  cudaLaunchConfig_t cfg = {};
+  cfg.gridDim = dim3(D / S, resident);
+  cfg.blockDim = dim3(THREADS);
+  cfg.dynamicSmemBytes = smem;
+  cfg.stream = (cudaStream_t)stream;
+  cudaLaunchAttribute attr[2];
+  attr[0].id = cudaLaunchAttributeClusterDimension;
+  attr[0].val.clusterDim.x = FRNN_CLUSTER;
+  attr[0].val.clusterDim.y = 1;
+  attr[0].val.clusterDim.z = 1;
+  attr[1].id = cudaLaunchAttributeCooperative;
+  attr[1].val.cooperative = 1;
+  cfg.attrs = attr;
+  cfg.numAttrs = 2;
+  e = cudaLaunchKernelEx(&cfg, frnn_hybrid_bw_kernel, a);
+#else
   void* args[] = {&a};
   e = cudaLaunchCooperativeKernel((void*)frnn_hybrid_bw_kernel, dim3(D / S, resident), dim3(THREADS), args, smem,
                                   (cudaStream_t)stream);
+#endif
   return (int)e;
 }

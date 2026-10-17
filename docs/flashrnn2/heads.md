@@ -196,3 +196,49 @@ Run "heads v3" stopped at its canary after 31 s: the test hook `per_head_gemms` 
 function that did not take the new `method` argument (a harness defect; nothing ran on the GPU beyond that case). The
 hook is fixed and the login preflight now calls the library's `weight_gradients` through the hook on CPU tensors; the
 batch is rerun unchanged otherwise ("heads v4").
+
+### 8.1 Results (job "heads v4", 2026-10-17)
+
+**H1-v3**: single-CTA path 24/24 (H ∈ {2, 3, 16}, D = 64 / 128, LSTM/sLSTM, FP16/BF16: FP64 budgets and per-head
+bitwise); Triton R-tiled path 12/24: every D = 256 case passes, every D = 768 case fails before running with a Triton
+`OutOfResources` (the fused-recompute kernel needs 320 KB at H ∈ {2, 16} and 416 KB at H = 3 of shared memory, the
+limit is 227 KB). It is a configuration error, not a numerical one: the fused variant had been qualified at H = 1 only
+where it fits. Fix (after the run): the H > 1 default applies up to D = 256 (`training.FUSED_HEADS_MAX_WIDTH`); above
+it the earlier, qualified H > 1 default stays (the strided-bmm dR is kept; it is bitwise equal to einsum on the CPU).
+The claim shapes (D = 64 / 128) run on the single-CTA path, which qualified, so the timing below stands.
+
+**H6** (new H > 1 training path / previous one) holds 20/24, **H3-train-v3** (FlashRNN1 / FlashRNN2) holds 4/24.
+Training step, B = 16, T = 256 (128 at H = 1024):
+
+| cell | dtype | D | H | vs previous H > 1 path (H6) | vs FlashRNN1 (H3-train-v3) |
+| --- | --- | --- | --- | --- | --- |
+| lstm | bflo | 64 | 16 | 1.04 [0.89, 1.14] (no) | 0.98 [0.98, 0.98] (no) |
+| lstm | bflo | 64 | 256 | 1.56 [1.50, 1.60] | 0.79 [0.79, 0.79] (no) |
+| lstm | bflo | 64 | 1024 | 1.57 [1.54, 1.59] | 0.79 [0.79, 0.79] (no) |
+| lstm | bflo | 128 | 16 | 1.17 [1.03, 1.26] | 0.88 [0.88, 0.88] (no) |
+| lstm | bflo | 128 | 256 | 1.55 [1.51, 1.56] | 0.90 [0.90, 0.90] (no) |
+| lstm | bflo | 128 | 1024 | 1.66 [1.64, 1.67] | 0.91 [0.91, 0.91] (no) |
+| lstm | floa | 64 | 16 | 1.04 [0.89, 1.13] (no) | 0.92 [0.92, 0.92] (no) |
+| lstm | floa | 64 | 256 | 1.54 [1.49, 1.59] | 0.74 [0.74, 0.74] (no) |
+| lstm | floa | 64 | 1024 | 1.58 [1.54, 1.59] | 0.74 [0.74, 0.74] (no) |
+| lstm | floa | 128 | 16 | 1.18 [1.04, 1.27] | 0.89 [0.89, 0.90] (no) |
+| lstm | floa | 128 | 256 | 1.55 [1.51, 1.56] | 0.90 [0.90, 0.90] (no) |
+| lstm | floa | 128 | 1024 | 1.67 [1.65, 1.67] | 0.92 [0.92, 0.92] (no) |
+| slstm | bflo | 64 | 16 | 1.09 [0.94, 1.18] (no) | 1.00 [1.00, 1.00] |
+| slstm | bflo | 64 | 256 | 1.56 [1.50, 1.59] | 0.85 [0.85, 0.85] (no) |
+| slstm | bflo | 64 | 1024 | 1.58 [1.55, 1.60] | 0.86 [0.86, 0.86] (no) |
+| slstm | bflo | 128 | 16 | 1.20 [1.07, 1.29] | 0.97 [0.96, 0.97] (no) |
+| slstm | bflo | 128 | 256 | 1.54 [1.51, 1.55] | 1.05 [1.05, 1.05] |
+| slstm | bflo | 128 | 1024 | 1.64 [1.63, 1.64] | 1.07 [1.07, 1.07] |
+| slstm | floa | 64 | 16 | 1.08 [0.93, 1.18] (no) | 0.93 [0.93, 0.93] (no) |
+| slstm | floa | 64 | 256 | 1.56 [1.50, 1.59] | 0.86 [0.86, 0.86] (no) |
+| slstm | floa | 64 | 1024 | 1.58 [1.55, 1.59] | 0.86 [0.86, 0.86] (no) |
+| slstm | floa | 128 | 16 | 1.20 [1.07, 1.30] | 0.90 [0.90, 0.90] (no) |
+| slstm | floa | 128 | 256 | 1.54 [1.51, 1.56] | 0.99 [0.99, 0.99] (no) |
+| slstm | floa | 128 | 1024 | 1.64 [1.63, 1.65] | 1.02 [1.01, 1.02] |
+
+Reading (post hoc): removing the FP32 preactivation tensor and the permuted copies makes the H > 1 step 1.5-1.7x
+faster at H ≥ 256 (at H = 16, where the copies were small, the intervals include 1). Against FlashRNN1 the gap shrinks
+from 0.47-0.94x (section 6) to 0.74-1.07x, and sLSTM at D = 128, H ≥ 256 is now faster; LSTM at D = 64 stays the
+furthest behind (0.74-0.79x). Where the remaining time goes is measured in the next diagnostic run (step breakdown and
+Nsight Systems with the new default; max-width.md section 18 batch). Evidence: `heads-evidence/heads-v4-analysis.json`.

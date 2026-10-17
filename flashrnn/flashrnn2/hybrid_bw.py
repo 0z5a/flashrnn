@@ -41,11 +41,13 @@ def supported(width, sms=132):
     return width % 16 == 0 and (4 * width // WARPS) % 16 == 0 and 2 <= width // S <= sms and width >= 256
 
 
-VERIFY_BITS = dict(check=1, delay=2, single=4, no_sync=8)
+VERIFY_BITS = dict(check=1, delay=2, single=4, no_sync=8, prof=16, cl_single=32, cl_no_sync=64)
 
 
 def verify_bits(verify):
-    """verify: None or {"check": bool, "delay_seed": int | None, "broken": None | "single" | "no_sync"}."""
+    """verify: None or {"check": bool, "delay_seed": int | None,
+    "broken": None | "single" | "no_sync" | "cl_single" | "cl_no_sync"} (the last two: cluster stage, one buffer /
+    no barrier between rounds)."""
     if not verify:
         return 0, 0
     bits = VERIFY_BITS["check"] if verify.get("check", True) else 0
@@ -56,11 +58,13 @@ def verify_bits(verify):
     return bits, int(verify.get("delay_seed") or 0)
 
 
-def build(width, krw, slstm, bf16, cache_dir=None, verify=0, bm=16):
+def build(width, krw, slstm, bf16, cache_dir=None, verify=0, bm=16, cluster=0):
     cuda_home = os.environ.get("FRNN_HYBRID_CUDA_HOME", "/apps/ACC/CUDA/12.8")
     nvcc = os.path.join(cuda_home, "bin", "nvcc")
     flags = [f"-DFRNN_D={width}", f"-DFRNN_KRW={krw}", f"-DFRNN_SLSTM={int(slstm)}", f"-DFRNN_BF16={int(bf16)}",
              f"-DFRNN_VERIFY={int(verify)}", f"-DFRNN_BM={int(bm)}"]
+    if cluster:
+        flags.append(f"-DFRNN_CLUSTER={int(cluster)}")
     digest = hashlib.sha256(SOURCE.read_bytes() + " ".join(flags).encode()).hexdigest()[:16]
     cache = Path(cache_dir or os.environ.get("FRNN_HYBRID_CACHE",
                                              os.environ.get("TMPDIR", str(Path.home() / ".cache")) + "/frnn_hybrid_bw"))
@@ -75,21 +79,23 @@ def build(width, krw, slstm, bf16, cache_dir=None, verify=0, bm=16):
     return lib
 
 
-def _lib(width, krw, slstm, bf16, verify=0, bm=16):
-    key = (width, krw, slstm, bf16, verify, bm)
+def _lib(width, krw, slstm, bf16, verify=0, bm=16, cluster=0):
+    key = (width, krw, slstm, bf16, verify, bm, cluster)
     if key not in _LIBS:
-        lib = ctypes.CDLL(str(build(width, krw, slstm, bf16, verify=verify, bm=bm)))
+        lib = ctypes.CDLL(str(build(width, krw, slstm, bf16, verify=verify, bm=bm, cluster=cluster)))
         lib.frnn_hybrid_bw.restype = ctypes.c_int
         lib.frnn_hybrid_bw.argtypes = [ctypes.c_void_p] * 10 + [ctypes.c_int] * 7 + [ctypes.c_void_p]
         lib.frnn_hybrid_bw_smem.restype = ctypes.c_int
+        lib.frnn_hybrid_bw_max_clusters.restype = ctypes.c_int
         _LIBS[key] = lib
     return _LIBS[key]
 
 
 def backward(wx, recurrent, bias, initial, history, d_history, d_final, cell, *, reg_rows_per_warp=None, tf32=False,
-             diagnostics=None, batch_rows=None, wgrad="bmm", _verify=None):
+             diagnostics=None, batch_rows=None, wgrad="bmm", prof=False, cluster=0, _verify=None):
     """Returns (dg FP32 [B,T,4,H,D], dR, dbias, d_initial FP32); d_history / d_final as in triton_rtiled_bw.
 
+    cluster: 0, or 8 for the distributed-shared-memory exchange (clusters of 8 CTAs share each staged dG chunk).
     _verify (race verification only, never served): see verify_bits; the violation counters are written back into
     the dict (after_read, after_mma)."""
     from .triton_rtiled_bw import preactivations, weight_gradients
@@ -99,6 +105,8 @@ def backward(wx, recurrent, bias, initial, history, d_history, d_final, cell, *,
     batch, steps, gates, heads, width = wx.shape
     if wx.dtype not in (torch.float16, torch.bfloat16) or not supported(width):
         raise ValueError("unsupported shape or dtype for the hybrid backward")
+    if cluster not in (0, WARPS) or (cluster and (width // S) % cluster):
+        raise ValueError("cluster must be 0, or 8 with D / 16 a multiple of 8")
     device = wx.device
     sms = torch.cuda.get_device_properties(device).multi_processor_count
     bm = batch_tile(batch) if batch_rows is None else batch_rows
@@ -108,14 +116,27 @@ def backward(wx, recurrent, bias, initial, history, d_history, d_final, cell, *,
     groups = tiles * heads
     resident = max(1, min(groups, sms // k))
     slots = (groups + resident - 1) // resident
+    events = [torch.cuda.Event(enable_timing=True) for _ in range(4)] if (diagnostics or {}).get("time") else None
+    if events:
+        events[0].record()
     pre, h_prev = preactivations(wx, recurrent, bias, initial, history, tf32)
+    if events:
+        events[1].record()
     dg = torch.empty((batch, steps, 4, heads, width), device=device, dtype=torch.float32)
     d_init = torch.empty(initial.shape, device=device, dtype=torch.float32)
     xbuf = torch.empty((resident, 2, bm, 4 * width), device=device, dtype=wx.dtype)
     init32 = initial.float().contiguous()
     bits, seed = verify_bits(_verify)
-    lib = _lib(width, krw, cell == "slstm", wx.dtype == torch.bfloat16, bits, bm)
-    err = torch.zeros(4, device=device, dtype=torch.int32)
+    if prof:
+        bits |= VERIFY_BITS["prof"]
+    lib = _lib(width, krw, cell == "slstm", wx.dtype == torch.bfloat16, bits, bm, cluster)
+    if cluster:  # cap the co-resident groups by the clusters the GPU can hold at once
+        fit = lib.frnn_hybrid_bw_max_clusters() * cluster // k
+        if fit < 1:
+            raise RuntimeError("no group of clusters fits on the GPU")
+        resident = min(resident, fit)
+        slots = (groups + resident - 1) // resident
+    err = torch.zeros(12, device=device, dtype=torch.int32)
     err[3] = seed
     tensors = [pre.contiguous(), history.contiguous(), init32, d_history.contiguous(), d_final.float().contiguous(),
                recurrent.contiguous(), dg, d_init, xbuf, err]
@@ -123,10 +144,23 @@ def backward(wx, recurrent, bias, initial, history, d_history, d_final, cell, *,
                             slots, tiles, ctypes.c_void_p(torch.cuda.current_stream(device).cuda_stream))
     if rc != 0:
         raise RuntimeError(f"hybrid backward launch failed (cudaError {rc})")
+    if events:
+        events[2].record()
     if _verify is not None:
         counts = err.tolist()
-        _verify.update(after_read=counts[1], after_mma=counts[2])
+        _verify.update(after_read=counts[1], after_mma=counts[2], after_stage=counts[8])
     d_recurrent, d_bias = weight_gradients(dg, h_prev, tf32, wgrad)
+    if events:
+        events[3].record()
+        torch.cuda.synchronize()
+        diagnostics["ms"] = dict(preactivation=events[0].elapsed_time(events[1]),
+                                 kernel=events[1].elapsed_time(events[2]),
+                                 weight_gradients=events[2].elapsed_time(events[3]))
+    if prof and diagnostics is not None:
+        c = err.tolist()
+        steps = max(c[7], 1)
+        diagnostics["phases_us_per_step"] = dict(reduction=c[4] * 64 / 1000 / steps, pointwise_publish=c[5] * 64 / 1000 / steps,
+                                                 grid_barrier=c[6] * 64 / 1000 / steps, cta_steps=c[7])
     if diagnostics is not None:
         diagnostics.update(reg_rows_per_warp=krw, batch_rows=bm, shared_bytes=lib.frnn_hybrid_bw_smem(), ctas=k * resident,
                            groups=groups, resident=resident, slots=slots)
