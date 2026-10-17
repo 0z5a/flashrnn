@@ -222,3 +222,18 @@ The six W4 misses are all B = 64 at D = 1536 or 1792 (0.78-0.94x): the same batc
 (one resident group of 96-112 CTAs, four 16-row tiles one after another). FlashRNN1 `cuda_fused` itself runs to
 D = 2560 (section 7) but is 2.3-6.7x slower than the hybrid kernel at D = 1536-1984.
 
+
+## 9. Results at D = 2048 with two warpgroups (job "maxd 2048", 2026-10-17)
+
+**W1-2048**: 4/4 forward cases pass (LSTM/sLSTM, FP16/BF16). **W3-2048** holds 8/8, **W4-2048** holds 8/8 (forward, T = 256).
+
+| cell | dtype | B | vs cuda_fused | vs cuda |
+| --- | --- | --- | --- | --- |
+| lstm | bflo | 16 | 7.61 [7.59, 7.63] | 5.60 [5.57, 5.64] |
+| lstm | bflo | 64 | 3.56 [3.43, 3.93] | 1.24 [1.24, 1.25] |
+| lstm | floa | 16 | 7.66 [7.25, 8.83] | 5.18 [5.15, 5.20] |
+| lstm | floa | 64 | 5.35 [5.21, 5.76] | 1.38 [1.38, 1.39] |
+| slstm | bflo | 16 | 7.51 [7.49, 7.54] | 5.95 [5.91, 5.98] |
+| slstm | bflo | 64 | 3.46 [3.46, 3.46] | 1.36 [1.36, 1.37] |
+| slstm | floa | 16 | 7.38 [7.35, 7.40] | 5.43 [5.40, 5.46] |
+| slstm | floa | 64 | 5.12 [5.12, 5.13] | 1.44 [1.43, 1.44] |
