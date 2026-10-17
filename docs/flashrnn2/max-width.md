@@ -528,7 +528,11 @@ Reading (post hoc; the pre-registered counters are missing, so the rule's cases 
   about 12 µs per step). The resident-R kernel reads the whole exchanged dG in every CTA (96 · 64 · 6144 · 2 B = 75 MB
   per step) through 32-bit fragment loads, at an effective 1.6 TB/s. Neither shared staging nor a smaller operand
   volume per CTA helped while every CTA still reduces the full K = 4D. What would change the volume is a 2-D split of R
-  (CTA (i, j) holds a [4D/q × D/p] block, reads only its dG slice, writes a partial dh reduced over q CTAs). For
-  p · q = 96 that moves about 7x fewer bytes per step, at the price of a second barrier. It is not built.
+  (CTA (i, j) holds a [4D/q × D/p] block, reads only its dG slice, writes an FP32 partial dh reduced over q CTAs). Per
+  step that moves 8 · (p + q) · B · D bytes (FP16 dG slices: 8 · p · B · D; FP32 partials written and read:
+  8 · q · B · D) against the 1-D kernel's 8 · k · B · D (k = D / 16): at D = 1536 with p = 8, q = 16 about 19 MB
+  against 75 MB (4x; at most about 4.9x for p ≈ q ≈ √(p q)), the same order as the 19 MB of R that cuBLAS reads per step.
+  The price is a second grid barrier per step. (An earlier draft of this paragraph said 7x; it mixed FP16 and FP32
+  element sizes.)
 
 The cluster variant stays opt-in (`cluster=8`) and is not a default.
