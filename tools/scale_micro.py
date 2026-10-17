@@ -6,7 +6,11 @@
   hbm       device-memory read bandwidth per GPU (1 GiB copy, median of 7)
   pcie      pinned-host-to-device bandwidth per GPU (512 MiB, median of 7)
   l2        intra-GPU counter-barrier round trip among k CTAs (the R-tiled group barrier, alpha_l2)
-Writes micro.json. Usage: scale_micro.py --out DIR [--devices 0,1,2,3]
+Writes micro.json. Usage: scale_micro.py --out DIR [--devices 0,1,2,3] [--allocs uva,nccl_symm] [--warmup 1]
+--allocs: the pair benchmark per allocation of its buffers and flags ("uva": PyTorch allocator + peer access;
+"nccl_symm": NCCL 2.32 symmetric windows, LSA addresses; results under pair_by_alloc, "pair" stays the uva rows).
+--warmup 1: one untimed launch of every (size) kernel on both devices before the timed one (scale-out-plan.md
+section 9: the first pair compiled every size inside its timed window).
 """
 import argparse
 import json
@@ -47,20 +51,49 @@ def _pingpong(PEER_BUF, PEER_FLAG, MY_BUF, MY_FLAG, ERR, n, first, N_BYTES: tl.c
             tl.debug_barrier()
 
 
-def pair_bench(a, b, nbytes, n):
+class _Raw:
+    """A raw device address as a Triton pointer argument (int32 elements)."""
+    dtype = torch.int32
+
+    def __init__(self, address):
+        self.address = address
+
+    def data_ptr(self):
+        return self.address
+
+
+def pair_bench(a, b, nbytes, n, alloc="uva", devices=None):
     da, db = f"cuda:{a}", f"cuda:{b}"
     words = max(1, nbytes // 4)
-    bufs = {a: torch.zeros((words + 64,), device=da, dtype=torch.int32),
-            b: torch.zeros((words + 64,), device=db, dtype=torch.int32)}
-    flags = {a: torch.zeros((8,), device=da, dtype=torch.int32), b: torch.zeros((8,), device=db, dtype=torch.int32)}
     errs = {a: torch.zeros((1,), device=da, dtype=torch.int32), b: torch.zeros((1,), device=db, dtype=torch.int32)}
+    if alloc == "uva":
+        bufs = {a: torch.zeros((words + 64,), device=da, dtype=torch.int32),
+                b: torch.zeros((words + 64,), device=db, dtype=torch.int32)}
+        flags = {a: torch.zeros((8,), device=da, dtype=torch.int32), b: torch.zeros((8,), device=db, dtype=torch.int32)}
+    else:
+        from flashrnn.flashrnn2 import symm_mem
+        sess = symm_mem.session(devices)
+        rank = {d: devices.index(d) for d in (a, b)}
+        bid, fid = sess.buffer("micro_buf", 4 * (words + 64)), sess.buffer("micro_flag", 4 * 8)
+        for d in (a, b):
+            torch.cuda.set_device(d)
+            sess.zero(bid, rank[d], 4 * (words + 64))
+            sess.zero(fid, rank[d], 4 * 8)
+        btab = {d: sess.table(bid, rank[d]) for d in (a, b)}
+        ftab = {d: sess.table(fid, rank[d]) for d in (a, b)}
+        bufs = {d: _Raw(sess.local(bid, rank[d])) for d in (a, b)}
+        flags = {d: _Raw(sess.local(fid, rank[d])) for d in (a, b)}
     for d in (a, b):
         torch.cuda.synchronize(d)
     ev = {}
     for d, peer, first in ((a, b, 1), (b, a, 0)):
         torch.cuda.set_device(d)
-        pb = torch.tensor([bufs[peer].data_ptr()], device=f"cuda:{d}", dtype=torch.int64)
-        pf = torch.tensor([flags[peer].data_ptr()], device=f"cuda:{d}", dtype=torch.int64)
+        if alloc == "uva":
+            pb = torch.tensor([bufs[peer].data_ptr()], device=f"cuda:{d}", dtype=torch.int64)
+            pf = torch.tensor([flags[peer].data_ptr()], device=f"cuda:{d}", dtype=torch.int64)
+        else:  # the peer's LSA address as mapped on this device
+            pb = btab[d][rank[peer]:rank[peer] + 1].clone()
+            pf = ftab[d][rank[peer]:rank[peer] + 1].clone()
         e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
         e0.record()
         _pingpong[(1,)](pb, pf, bufs[d], flags[d], errs[d], n, first, max(16, nbytes), 1 << 24, num_warps=4)
@@ -93,10 +126,13 @@ def main():
     p.add_argument("--out", required=True)
     p.add_argument("--devices", default="0,1,2,3")
     p.add_argument("--rounds", type=int, default=2000)
+    p.add_argument("--allocs", default="uva")
+    p.add_argument("--warmup", type=int, default=0)
     a = p.parse_args()
     devices = [int(x) for x in a.devices.split(",")]
+    allocs = a.allocs.split(",")
     rec = dict(devices=devices, started=time.time(), gpu=torch.cuda.get_device_name(devices[0]), pair={}, hbm={},
-               pcie={}, errors={})
+               pcie={}, errors={}, allocs=allocs, warmup=a.warmup, pair_by_alloc={})
     try:
         rec["peer_probe"] = enable_peer_access(devices)
     except Exception as error:  # noqa: BLE001
@@ -105,21 +141,35 @@ def main():
         (Path(a.out) / "micro.json").write_text(json.dumps(rec, indent=1, default=str))
         print(json.dumps(dict(status="PEER_ACCESS_UNAVAILABLE", error=repr(error))))
         return 2
-    for i, x in enumerate(devices):
-        for y in devices[i + 1:]:
-            row = {}
-            for nbytes in SIZES:
-                n = a.rounds if nbytes <= 65536 else max(200, a.rounds // 8)
-                us, err = pair_bench(x, y, nbytes, n)
-                row[str(nbytes)] = dict(one_way_us=us, barrier_error=err)
-            alpha = row["16"]["one_way_us"]
-            big = row[str(SIZES[-1])]["one_way_us"]
-            row["alpha_us"] = alpha
-            row["beta_us_per_MB"] = (big - alpha) / (SIZES[-1] / 1e6)
-            row["bandwidth_GBps_at_1MB"] = SIZES[-1] / (big * 1e-6) / 1e9
-            rec["pair"][f"{x}-{y}"] = row
-            print(json.dumps(dict(pair=f"{x}-{y}", alpha_us=round(alpha, 2), GBps_1MB=round(row["bandwidth_GBps_at_1MB"], 1))),
-                  flush=True)
+    if "nccl_symm" in allocs:
+        try:
+            from flashrnn.flashrnn2 import symm_mem
+            sess = symm_mem.session(devices)
+            rec["symm"] = dict(nccl_version=sess.nccl_version, probe=sess.probe)
+        except Exception as error:  # noqa: BLE001 - reported outcome; the uva rows still run
+            rec["errors"]["symm_init"] = repr(error)
+            allocs = [x for x in allocs if x != "nccl_symm"]
+    for alloc in allocs:
+        rec["pair_by_alloc"][alloc] = {}
+        for i, x in enumerate(devices):
+            for y in devices[i + 1:]:
+                row = {}
+                for nbytes in SIZES:
+                    n = a.rounds if nbytes <= 65536 else max(200, a.rounds // 8)
+                    if a.warmup:
+                        pair_bench(x, y, nbytes, 4, alloc, devices)
+                    us, err = pair_bench(x, y, nbytes, n, alloc, devices)
+                    row[str(nbytes)] = dict(one_way_us=us, barrier_error=err)
+                alpha = row["16"]["one_way_us"]
+                big = row[str(SIZES[-1])]["one_way_us"]
+                row["alpha_us"] = alpha
+                row["beta_us_per_MB"] = (big - alpha) / (SIZES[-1] / 1e6)
+                row["bandwidth_GBps_at_1MB"] = SIZES[-1] / (big * 1e-6) / 1e9
+                rec["pair_by_alloc"][alloc][f"{x}-{y}"] = row
+                if alloc == "uva":
+                    rec["pair"][f"{x}-{y}"] = row
+                print(json.dumps(dict(alloc=alloc, pair=f"{x}-{y}", alpha_us=round(alpha, 2),
+                                      GBps_1MB=round(row["bandwidth_GBps_at_1MB"], 1))), flush=True)
     for d in devices:
         torch.cuda.set_device(d)
         src = torch.empty((1 << 30,), device=f"cuda:{d}", dtype=torch.uint8)

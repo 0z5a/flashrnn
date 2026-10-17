@@ -11,6 +11,10 @@ in shared memory for the whole call (loaded before the step loop); 1 re-reads it
 HBM, the "stream" baselines). The h operand is read in K chunks of ``KC`` so that D up to 4096 fits. ``PROF`` times the
 step phases (compute, publish, wait) with the global timer behind block barriers, as the backward kernel does.
 
+``alloc``: "uva" (default) allocates the exchange buffer and the arrival counters with the PyTorch allocator and passes
+their unified addresses (peer access enabled); "nccl_symm" takes them from NCCL 2.32 symmetric windows (symm_mem.py:
+ncclMemAlloc, cuMem mappings, peer addresses from the LSA mapping). The kernel is the same for both.
+
 Only whole logical calls (sequence start), output modes full/hidden, LSTM/sLSTM. Not served by dispatch; a
 measurement path (docs/flashrnn2/scale-out-plan.md).
 """
@@ -297,7 +301,8 @@ def _probe_store(ADDRS, value, slot):
 
 
 def recurrence(wx, recurrent, bias, initial, cell="lstm", *, devices, slice_width=16, schedule="direct", stride=1,
-               rmode="smem", num_warps=4, output_mode="hidden", k_chunk=512, profile=False, diagnostics=None):
+               rmode="smem", num_warps=4, output_mode="hidden", k_chunk=512, profile=False, diagnostics=None,
+               alloc="uva"):
     """One logical call on ``devices`` (list of CUDA device indices). Inputs may live anywhere; each GPU gets a copy
     of Wx, R, bias and the initial state and computes its own D/P output columns. Returns the gathered hidden output
     ([B,T,H,D] or [S,B,T,H,D] for ``full``) on the first device, the FP32 final carry gathered likewise, and timing."""
@@ -309,6 +314,8 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, devices, slice_widt
         raise ValueError(f"schedule in {sorted(SCHEDULES)}")
     if rmode not in ("smem", "stream"):
         raise ValueError("rmode smem or stream")
+    if alloc not in ("uva", "nccl_symm"):
+        raise ValueError("alloc uva or nccl_symm")
     peers = len(devices)
     batch, steps, gates, heads, width = wx.shape
     if width % (peers * slice_width):
@@ -344,21 +351,36 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, devices, slice_widt
             out=torch.empty((states, batch, steps, heads, width) if output_mode == "full"
                             else (batch, steps, heads, width), device=dev, dtype=torch.float32),
             final=torch.empty((states, batch, 1, heads, width), device=dev, dtype=torch.float32),
-            xbuf=torch.zeros((slots, 2, 16, width), device=dev, dtype=wx.dtype),
-            sync=torch.zeros((slots * rounds + 8,), device=dev, dtype=torch.int32),
+            xbuf=torch.zeros((slots, 2, 16, width), device=dev, dtype=wx.dtype) if alloc == "uva" else None,
+            sync=torch.zeros((slots * rounds + 8,), device=dev, dtype=torch.int32) if alloc == "uva" else None,
             err=torch.zeros((32 + 8 * splits_per * slots if profile else 1,), device=dev, dtype=torch.int32),
         )
+    if alloc == "nccl_symm":
+        from . import symm_mem
+
+        sess = symm_mem.session(devices)
+        xbytes = slots * 2 * 16 * width * wx.element_size()
+        sbytes = (slots * rounds + 8) * 4
+        xid, sid = sess.buffer("xbuf", xbytes), sess.buffer("sync", sbytes)
+        for rank, d in enumerate(devices):
+            torch.cuda.set_device(d)
+            sess.zero(xid, rank, xbytes)
+            sess.zero(sid, rank, sbytes)
     for d in devices:
         torch.cuda.synchronize(d)
-    xaddr = [per[d]["xbuf"].data_ptr() for d in devices]
-    saddr = [per[d]["sync"].data_ptr() for d in devices]
+    if alloc == "uva":
+        xaddr = [per[d]["xbuf"].data_ptr() for d in devices]
+        saddr = [per[d]["sync"].data_ptr() for d in devices]
     events = {}
     kernel = None
     for rank, d in enumerate(devices):
         torch.cuda.set_device(d)
         p = per[d]
-        peers_t = torch.tensor(xaddr, device=f"cuda:{d}", dtype=torch.int64)
-        syncs_t = torch.tensor(saddr, device=f"cuda:{d}", dtype=torch.int64)
+        if alloc == "uva":
+            peers_t = torch.tensor(xaddr, device=f"cuda:{d}", dtype=torch.int64)
+            syncs_t = torch.tensor(saddr, device=f"cuda:{d}", dtype=torch.int64)
+        else:  # LSA addresses of the session's ranks; the kernel reads the first P entries
+            peers_t, syncs_t = sess.table(xid, rank), sess.table(sid, rank)
         p["peers_t"], p["syncs_t"] = peers_t, syncs_t
         e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
         e0.record()
@@ -384,7 +406,7 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, devices, slice_widt
         out[..., cols] = per[d]["out"][..., cols].to(first)
         final[..., cols] = per[d]["final"][..., cols].to(first)
     if diagnostics is not None:
-        diagnostics.update(ms=ms, kernel_ms=max(ms.values()), registers=kernel.n_regs, spills=kernel.n_spills,
+        diagnostics.update(alloc=alloc, ms=ms, kernel_ms=max(ms.values()), registers=kernel.n_regs, spills=kernel.n_spills,
                            shared_bytes=kernel.metadata.shared, splits_per=splits_per, slots=slots, rounds=rounds,
                            groups=groups, k_chunk=kc, chunks=nch)
         if profile:

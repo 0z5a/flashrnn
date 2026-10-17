@@ -9,9 +9,15 @@ Modes (one JSON record per call, written to --out/<mode>.json)
             of the same configuration, and the model prediction from --micro (micro.json of the same job)
   heads     many heads: forward and training step throughput against H on one GPU (R-tiled Triton at the table
             default and the measured TileLang configuration when installed), and heads partitioned over the GPUs
+  paired    exchange-buffer allocation A/B (scale-out-plan.md section 9): per config and cell, --blocks blocks of
+            --calls calls of each allocation ("uva" and "nccl_symm"), order alternating per block (ABBA); per call the
+            kernel time of the slowest GPU; outputs checked bitwise against the arm's first call
+qualify --allocs uva,nccl_symm also runs every configuration on symmetric buffers and compares it bitwise with the
+uva run; --warmup 1 runs every configuration once untimed and unchecked first (a failure there is recorded).
 Config strings: "P:D:S:schedule:rmode[:stride]" e.g. "4:2048:8:direct:smem", "1:4096:16:direct:stream".
 """
 import argparse
+import hashlib
 import json
 import math
 import time
@@ -64,13 +70,25 @@ def median(xs):
     return sorted(xs)[len(xs) // 2]
 
 
+def call(c, leaves, cell, devices, a, alloc="uva", **kw):
+    return multi_gpu.recurrence(*leaves, cell, devices=devices[:c["peers"]], slice_width=c["slice_width"],
+                                schedule=c["schedule"], stride=c["stride"], rmode=c["rmode"], num_warps=a.warps,
+                                k_chunk=a.k_chunk, alloc=alloc, **kw)
+
+
 def mode_qualify(a, devices):
-    rec = dict(mode="qualify", configs=[], started=time.time())
+    rec = dict(mode="qualify", configs=[], started=time.time(), allocs=a.allocs.split(","), warmup=a.warmup)
     for cell in ("lstm", "slstm"):
         for config in a.configs:
             c = parse(config)
             leaves = inputs(cell, a.batch, 48, 1, c["width"], 101 + c["width"], f"cuda:{devices[0]}")
             row = dict(c, cell=cell)
+            if a.warmup:
+                try:
+                    call(c, leaves, cell, devices, a)
+                    row["warmup_error"] = None
+                except Exception:  # noqa: BLE001
+                    row["warmup_error"] = traceback.format_exc()[-800:]
             try:
                 ref = None
                 if 4 * c["width"] * c["slice_width"] * 2 <= 160 * 1024 and c["width"] // c["slice_width"] <= 132:
@@ -89,18 +107,38 @@ def mode_qualify(a, devices):
                 else:
                     row["bitwise_vs_single_gpu"] = None  # the single-GPU kernel cannot hold this slice
                 # Every multi-GPU configuration must also equal the P = 1 direct run of the same kernel.
-                base, _, _ = multi_gpu.recurrence(*leaves, cell, devices=devices[:1], slice_width=c["slice_width"],
-                                                  schedule="direct", rmode=c["rmode"], num_warps=a.warps,
-                                                  k_chunk=a.k_chunk) if c["peers"] > 1 else (out, None, None)
-                row["bitwise_vs_p1"] = bool(torch.equal(out, base))
+                try:
+                    base, _, _ = multi_gpu.recurrence(*leaves, cell, devices=devices[:1], slice_width=c["slice_width"],
+                                                      schedule="direct", rmode=c["rmode"], num_warps=a.warps,
+                                                      k_chunk=a.k_chunk) if c["peers"] > 1 else (out, None, None)
+                    row["bitwise_vs_p1"] = bool(torch.equal(out, base))
+                except ValueError as error:  # the P = 1 run cannot hold this slice (more CTAs than SMs)
+                    row.update(bitwise_vs_p1=None, p1_unavailable=str(error))
+                # Cross-P / cross-schedule agreement is read from these digests by the analysis.
+                row["out_sha256"] = hashlib.sha256(out.cpu().numpy().tobytes()).hexdigest()
+                row["final_sha256"] = hashlib.sha256(final.cpu().numpy().tobytes()).hexdigest()
+                if "nccl_symm" in rec["allocs"]:
+                    sym = {}
+                    try:
+                        diag_s = {}
+                        out_s, final_s, _ = call(c, leaves, cell, devices, a, alloc="nccl_symm", diagnostics=diag_s)
+                        sym.update(kernel_ms=diag_s["kernel_ms"], bitwise_vs_uva=bool(torch.equal(out_s, out)),
+                                   carry_bitwise_vs_uva=bool(torch.equal(final_s, final)))
+                    except Exception:  # noqa: BLE001
+                        sym.update(error=traceback.format_exc()[-1500:], bitwise_vs_uva=False)
+                    row["symm"] = sym
                 row["finite"] = bool(torch.isfinite(out).all())
                 # FP64 reference on the CPU (same rounded inputs), tolerance 2e-2 of the output scale.
                 wx64, r64, b64, i64 = (x.double().cpu() for x in leaves)
                 hist, _ = reference.recurrence(wx64, r64, b64, i64, cell)
                 ref64 = hist[0].float().to(out.device)
                 row["max_rel_vs_fp64"] = ((out - ref64).abs().max() / ref64.abs().max().clamp_min(1e-30)).item()
-                row["pass_"] = (row["finite"] and row["bitwise_vs_p1"] and row["bitwise_vs_single_gpu"] is not False
-                                and row["max_rel_vs_fp64"] < 2e-2)
+                if a.allocs != "uva":  # section 9 rule: the single-GPU kernel comparison is reported, not gating
+                    row["pass_"] = (row["finite"] and row["bitwise_vs_p1"] is not False and row["max_rel_vs_fp64"] < 2e-2
+                                    and row.get("symm", {}).get("bitwise_vs_uva", True))
+                else:
+                    row["pass_"] = (row["finite"] and row["bitwise_vs_p1"] and row["bitwise_vs_single_gpu"] is not False
+                                    and row["max_rel_vs_fp64"] < 2e-2)
             except Exception:  # noqa: BLE001
                 row.update(error=traceback.format_exc()[-1500:], pass_=False)
             rec["configs"].append(row)
@@ -267,9 +305,50 @@ def mode_heads(a, devices):
     return 0
 
 
+def mode_paired(a, devices):
+    rec = dict(mode="paired", start=a.start, blocks_per_config=a.blocks, calls=a.calls, configs=[], started=time.time())
+    arms = ("uva", "nccl_symm")
+    for cell in a.cells.split(","):
+        for config in a.configs:
+            c = parse(config)
+            row = dict(c, cell=cell, blocks=[], outputs_stable={})
+            try:
+                leaves = inputs(cell, a.batch, a.steps, 1, c["width"], 707 + c["width"], f"cuda:{devices[0]}")
+                first = {}
+                for arm in arms:  # warm-up, and the reference output of each arm
+                    call(c, leaves, cell, devices, a, alloc=arm)
+                    first[arm] = call(c, leaves, cell, devices, a, alloc=arm)[0]
+                    row["outputs_stable"][arm] = True
+                row["arms_bitwise"] = bool(torch.equal(first["uva"], first["nccl_symm"]))
+                for blk in range(a.blocks):
+                    order = arms if (blk + a.start) % 2 == 0 else arms[::-1]
+                    entry = dict(order=list(order))
+                    for arm in order:
+                        ts = []
+                        for _ in range(a.calls):
+                            out, _, ms = call(c, leaves, cell, devices, a, alloc=arm)
+                            ts.append(max(ms.values()))
+                        if not torch.equal(out, first[arm]):
+                            row["outputs_stable"][arm] = False
+                        entry[f"{arm}_ms"] = sum(ts) / len(ts)
+                    row["blocks"].append(entry)
+            except Exception:  # noqa: BLE001
+                row["error"] = traceback.format_exc()[-1500:]
+            rec["configs"].append(row)
+            b = row["blocks"]
+            print(json.dumps(dict(name=c["name"], cell=cell, blocks=len(b), error=(row.get("error") or "")[-200:],
+                                  uva=round(median([x["uva_ms"] for x in b]), 4) if b else None,
+                                  symm=round(median([x["nccl_symm_ms"] for x in b]), 4) if b else None)), flush=True)
+            write(Path(a.out) / "paired.json", rec)
+    rec["finished"] = time.time()
+    rec["status"] = "DONE"
+    write(Path(a.out) / "paired.json", rec)
+    return 0
+
+
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("mode", choices=("qualify", "time", "heads"))
+    p.add_argument("mode", choices=("qualify", "time", "heads", "paired"))
     p.add_argument("--out", required=True)
     p.add_argument("--devices", default="0,1,2,3")
     p.add_argument("--configs", default="")
@@ -282,13 +361,22 @@ def main():
     p.add_argument("--micro", default="")
     p.add_argument("--widths", default="192,384,768")
     p.add_argument("--heads", default="1,4,16,64")
+    p.add_argument("--allocs", default="uva")
+    p.add_argument("--warmup", type=int, default=0)
+    p.add_argument("--blocks", type=int, default=20)
+    p.add_argument("--calls", type=int, default=3)
+    p.add_argument("--start", type=int, default=0)
     a = p.parse_args()
     a.configs = [c for c in a.configs.split(",") if c]
     torch.backends.cuda.matmul.allow_tf32 = False
     devices = [int(x) for x in a.devices.split(",")]
     if a.mode != "heads" or len(devices) > 1:
         multi_gpu.enable_peer_access(devices)
-    return {"qualify": mode_qualify, "time": mode_time, "heads": mode_heads}[a.mode](a, devices)
+    if "nccl_symm" in a.allocs or a.mode == "paired":
+        from flashrnn.flashrnn2 import symm_mem
+        symm_mem.session(devices)  # all devices: a P-GPU call uses the first P
+    return {"qualify": mode_qualify, "time": mode_time, "heads": mode_heads,
+            "paired": mode_paired}[a.mode](a, devices)
 
 
 if __name__ == "__main__":

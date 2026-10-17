@@ -250,3 +250,52 @@ parameters (parameters recovered within the injected 3% noise; all checks evalua
 5. Qualification reference where P = 1 cannot exist: FP64 plus cross-P/cross-schedule bitwise agreement.
 6. Prime P: not placeable unevenly on nodes of four with either library; a single-node P = 3 case shows the
    coprime property on hardware cheaply.
+
+## 9. Symmetric exchange buffers in the multi-GPU recurrence (pre-registration, 2026-10-17, before any run of it)
+
+**Change.** Until now only the phase B exchange skeleton ran on symmetric memory; the real multi-GPU recurrence
+(`multi_gpu.py`) allocated its exchange buffer and arrival counters with the PyTorch allocator and reached the peers
+through unified addresses after enabling peer access ("uva"). `multi_gpu.recurrence(alloc="nccl_symm")` now takes both
+from NCCL 2.32 symmetric windows (`symm_mem.cu` / `symm_mem.py`): one communicator per GPU of the process
+(`ncclCommInitAll`), `ncclMemAlloc` (cuMem-backed) on every GPU, `ncclCommWindowRegister(..., NCCL_WIN_COLL_SYMMETRIC)`
+in one group, and every peer's address read on the device from the window's LSA mapping (`ncclGetLsaPointer`). The
+kernel is unchanged; only the address tables differ. PyTorch in this environment carries NCCL 2.20.5 under the same
+soname, so 2.32.3 (the copy already staged for phase B) is opened by path with `RTLD_LOCAL | RTLD_DEEPBIND` and called
+through dlsym'd pointers; the login preflight checks that the opened library reports 2.32.3 in a process that has
+imported PyTorch. NVSHMEM is not used here (one PE per process; this path is one process). Cross-node symmetric buffers
+need a CUDA recurrence kernel with network puts (Triton cannot issue them) and are not part of this batch.
+
+**Repairs from section 8.3 that this batch addresses, and what it leaves out.**
+* Repair 2 (micro pair 0-1 slow at every size, first-configuration timeout on the same pair). Hypothesis, stated before
+  the run: the first pair compiled the ping-pong kernel for every message size inside its timed window (one Triton
+  specialisation per size; the later pairs reused them), and the first multi-GPU call compiled while its first GPU was
+  already spinning on the exchange. The micro runs twice: unchanged (`--warmup 0`, uva only), and with one untimed
+  launch per size and pair before the timed one (`--warmup 1`, uva and nccl_symm). The hypothesis is supported if pair
+  0-1 is ≥ 3× slower than the median pair at 16 B without warm-up and within 1.5× of it with warm-up. Qualification and
+  timing run every configuration once untimed first.
+* Repair 5 (no P = 1 reference where splitting is necessary). Qualification rule for this batch: finite, FP64 within
+  2e-2 relative (as before), bitwise equal to the P = 1 run where that run exists, the output digest equal across every
+  P and schedule of the same (cell, D, S) (cross-P agreement, the reference where P = 1 cannot run), and the symmetric
+  run bitwise equal to the uva run. The single-GPU R-tiled comparison is reported, not gating (it was false everywhere
+  in phase A: a different MMA accumulation order, not a defect of the exchange).
+* Repair 6 (prime P): D = 1536, S = 8 at P = 3 (direct with strides 1 and 2, ring) on one node.
+* Left out: the D = 4096 single-GPU HBM-bound stream baseline (repair 1), the sLSTM stream bug (repair 3; this batch
+  runs resident slices only), many heads (repair 4), cross-node runs, and the cost-model checks of phase A.
+
+**Runs (batch "symm", one node, four H100):**
+* Preflight: topology, peer-access probe (gates the batch), and, reported: NCCL versions in the process, multicast
+  support per GPU (`CU_DEVICE_ATTRIBUTE_MULTICAST_SUPPORTED`; the full-mesh NVLink nodes are expected to have none, so
+  nothing here depends on NVLS), the symmetric session and its peer-table probe. A symmetric-session failure is a
+  reported outcome: the uva rows of every later task still run.
+* Micro (two runs, above): one-way latency and bandwidth per GPU pair, 16 B to 1 MiB.
+* **S1 qualification**: design C (resident slices) LSTM/sLSTM, T = 48, B = 16: D = 1024, S = 16 at P ∈ {2, 4}
+  (direct, ring, recursive doubling; P = 4 also stride 3); D = 2048, S = 8 at P ∈ {2, 4} (same set); D = 1536, S = 8 at
+  P = 3 (direct strides 1 and 2, ring); 17 configurations × 2 cells, rule above.
+* **S2 paired timing**: the same 17 configurations × 2 cells, B = 16, T = 256: per process start 20 blocks of 3 calls
+  per allocation, order alternating per block, kernel time of the slowest GPU per call, three process starts; ratio
+  uva / nccl_symm with the 95% hierarchical bootstrap of the earlier batches (10,000 draws, starts then blocks). Read
+  per configuration: symmetric faster if the lower bound is ≥ 1.02, uva faster if the upper bound is ≤ 0.98, otherwise
+  no difference resolved. Expectation stated now: no difference resolved for most configurations — both allocations
+  map the same NVLink peer memory, and the exchange per step is a few KB; a difference would point to the mapping
+  (cuMem granularity, TLB) or to the flag placement, and would be reported as such. Starts whose outputs were not
+  bitwise stable are excluded and listed.
