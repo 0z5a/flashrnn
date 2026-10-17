@@ -382,3 +382,59 @@ PyTorch here ships none.
   outputs bitwise equal to the one-process reference (forward: the same configuration on uva buffers; backward: the
   single-GPU kernel), no wait timeout. Kernel times per call (slowest PE, 9 calls) are reported next to the reference's
   median, not paired (different processes).
+
+## 12. Results of the "mg" batch (2026-10-18)
+
+Evidence: `scale-out-evidence/mg-analysis.json` (`tools/scale_mg_analyze.py`), archive verified by SHA-256.
+
+**G1, multi-GPU backward: 42/42.** dG and d_initial are bitwise equal to the single-GPU kernel with the same batch
+tile and register split. This holds for D ∈ {1024, 1536, 2048}, P ∈ {2, 4} (and P = 3 at D = 1536), B = 16 / 64,
+BM = 16 / 64, LSTM and sLSTM, on uva and on NCCL symmetric buffers alike.
+
+**G2, race verification: 4/4.**
+* The correct kernel counts zero violations in every run.
+* No grid barrier: flagged in 17-21 of 21 runs.
+* No cross-GPU wait: flagged in 21/21 runs.
+* Single buffer: flagged in 21/21 runs.
+* No variant changed the outputs silently.
+
+**G3, multi-GPU against one GPU (backward kernel time, paired, 3 starts):**
+
+| case | one GPU (1-D, BM = 64) / multi-GPU (BM = 16) | uva / symmetric |
+| --- | --- | --- |
+| LSTM D = 1536, P = 4, B = 64 | 2.30 [2.29, 2.31] (15.0 → 6.5 ms) | 0.98, not resolved |
+| sLSTM D = 1536, P = 4, B = 64 | 2.34 [2.33, 2.35] | 0.99, not resolved |
+| LSTM D = 2048, P = 4, B = 64 | 2.42 [2.41, 2.42] (17.8 → 7.4 ms) | 0.99, not resolved |
+| sLSTM D = 2048, P = 4, B = 64 | 2.40 [2.40, 2.41] | 0.99, not resolved |
+| LSTM D = 2048, P = 2, B = 64 | 1.27 [1.26, 1.27] | 1.00, not resolved |
+| sLSTM D = 2048, P = 2, B = 64 | 1.24 [1.24, 1.25] | 1.00, not resolved |
+| LSTM D = 2048, P = 4, B = 16 | 0.99 [0.94, 1.08], not resolved | 0.99, not resolved |
+
+The prediction holds: faster at B = 64, where the split puts four batch tiles on the GPUs at once, and no gain at
+B = 16. Context (max-width.md section 21, single GPU, same shapes): the 2-D split backward takes 6.0 ms at D = 1536 and
+7.9 ms at D = 2048. One GPU with the 2-D kernel therefore matches four GPUs with the multi-GPU 1-D kernel. A
+multi-GPU version of the 2-D kernel is the obvious combination; it is not built. Symmetric buffers make no difference.
+
+**F1, repaired forward: 0/34; F2: 26 rows with data, 8 without.** The repair of section 10 did not fix the forward:
+* Ring and doubling outputs are still wrong at P = 2 and P = 3 and at D = 1024, P = 4.
+* Some wrong outputs repeat to the last digit across runs and batches. For example, 4:1024 ring LSTM has an FP64 error
+  of 0.10484 in all three runs here and in section 9.
+* The direct schedule at D = 1024 "timed out" on rank 0 again. Those calls returned within seconds, so the spin limit
+  (2^26 polls) was never reached. The cause is something else.
+* Every configuration at P = 4, D = 2048 passes, as does every P = 3 direct configuration.
+
+Two findings (post hoc):
+* *Read-back of the own block (a confirmed defect).* In round 0, ring and doubling forward the GPU's own block. Each CTA
+  stores it into the local buffer, crosses a block barrier, and reads it back with L2-only loads (`.cg`). A block
+  barrier orders memory only at CTA scope, which the L1 can satisfy. So the read-back can see the L2 copy before the
+  store reaches it.
+* *The "timeouts" without a spin-out (not explained).* They happened only in the qualification process. There, D = 1024
+  is the only width where the single-GPU R-tiled reference runs just before the multi-GPU call. They never happened in
+  the paired runs (T = 256, no such reference).
+The multi-GPU forward is not qualified. Its timings (F2; phase A's ring/doubling) stay superseded.
+
+**N1, NVSHMEM: 0/18, a build defect.** `nvshmemx_init_attr` is inline in the NVSHMEM headers and calls
+`nvshmemi_init_thread` from `libnvshmem_device.a`, which the helper did not link. Every worker failed at `dlopen`. The
+login gate compiled the helper but never loaded it. The repaired build is relocatable device code, linked against
+`libnvshmem_device.a` with CUDA 13.2 (the toolkit that built that library; 12.8 rejects its ABI), and it now passes a
+login-node `dlopen` check.
