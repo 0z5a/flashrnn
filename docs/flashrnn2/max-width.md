@@ -469,3 +469,66 @@ would help); (iii) non-kernel phases > 30% of the step → the FP32 passes aroun
 any cluster gain: the ratio of L2 read sectors (plain / cluster; about 8 for the exchange part if the volume cut acts),
 sectors per request, and the stall mix (long scoreboard against barrier / membar) of both kernels at the same shape. A
 gain with an L2 read-sector ratio near 1 would contradict the volume explanation.
+
+## 19. Results of the DSMEM batch (job "dsmem", 2026-10-17)
+
+Evidence: `max-width-evidence/dsmem-analysis.json` and the archive (SHA-256 verified).
+
+**C0, feasibility.** The GPU holds at most 15 co-resident clusters of 8 CTAs (`cudaOccupancyMaxActiveClusters`, at one
+CTA per SM), i.e. 120 CTAs. D ≤ 1792 needs at most 14 clusters per group and runs (cooperative + cluster launch
+accepted; output bitwise equal to the plain kernel at every D ∈ {1024, 1280, 1536, 1792}, BM ∈ {16, 64}). D = 2048
+needs 16 clusters and does not fit: every D = 2048 cluster case (qualification, timing, race, profile) reports "no
+group of clusters fits on the GPU", the outcome pre-registered as reportable.
+
+**R-dsmem**: 2/2 runnable tasks pass (D = 1536, LSTM and sLSTM, BM = 64): the correct kernel 0 violations in 21/21
+runs, bitwise equal to the uninstrumented kernel and to the plain kernel; all four broken variants (single exchange
+buffer, no grid barrier, single stage buffer, no cluster barrier between rounds) flagged in 21/21 runs, never silently.
+The four D = 2048 tasks did not run (C0).
+
+**W1-dsmem**: 16/16 at D ∈ {1536, 1792}, 0/8 at D = 2048 (C0). Plain BM = 64 re-qualification 8/8. H > 1 follow-up
+(heads.md section 8.1): the R-tiled path at D = 768 with the corrected default 12/12.
+
+**W6-dsmem 0/12, W4-dsmem 0/12** (8 measured, D = 2048 not run). Training step, B = 64, T = 256:
+
+| cell | dtype | D | plain / cluster | cuda / cluster |
+| --- | --- | --- | --- | --- |
+| lstm | floa | 1536 | 0.71 [0.71, 0.71] | 0.38 [0.37, 0.38] |
+| lstm | floa | 1792 | 0.75 [0.75, 0.75] | 0.37 [0.36, 0.38] |
+| lstm | bflo | 1536 | 0.69 [0.69, 0.70] | 0.36 [0.35, 0.37] |
+| lstm | bflo | 1792 | 0.76 [0.76, 0.76] | 0.36 [0.36, 0.36] |
+| slstm | floa | 1536 | 0.69 [0.69, 0.70] | 0.40 [0.40, 0.40] |
+| slstm | floa | 1792 | 0.74 [0.74, 0.74] | 0.41 [0.41, 0.42] |
+| slstm | bflo | 1536 | 0.70 [0.70, 0.70] | 0.39 [0.38, 0.40] |
+| slstm | bflo | 1792 | 0.75 [0.74, 0.75] | 0.38 [0.38, 0.38] |
+
+The cluster exchange makes the training step 1.3-1.45x slower than the plain kernel; the slowdown pre-registered as
+a legitimate outcome happened.
+
+**Profile.** Nsight Compute did not run: the command named a section that this Nsight Compute version does not have
+(`LaunchStatistics`), a harness error of this batch, so the reading rule's L2-sector and stall counters are missing.
+What was measured (CUDA events, in-kernel phase timers, Nsight Systems):
+
+| D = 1536, LSTM FP16, B = 64, per call | plain | cluster | FlashRNN1 `cuda` |
+| --- | --- | --- | --- |
+| training step | 26.1 ms | 37.0 ms | 13.4 ms |
+| backward recurrent kernel(s) | 16.6 ms | 27.6 ms | ~5 ms (cuBLAS dh = dG·Rᵀ per step) + ~0.9 ms pointwise |
+| per step in the kernel: reduction / pointwise + publish / grid barrier | 47.5 / 12.1 / 4.8 µs | 89.0 / 11.8 / 4.0 µs | — |
+| training forward / preactivation recompute / dR + dbias | 3.3 / 2.7 / 1.7 ms | same | — |
+
+At D = 2048 (plain): step 37.2 ms against `cuda`'s 26.4 ms; kernel 21.2 ms, reduction 64 µs of a 81 µs step.
+
+Reading (post hoc; the pre-registered counters are missing, so the rule's cases (i) and (ii) cannot be decided):
+* The reduction phase is three quarters of the plain kernel's step, and the cluster version doubles it, while
+  pointwise and barrier stay the same. So the cluster cost lies in the reduction: 12 cluster barriers per step and
+  32-bit remote shared loads. Cutting the L2 reads eightfold did not make the reduction faster, so L2 bandwidth was not
+  its limit at this shape. This is the opposite of what case (i) needs.
+* Non-kernel phases (forward, recompute, weight gradients, copies) are about 30% of the plain step, at the border of
+  case (iii).
+* Against `cuda` the gap is the kernel itself. cuBLAS reads R from L2 once per step (4·D² · 2 B = 19 MB at D = 1536,
+  about 12 µs per step). The resident-R kernel reads the whole exchanged dG in every CTA (96 · 64 · 6144 · 2 B = 75 MB
+  per step) through 32-bit fragment loads, at an effective 1.6 TB/s. Neither shared staging nor a smaller operand
+  volume per CTA helped while every CTA still reduces the full K = 4D. What would change the volume is a 2-D split of R
+  (CTA (i, j) holds a [4D/q × D/p] block, reads only its dG slice, writes a partial dh reduced over q CTAs). For
+  p · q = 96 that moves about 7x fewer bytes per step, at the price of a second barrier. It is not built.
+
+The cluster variant stays opt-in (`cluster=8`) and is not a default.

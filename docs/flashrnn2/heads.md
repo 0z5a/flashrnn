@@ -242,3 +242,23 @@ faster at H ≥ 256 (at H = 16, where the copies were small, the intervals inclu
 from 0.47-0.94x (section 6) to 0.74-1.07x, and sLSTM at D = 128, H ≥ 256 is now faster; LSTM at D = 64 stays the
 furthest behind (0.74-0.79x). Where the remaining time goes is measured in the next diagnostic run (step breakdown and
 Nsight Systems with the new default; max-width.md section 18 batch). Evidence: `heads-evidence/heads-v4-analysis.json`.
+
+### 8.2 Where the remaining H > 1 time goes (DSMEM batch, report only)
+
+LSTM FP16, B = 16, new default (fused recompute, strided-bmm dR), per training step:
+
+| D | H | FlashRNN2 step | FlashRNN1 step | forward | preactivation | backward kernel | dR / dbias |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 64 | 256 | 13.4 ms | 9.9 ms | 1.4 | 0.3 | 5.1 | 2.4 |
+| 128 | 1024 (T 128) | 55.5 | 51.6 | 5.8 | 1.2 | 21.8 | 9.9 |
+
+Nsight Systems at D = 64, H = 1024, per call:
+
+| | backward recurrent kernel | forward recurrent kernel | other |
+| --- | --- | --- | --- |
+| FlashRNN2 | 10.3 ms | 1.8 ms | 5.4 ms of copies, 2.8 ms FP32 dR GEMMs, 1.4 ms dbias reduction |
+| FlashRNN1 | 9.8 ms | 5.7 ms | 1 ms FP16 dR GEMM |
+
+The recurrent kernels are at parity or faster. The remaining loss is the FP32 dR GEMMs on the FP32 dG and the dtype
+copies around the kernels. The next change is an FP16-operand dR with FP32 accumulation (a precision change, so it
+needs its own qualification) and dropping the copies; it is not done yet.
