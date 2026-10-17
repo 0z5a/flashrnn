@@ -51,19 +51,20 @@ def same(a, b):
 
 def inputs(case, seed):
     cell, dtype, b, t, d = (case[k] for k in ("cell", "dtype", "batch", "steps", "width"))
+    h = case.get("heads", 1)  # every head draws its own R and bias; H = 1 keeps the earlier random stream
     g = torch.Generator().manual_seed(seed)
     states = 4 if cell == "slstm" else 2
-    wx = torch.randn(b, t, 4, 1, d, generator=g) * 0.5
-    r = torch.randn(4, 1, d, d, generator=g) * (0.5 / d ** 0.5)
-    bias = torch.randn(4, 1, d, generator=g) * 0.1
-    init = torch.randn(states, b, 1, 1, d, generator=g) * 0.2
+    wx = torch.randn(b, t, 4, h, d, generator=g) * 0.5
+    r = torch.randn(4, h, d, d, generator=g) * (0.5 / d ** 0.5)
+    bias = torch.randn(4, h, d, generator=g) * 0.1
+    init = torch.randn(states, b, 1, h, d, generator=g) * 0.2
     if cell == "slstm":
         if case["init"] == "zero":
             init[1:] = 0
         else:
             init[2] = init[2].abs() + 1
-    cot_h = torch.randn(b, t, 1, d, generator=g)
-    cot_f = torch.randn(states, b, 1, 1, d, generator=g)
+    cot_h = torch.randn(b, t, h, d, generator=g)
+    cot_f = torch.randn(states, b, 1, h, d, generator=g)
     if cell == "slstm":
         cot_f[3] = 0
     leaves = [x.to(DT[dtype]).cuda() for x in (wx, r, bias, init)]
