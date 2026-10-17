@@ -157,3 +157,37 @@ sLSTM BF16 at D = 128, H ∈ {256, 1024}; B = 16, T = 256, 128 at H = 1024): the
 history), and for four backward variants (default; TF32 GEMMs; `fast` + TF32; `fast` + TF32 + preactivations fused
 into the kernel) the step time and the backward's phases (preactivation recompute, kernel, dR/dbias GEMMs), next to
 FlashRNN1's step; Nsight Systems kernel timelines of FlashRNN2 and FlashRNN1 at D = 64, H = 1024 and D = 128, H = 256.
+
+### 7.1 Profiling results (job "heads prof", 2026-10-17)
+
+Training step, LSTM FP16, B = 16 (breakdown in `heads-evidence/hprof-breakdown.json`):
+
+| D | H | FlashRNN2 step | FlashRNN1 step | forward | preactivation | backward kernel | dR / dbias | fused recompute: step |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 64 | 16 | 3.1 ms | 2.7 ms | 0.9 | 0.43 | 1.16 | 0.33 | 2.9 |
+| 64 | 256 | 21.2 | 10.0 | 1.4 | 6.5 | 4.4 | 4.8 | 15.7 |
+| 64 | 1024 (T 128) | 41.7 | 19.5 | 2.1 | 13.0 | 8.9 | 9.1 | 30.6 |
+| 128 | 256 | 43.5 | 25.3 | 3.0 | 13.3 | 9.7 | 9.3 | 32.4 |
+| 128 | 1024 (T 128) | 93.2 | 51.8 | 5.8 | 26.8 | 18.8 | 24.8 | 70.5 |
+
+TF32 changes nothing (the H > 1 GEMMs are memory-bound). Nsight Systems at D = 64, H = 1024, per call: FlashRNN2's
+recurrent kernels take 8.9 ms (backward) + 1.8 ms (forward) against FlashRNN1's 9.9 + 5.8 ms, but FlashRNN2 spends about
+25 ms in PyTorch elementwise / copy kernels (the einsum operands and outputs permuted to and from [B, T, 4, H, D] in
+FP32, the preactivation sum, dtype casts) against FlashRNN1's about 6 ms, plus 3.8 ms of FP32 GEMMs against 1 ms of FP16.
+The cost is outside the kernels.
+
+## 8. H > 1 training without the FP32 preactivation tensor (pre-registration, 2026-10-17, before any run of it)
+
+Changes: (1) for H > 1 the training path defaults to the fused kernel variant (`fast` and `fuse_pre = 2`: the gate
+preactivations are recomputed inside the backward kernel, qualified at H = 1 in earlier rounds) — no FP32
+[B, T, 4, H, D] preactivation tensor and none of its permuted copies; (2) dR for H > 1 is one strided batched GEMM per
+gate on views of dG and h (`weight_gradients(method="bmm")`, no permuted copy of dG; on the CPU equal to the einsum
+path bitwise and within 1e-7 of FP64). The earlier path stays selectable (`legacy_heads`, `wgrad="einsum"`).
+
+Runs (batch "heads v3"):
+* **H1-v3**: the training part of section 2's qualification with the new defaults passed explicitly to the H-head and
+  the H = 1 runs (so the per-head bitwise comparison compares the same kernel variant), on the single-CTA and Triton
+  R-tiled paths at H ∈ {2, 3, 16} (training is not served by TileLang at H > 1).
+* **H3-train-v3**: training step at the claim shapes of section 3 (D ∈ {64, 128} × H ∈ {16, 256, 1024} × LSTM/sLSTM ×
+  FP16/BF16) against FlashRNN1, and **H6** against the previous H > 1 path (unfused, einsum dR); protocol and rule of
+  section 4.

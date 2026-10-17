@@ -87,7 +87,7 @@ def _lib(width, krw, slstm, bf16, verify=0, bm=16):
 
 
 def backward(wx, recurrent, bias, initial, history, d_history, d_final, cell, *, reg_rows_per_warp=None, tf32=False,
-             diagnostics=None, batch_rows=None, _verify=None):
+             diagnostics=None, batch_rows=None, wgrad="bmm", _verify=None):
     """Returns (dg FP32 [B,T,4,H,D], dR, dbias, d_initial FP32); d_history / d_final as in triton_rtiled_bw.
 
     _verify (race verification only, never served): see verify_bits; the violation counters are written back into
@@ -126,7 +126,7 @@ def backward(wx, recurrent, bias, initial, history, d_history, d_final, cell, *,
     if _verify is not None:
         counts = err.tolist()
         _verify.update(after_read=counts[1], after_mma=counts[2])
-    d_recurrent, d_bias = weight_gradients(dg, h_prev, tf32)
+    d_recurrent, d_bias = weight_gradients(dg, h_prev, tf32, wgrad)
     if diagnostics is not None:
         diagnostics.update(reg_rows_per_warp=krw, batch_rows=bm, shared_bytes=lib.frnn_hybrid_bw_smem(), ctas=k * resident,
                            groups=groups, resident=resident, slots=slots)

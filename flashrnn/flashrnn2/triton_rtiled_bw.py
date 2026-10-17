@@ -609,8 +609,11 @@ def preactivations(wx, recurrent, bias, initial, history, tf32=False):
     return pre, h_prev
 
 
-def weight_gradients(dg, h_prev, tf32=False):
-    """dR[g,n,o,p] = sum_{b,t} dG[b,t,g,n,o] round(h_{t-1})[b,t,n,p] and dbias, FP32, no atomics."""
+def weight_gradients(dg, h_prev, tf32=False, method="bmm"):
+    """dR[g,n,o,p] = sum_{b,t} dG[b,t,g,n,o] round(h_{t-1})[b,t,n,p] and dbias, FP32, no atomics.
+
+    H > 1: method "bmm" (default) runs one strided batched GEMM per gate on views of dG and h (batch = head, no
+    permuted copy of dG); "einsum" is the earlier path (permutes dG into a contiguous copy first)."""
     batch, steps, gates, heads, width = dg.shape
     previous = torch.backends.cuda.matmul.allow_tf32
     torch.backends.cuda.matmul.allow_tf32 = tf32  # TF32 rounds the FP32 dG operand
@@ -619,8 +622,16 @@ def weight_gradients(dg, h_prev, tf32=False):
             flat = dg.view(batch * steps, gates * width)
             d_recurrent = (flat.t() @ h_prev.reshape(batch * steps, width).float()).view(gates, 1, width, width)
             d_bias = flat.sum(dim=0).view(gates, 1, width)
-        else:
+        elif method == "einsum":
             d_recurrent = torch.einsum("btgno,btnp->gnop", dg, h_prev.float())
+            d_bias = dg.sum(dim=(0, 1))
+        else:
+            bt = batch * steps
+            hp = h_prev.float().view(bt, heads, width).transpose(0, 1)  # [H, BT, D]
+            dgv = dg.view(bt, gates, heads, width)
+            d_recurrent = torch.empty((gates, heads, width, width), device=dg.device, dtype=torch.float32)
+            for g in range(gates):
+                torch.bmm(dgv[:, g].transpose(0, 1).transpose(1, 2), hp, out=d_recurrent[g])  # [H,D,BT] x [H,BT,D]
             d_bias = dg.sum(dim=(0, 1))
     finally:
         torch.backends.cuda.matmul.allow_tf32 = previous
@@ -646,6 +657,7 @@ def backward(
     _verify: dict[str, object] | None = None,
     fast: bool = False,
     fuse_pre: bool | int = False,
+    wgrad: str = "bmm",
     split_gates: bool = False,
     profile_steps: bool = False,
     history_grad_components: tuple[bool, ...] | None = None,
@@ -753,7 +765,7 @@ def backward(
         _verify.update(barrier_error=counts[0], after_barrier=counts[1], after_mma=counts[2])
     if events:
         events[2].record()
-    d_recurrent, d_bias = weight_gradients(dg, h_prev, tf32)
+    d_recurrent, d_bias = weight_gradients(dg, h_prev, tf32, wgrad)
     if events:
         events[3].record()
         torch.cuda.synchronize()
