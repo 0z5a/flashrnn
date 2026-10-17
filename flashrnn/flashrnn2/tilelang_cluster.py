@@ -564,7 +564,7 @@ def hybrid_smem(width, reg_k, slice_width=16, bm=16, threads=128):
     return 4 * slice_width * (width - reg_k) * 2 + width * bm * 2 + (threads // 128) * 4 * slice_width * bm * 4
 
 
-HYBRID_SLICE, HYBRID_REG_K_STEP, HYBRID_REG_K_MAX = 16, 64, 768  # max: register rows per warpgroup
+HYBRID_SLICE, HYBRID_THREADS, HYBRID_REG_K_STEP, HYBRID_REG_K_MAX = 16, 128, 64, 768  # max: rows per warpgroup
 
 
 def supported_hybrid(width, reg_k, sms=132, bm=16, threads=128):

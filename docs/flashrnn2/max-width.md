@@ -257,3 +257,17 @@ Runs (batch "bm64"):
   section 3: **W6** the BM = 64 kernel against the previous FlashRNN2 configuration at the same D (TileLang grid BM = 16
   at D ≤ 1280, register residency BM = 16 above); **W4-bm64** against FlashRNN1 `cuda`; **W3-bm64** against `cuda_fused`.
   Ratio = other time / BM = 64 time; a check holds for a shape when the lower 95% bound is ≥ 1.
+
+## 11. First training run (job "bw 2048", 2026-10-17) and reruns
+
+W1-train as pre-registered: **FAIL**, 8/16 on the large-D path (control: Triton backward at D = 1024, 4/4). Every
+D = 1536 and D = 1792 case died at kernel trace with `NameError: HYBRID_THREADS` — the two-warpgroup change had removed
+a constant the one-warpgroup forward still used (a code defect of this session, not a numerical failure). The cases
+that ran pass: the CUDA backward at D = 1024 (forced) has the same FP64 gradient error as the Triton backward on the
+same inputs (FP16 rel. 3.0e-4 / 3.8e-4 for d_wx / dR, BF16 2.4e-3 / 2.7e-3), and the full training step at D = 2048
+passes in all four (cell, dtype) cases (FP16 3.0e-4, BF16 2.4e-3). Because the path did not qualify, no paired timing
+ran. The B = 64 batch (section 10) carried the same defect in its comparison arm and was cancelled before it started.
+
+Fix: the constant restored; and every batch now runs `tools/tl_trace_check.py` on the login node, which traces and
+compiles every TileLang kernel of the plan (both FlashRNN2 arms, forward and training modes), and the seal requires it
+to pass. Both batches are rerun unchanged otherwise ("bw 2048 v2", "bm64 v2").
