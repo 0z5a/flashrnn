@@ -123,6 +123,11 @@ class _Recurrence(torch.autograd.Function):
             d_final += d_carry.float()
         options = dict(ctx.backward_options)
         backend = options.pop("backend", None)
+        if backend is None and wx.shape[-1] > HYBRID_BACKWARD_ABOVE and wx.shape[0] > 32:
+            from . import hybrid_bw2d
+
+            if hybrid_bw2d.supported(wx.shape[-1]):  # B > 32 at D = 1536 / 2048: max-width.md section 21
+                backend = "hybrid2d"
         if backend == "hybrid2d":
             # R split over column blocks and K blocks (max-width.md section 20); opt-in.
             from . import hybrid_bw2d

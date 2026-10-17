@@ -572,3 +572,77 @@ barrier per step (the 1-D kernel's barrier phase was 4-5 µs per step).
   D ∈ {1536, 2048}, LSTM FP16 and sLSTM BF16; Nsight Systems of the 2-D step at D ∈ {1536, 2048}; Nsight Compute of the
   first 2-D and 1-D backward launch at D ∈ {1536, 2048}, T = 32 (sections checked against `ncu --list-sections` on
   the login node before sealing).
+
+## 21. Results of the 2-D split backward (job "bw2d", 2026-10-18)
+
+Evidence: `max-width-evidence/bw2d-analysis.json` and the archive (SHA-256 verified).
+
+**R-2d**: 5/5 tasks pass (D ∈ {1536, 2048} × LSTM/sLSTM at BM = 64, B = 100; D = 2048 LSTM at BM = 16, B = 40). The
+correct kernel counts zero violations in 21/21 runs per task and its outputs are bitwise equal to the uninstrumented
+kernel. Both broken variants are flagged in 21/21 runs, never silently: without B1 the step stamps go stale, and
+without B2 the staged operands do not match the stored dG. Difference to the 1-D kernel: dG at most 7.1e-6 relative
+to its largest value, d_initial at most 4.8e-5.
+
+**W1-2d**: 24/24 (D ∈ {1024, 1536, 2048}, B ∈ {64, 40}, LSTM/sLSTM, FP16/BF16); 1-D canary 4/4.
+
+**W6-2d** (1-D / 2-D) holds 12/12, **W4-2d** (`cuda` / 2-D) 7/12. Training step, B = 64, T = 256:
+
+| cell | dtype | D | vs 1-D backward | vs cuda |
+| --- | --- | --- | --- | --- |
+| lstm | bflo | 1024 | 1.28 [1.28, 1.28] | 1.02 [1.01, 1.03] |
+| lstm | bflo | 1536 | 1.58 [1.58, 1.58] | 0.84 [0.84, 0.85] (no) |
+| lstm | bflo | 2048 | 1.42 [1.41, 1.42] | 1.03 [1.02, 1.04] |
+| lstm | floa | 1024 | 1.28 [1.28, 1.28] | 1.04 [1.02, 1.05] |
+| lstm | floa | 1536 | 1.59 [1.59, 1.59] | 0.89 [0.89, 0.90] (no) |
+| lstm | floa | 2048 | 1.42 [1.42, 1.43] | 1.06 [1.05, 1.07] |
+| slstm | bflo | 1024 | 1.39 [1.38, 1.39] | 1.07 [1.06, 1.08] |
+| slstm | bflo | 1536 | 1.61 [1.45, 1.68] | 0.95 [0.89, 0.99] (no) |
+| slstm | bflo | 2048 | 1.50 [1.50, 1.50] | 1.15 [1.14, 1.16] |
+| slstm | floa | 1024 | 1.39 [1.38, 1.39] | 1.10 [0.96, 1.17] (no) |
+| slstm | floa | 1536 | 1.67 [1.67, 1.67] | 0.99 [0.97, 1.01] (no) |
+| slstm | floa | 2048 | 1.51 [1.50, 1.51] | 1.16 [1.15, 1.17] |
+
+All rows are inside the pre-registered bands: 1.28-1.67x against the 1-D kernel, 0.84-1.16x against `cuda`. The B = 64
+training step now beats FlashRNN1's alternating backend at D = 1024 and D = 2048. At D = 1536 it is still 0.84-0.99x;
+the section 17 rows had been 0.47-0.71x.
+
+**Profile.**
+
+| per call, B = 64, LSTM FP16 | D = 1536 1-D | D = 1536 2-D | D = 2048 1-D | D = 2048 2-D |
+| --- | --- | --- | --- | --- |
+| training step | 24.2 ms | 15.2 ms | 33.9 ms | 23.9 ms |
+| backward kernel | 14.8 ms | 6.0 ms | 17.8 ms | 7.9 ms |
+| forward / recompute / dR + dbias | 3.3 / 2.7 / 1.7 | same | 7.2 / 3.9 / 2.7 | same |
+
+In-kernel phases of the 2-D kernel, per step (2-D numbers in µs; 1-D shown as its reduction + pointwise/publish +
+barrier):
+* D = 1536: pointwise 9.6, B2 1.7, GEMM 7.7, B1 2.3, partial sum 1.8. The 1-D kernel spent 47.3 + 6.0 + 4.1.
+* D = 2048: pointwise 12.5, B2 2.1, GEMM 11.5, B1 2.3, partial sum 1.4. The 1-D kernel spent 57.7 + 6.3 + 4.6.
+
+Nsight Compute (first backward launch, T = 32, LSTM FP16, B = 64):
+
+| | 1-D D = 1536 | 2-D D = 1536 | 1-D D = 2048 | 2-D D = 2048 |
+| --- | --- | --- | --- | --- |
+| duration | 1.89 ms | 0.76 ms | 2.27 ms | 0.98 ms |
+| L2 read sectors / requests | 119 M / 117 M | 20.0 M / 11.2 M | 152 M / 146 M | 22.1 M / 9.2 M |
+| L2 throughput (% of peak) | 59 | 33 | 61 | 28 |
+| SM throughput (% of peak) | 5.3 | 10.8 | 7.5 | 11.1 |
+
+Reading against the rule of section 18, now that the counters exist:
+* The 1-D kernel issues about one L2 sector per request. Its 32-bit fragment loads take 8 rows × 4 bytes per warp
+  instruction.
+* At 59-61% of L2 peak it is bound by the L2 request rate, not by bytes. That is case (ii): load width and request
+  count.
+* The 2-D kernel cuts L2 sectors 6-7x and requests 10-16x, the 128-bit staging plus the smaller volume. That matches
+  the 4-5x byte estimate of section 20 plus the staging.
+* What remains in the 2-D step is the pointwise phase (FP32 history and preactivation reads) and the GEMM. The two
+  barriers cost 4-4.5 µs per step together, about what the single 1-D barrier phase cost.
+
+Also observed: in one profile sweep (`s-prof-lstm-floa-d2048`) FlashRNN1 `cuda` took 169 ms for one call against
+about 25 ms elsewhere. The paired claim rows at that shape are unaffected (3 starts × 20 blocks). It is reported, not
+explained.
+
+**Default (after the run).** For B > 32 at D ∈ {1536, 2048}, the training backward now uses the 2-D kernel when no
+backend is named (`training.py`). D = 1792 keeps the 1-D kernel. B ≤ 32 keeps the 1-D kernel, untimed for the 2-D
+one. D ≤ 1280 keeps the Triton backward; the D = 1024 rows above compare against the 1-D CUDA kernel, not against
+that default.
