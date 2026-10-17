@@ -515,3 +515,46 @@ With the section 14 repairs:
 
 Prediction: F4, F5 and N2 pass in full. A failure of any ring/doubling configuration means the per-GPU barrier is
 still not enough. In that case ring and doubling are withdrawn and only the direct schedule is reported.
+
+## 16. Results of batch "mg3" (2026-10-18)
+
+Evidence: `scale-out-evidence/mg3/`, archive verified by SHA-256. The section 15 prediction holds in full.
+
+**F4: 510/510 calls clean.** 17 configurations × 2 cells × 15 calls in the three sequences, uva buffers, no NCCL
+communicator. No exchange error, FP64 error ≤ 6e-5, and one output digest per (cell, D, S) across every P, schedule and
+call. That includes ring and recursive doubling at P = 2 / 3 / 4 and calls right after the single-GPU reference.
+
+**F5: 34/34** by the section 9 rule:
+* uva and symmetric runs bitwise equal;
+* one digest per (cell, D, S) across P and schedules;
+* bitwise equal to the P = 1 run wherever that run exists;
+* FP64 within budget.
+
+With the reference now on the right GPU, the comparison with the single-GPU R-tiled kernel is still false at D = 1024
+(14/14), so the section 14 guess that it explained phase A's "false everywhere" is withdrawn. The two kernels
+accumulate the K chunks in different orders, as section 9 said.
+
+**N2: 18/18.** NVSHMEM, one process per GPU, P = 2 / 3 / 4: every forward configuration is bitwise equal to the
+one-process uva run, every multi-GPU backward bitwise equal to the single-GPU kernel.
+
+Kernel times (report only; NVSHMEM's slowest PE against the one-process run, not paired):
+
+| case | NVSHMEM | reference |
+| --- | --- | --- |
+| forward 2:1024 direct / ring | 0.67 / 0.67 ms | 0.72 / 0.74 ms (uva, one process) |
+| forward 4:1024 direct / ring / doubling | 0.81 / 0.94 / 0.80 ms | 0.95 / 1.08 / 0.94 ms |
+| forward 4:2048 direct / ring / doubling | 0.98 / 1.14 / 0.97 ms | 1.15 / 1.32 / 1.13 ms |
+| forward 3:1536 direct / ring | 10.3 / 10.3 ms | 10.1 / 10.1 ms |
+| backward D = 2048, B = 64, P = 4 (T = 32) | 0.98 ms | 3.03 ms (single GPU, 1-D, BM = 16) |
+| backward D = 1024, B = 16, P = 4 | 0.45 ms | 0.35 ms (single GPU) |
+
+The forward times are 10-15% lower under NVSHMEM than in one process. The one process launches the GPUs one after
+another, while NVSHMEM's processes start after a common barrier, so part of that gap is launch order, not the
+exchange. It is not a claim.
+
+**State of the multi-GPU path after sections 9-16:**
+* The forward (direct, ring, recursive doubling; P = 2 / 3 / 4) and the backward (dG exchange) qualify on uva, NCCL
+  symmetric and NVSHMEM buffers.
+* The backward passed race verification.
+* Phase A's ring/doubling timings and its pair-0-1 micro numbers are superseded by these repairs; timing the repaired
+  forward against the model (phase A check 2) has not been rerun.
