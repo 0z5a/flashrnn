@@ -176,3 +176,49 @@ so at most one or two groups are resident and the four 16-row batch tiles run on
 backend does all 64 rows in one GEMM per step. Training loses to `cuda_fused` at B = 16 (0.78-0.86x, except sLSTM BF16
 D = 1280) and to `cuda` at B = 64 (0.41-0.75x), for the same serialization and the Triton backward's cost at large D.
 
+
+## 8. Results of the register + shared-memory residency batch (job "maxd hybrid", 2026-10-17)
+
+**W1-hybrid**: 20/20 forward cases pass the FP64 budget at D = 1280 (reg_k 256), 1536, 1792, 1920, 1984 (LSTM/sLSTM, FP16/BF16); the shared-memory-only control at D = 1280 passes 4/4.
+
+**W3-hybrid** (against FlashRNN1 `cuda_fused`) holds in 32/32 shapes; **W4-hybrid** (against `cuda`) in 26/32. Forward, T = 256; ratio = FlashRNN1 time / FlashRNN2 time, 95% interval.
+
+| cell | dtype | B | D | vs cuda_fused | vs cuda |
+| --- | --- | --- | --- | --- | --- |
+| lstm | bflo | 16 | 1536 | 2.61 [2.51, 2.90] | 4.14 [4.09, 4.17] |
+| lstm | bflo | 16 | 1792 | 5.71 [5.69, 5.73] | 4.65 [4.57, 4.71] |
+| lstm | bflo | 16 | 1920 | 6.53 [6.51, 6.55] | 3.88 [3.83, 3.93] |
+| lstm | bflo | 16 | 1984 | 6.73 [6.70, 6.75] | 4.24 [4.21, 4.26] |
+| lstm | bflo | 64 | 1536 | 2.92 [2.85, 3.14] | 0.78 [0.77, 0.79] (no) |
+| lstm | bflo | 64 | 1792 | 3.31 [3.30, 3.31] | 0.79 [0.79, 0.80] (no) |
+| lstm | bflo | 64 | 1920 | 5.38 [5.37, 5.38] | 1.05 [1.04, 1.05] |
+| lstm | bflo | 64 | 1984 | 3.74 [3.74, 3.75] | 1.27 [1.26, 1.28] |
+| lstm | floa | 16 | 1536 | 2.31 [2.30, 2.31] | 2.94 [2.90, 2.96] |
+| lstm | floa | 16 | 1792 | 3.23 [3.22, 3.24] | 3.06 [3.04, 3.08] |
+| lstm | floa | 16 | 1920 | 3.51 [3.26, 4.20] | 3.13 [3.09, 3.16] |
+| lstm | floa | 16 | 1984 | 3.57 [3.56, 3.58] | 3.75 [3.69, 3.80] |
+| lstm | floa | 64 | 1536 | 3.07 [3.04, 3.10] | 1.05 [1.02, 1.11] |
+| lstm | floa | 64 | 1792 | 6.08 [5.93, 6.48] | 0.91 [0.91, 0.92] (no) |
+| lstm | floa | 64 | 1920 | 6.28 [6.27, 6.29] | 1.10 [1.09, 1.11] |
+| lstm | floa | 64 | 1984 | 6.53 [6.49, 6.62] | 1.35 [1.34, 1.36] |
+| slstm | bflo | 16 | 1536 | 3.04 [2.57, 3.85] | 4.34 [4.31, 4.37] |
+| slstm | bflo | 16 | 1792 | 5.66 [5.64, 5.68] | 4.85 [4.82, 4.89] |
+| slstm | bflo | 16 | 1920 | 6.53 [6.51, 6.55] | 4.01 [4.00, 4.03] |
+| slstm | bflo | 16 | 1984 | 6.68 [6.65, 6.70] | 4.37 [4.33, 4.42] |
+| slstm | bflo | 64 | 1536 | 3.85 [3.81, 3.96] | 0.82 [0.82, 0.82] (no) |
+| slstm | bflo | 64 | 1792 | 4.35 [4.34, 4.35] | 0.82 [0.81, 0.82] (no) |
+| slstm | bflo | 64 | 1920 | 6.43 [6.30, 6.80] | 1.15 [1.14, 1.16] |
+| slstm | bflo | 64 | 1984 | 3.79 [3.78, 3.79] | 1.37 [1.36, 1.38] |
+| slstm | floa | 16 | 1536 | 2.51 [2.47, 2.60] | 3.12 [3.07, 3.15] |
+| slstm | floa | 16 | 1792 | 3.36 [3.35, 3.37] | 3.11 [3.10, 3.13] |
+| slstm | floa | 16 | 1920 | 4.12 [3.46, 5.35] | 3.23 [3.20, 3.25] |
+| slstm | floa | 16 | 1984 | 3.72 [3.70, 3.73] | 3.95 [3.91, 3.99] |
+| slstm | floa | 64 | 1536 | 2.86 [2.84, 2.87] | 1.07 [1.07, 1.07] |
+| slstm | floa | 64 | 1792 | 5.48 [5.47, 5.48] | 0.94 [0.93, 0.95] (no) |
+| slstm | floa | 64 | 1920 | 6.13 [6.11, 6.14] | 1.17 [1.17, 1.18] |
+| slstm | floa | 64 | 1984 | 6.60 [6.45, 7.03] | 1.45 [1.44, 1.46] |
+
+The six W4 misses are all B = 64 at D = 1536 or 1792 (0.78-0.94x): the same batch-tile serialization as in section 7
+(one resident group of 96-112 CTAs, four 16-row tiles one after another). FlashRNN1 `cuda_fused` itself runs to
+D = 2560 (section 7) but is 2.3-6.7x slower than the hybrid kernel at D = 1536-1984.
+
