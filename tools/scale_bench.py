@@ -374,7 +374,13 @@ def main():
         multi_gpu.enable_peer_access(devices)
     if "nccl_symm" in a.allocs or a.mode == "paired":
         from flashrnn.flashrnn2 import symm_mem
-        symm_mem.session(devices)  # all devices: a P-GPU call uses the first P
+        try:
+            symm_mem.session(devices)  # all devices: a P-GPU call uses the first P
+        except Exception:  # noqa: BLE001 - reported; qualification still runs the uva rows
+            print("SYMM_SESSION_FAILED " + traceback.format_exc()[-1500:], flush=True)
+            if a.mode == "paired":
+                raise
+            a.allocs = "uva"
     return {"qualify": mode_qualify, "time": mode_time, "heads": mode_heads,
             "paired": mode_paired}[a.mode](a, devices)
 
