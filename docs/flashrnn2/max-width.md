@@ -118,3 +118,61 @@ Runs (batch "bw 2048"):
   failure is reported as such).
 * Not covered by this batch: race verification of the CUDA kernel's exchange (delay injection and broken-variant
   controls, as done for the Triton and TileLang kernels).
+
+## 7. Results of the shared-memory-only batch (job "maxd v1", 2026-10-17)
+
+**W1**: 20/20 qualification cases pass (TileLang grid S = 16 at D = 1024/1280/1424, Triton R tiling S = 16 at D = 1024/1280; forward and training; FP64 budgets).
+
+**W2** (largest D that built and ran; B = 16, T = 256): FlashRNN1 `cuda_fused` D = 2560 (D = 3072 and 4096: "No working solution of constraints"), FlashRNN1 `cuda` up to D = 4096 (all tested), FlashRNN2 in this batch D = 1424 forward and 1280 training, as the compile records predicted (the register-residency batches cover 1536-2048).
+
+**W3 / W4** (ratio = FlashRNN1 time / FlashRNN2 time, 95% interval; holds when the lower bound is >= 1). W3 holds in 32/40 shapes, W4 in 24/40.
+
+| kind | cell | dtype | B | D | vs cuda_fused (W3) | vs cuda (W4) |
+| --- | --- | --- | --- | --- | --- | --- |
+| forward | lstm | bflo | 16 | 1024 | 2.16 [1.86, 3.06] | 3.47 [3.45, 3.49] |
+| forward | lstm | bflo | 16 | 1280 | 2.30 [2.30, 2.31] | 3.33 [3.25, 3.38] |
+| forward | lstm | bflo | 16 | 1424 | 8.18 [8.15, 8.21] | 4.11 [4.04, 4.22] |
+| forward | lstm | bflo | 64 | 1024 | 4.22 [4.15, 4.41] | 1.54 [1.52, 1.55] |
+| forward | lstm | bflo | 64 | 1280 | 2.29 [2.23, 2.47] | 0.76 [0.75, 0.77] (no) |
+| forward | lstm | bflo | 64 | 1424 | 3.00 [3.00, 3.01] | 0.53 [0.53, 0.53] (no) |
+| forward | lstm | floa | 16 | 1024 | 1.81 [1.81, 1.82] | 3.22 [3.19, 3.26] |
+| forward | lstm | floa | 16 | 1280 | 2.21 [2.21, 2.22] | 2.91 [2.90, 2.91] |
+| forward | lstm | floa | 16 | 1424 | 5.53 [5.51, 5.55] | 2.90 [2.88, 2.91] |
+| forward | lstm | floa | 64 | 1024 | 4.22 [4.07, 4.65] | 1.50 [1.50, 1.51] |
+| forward | lstm | floa | 64 | 1280 | 2.35 [2.35, 2.36] | 0.93 [0.93, 0.93] (no) |
+| forward | lstm | floa | 64 | 1424 | 1.59 [1.59, 1.59] | 0.58 [0.57, 0.58] (no) |
+| forward | slstm | bflo | 16 | 1024 | 2.23 [1.90, 3.21] | 3.59 [3.57, 3.61] |
+| forward | slstm | bflo | 16 | 1280 | 3.14 [3.13, 3.15] | 3.46 [3.43, 3.49] |
+| forward | slstm | bflo | 16 | 1424 | 6.78 [6.73, 6.83] | 4.31 [4.26, 4.35] |
+| forward | slstm | bflo | 64 | 1024 | 2.86 [2.86, 2.87] | 1.53 [1.52, 1.54] |
+| forward | slstm | bflo | 64 | 1280 | 3.33 [3.32, 3.33] | 0.80 [0.79, 0.81] (no) |
+| forward | slstm | bflo | 64 | 1424 | 1.60 [1.60, 1.61] | 0.54 [0.54, 0.55] (no) |
+| forward | slstm | floa | 16 | 1024 | 1.89 [1.85, 1.91] | 3.31 [3.24, 3.38] |
+| forward | slstm | floa | 16 | 1280 | 2.30 [2.27, 2.38] | 3.01 [2.98, 3.03] |
+| forward | slstm | floa | 16 | 1424 | 5.58 [5.55, 5.60] | 3.04 [3.02, 3.05] |
+| forward | slstm | floa | 64 | 1024 | 2.85 [2.84, 2.85] | 1.50 [1.47, 1.52] |
+| forward | slstm | floa | 64 | 1280 | 2.48 [2.47, 2.48] | 0.97 [0.97, 0.97] (no) |
+| forward | slstm | floa | 64 | 1424 | 1.62 [1.62, 1.62] | 0.59 [0.59, 0.60] (no) |
+| train | lstm | bflo | 16 | 1024 | 0.83 [0.83, 0.83] (no) | 1.31 [1.29, 1.33] |
+| train | lstm | bflo | 16 | 1280 | 0.86 [0.86, 0.86] (no) | 1.23 [1.21, 1.24] |
+| train | lstm | bflo | 64 | 1024 | 1.35 [1.34, 1.36] | 0.75 [0.74, 0.76] (no) |
+| train | lstm | bflo | 64 | 1280 | 1.03 [0.99, 1.04] (no) | 0.41 [0.41, 0.42] (no) |
+| train | lstm | floa | 16 | 1024 | 0.78 [0.72, 0.80] (no) | 1.31 [1.29, 1.33] |
+| train | lstm | floa | 16 | 1280 | 0.83 [0.83, 0.83] (no) | 1.20 [1.19, 1.20] |
+| train | lstm | floa | 64 | 1024 | 1.35 [1.20, 1.41] | 0.71 [0.70, 0.72] (no) |
+| train | lstm | floa | 64 | 1280 | 1.05 [1.05, 1.05] | 0.43 [0.43, 0.44] (no) |
+| train | slstm | bflo | 16 | 1024 | 0.85 [0.85, 0.85] (no) | 1.31 [1.29, 1.33] |
+| train | slstm | bflo | 16 | 1280 | 1.00 [1.00, 1.01] | 1.26 [1.23, 1.27] |
+| train | slstm | bflo | 64 | 1024 | 1.12 [1.02, 1.16] | 0.75 [0.74, 0.76] (no) |
+| train | slstm | bflo | 64 | 1280 | 1.23 [1.23, 1.23] | 0.43 [0.43, 0.44] (no) |
+| train | slstm | floa | 16 | 1024 | 0.80 [0.80, 0.81] (no) | 1.31 [1.29, 1.34] |
+| train | slstm | floa | 16 | 1280 | 0.83 [0.83, 0.83] (no) | 1.21 [1.21, 1.21] |
+| train | slstm | floa | 64 | 1024 | 1.12 [1.11, 1.12] | 0.71 [0.69, 0.72] (no) |
+| train | slstm | floa | 64 | 1280 | 1.07 [1.07, 1.07] | 0.45 [0.44, 0.45] (no) |
+
+Reading (post hoc, not a check): the forward at B = 16 is 1.8-8.2x faster than both FlashRNN1 backends. At B = 64 it
+stays faster than `cuda_fused` but loses to `cuda` from D = 1280 (0.53-0.97x): a group needs k = D/16 = 64-89 CTAs,
+so at most one or two groups are resident and the four 16-row batch tiles run one after another, while the alternating
+backend does all 64 rows in one GEMM per step. Training loses to `cuda_fused` at B = 16 (0.78-0.86x, except sLSTM BF16
+D = 1280) and to `cuda` at B = 64 (0.41-0.75x), for the same serialization and the Triton backward's cost at large D.
+

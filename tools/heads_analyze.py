@@ -92,7 +92,10 @@ def main():
                 starts[other].append(pairs)
         for other in [n for n in c["arms"] if n != "one"]:
             res = bootstrap(starts[other], 20261017 + i)
-            check = "H2" if other == "loop_graph" else "H4" if c["experiment"] == "H4" else "H3" if other == "v1" else "loop"
+            if c.get("experiment", "").startswith("W"):  # large-D batches: W3 against cuda_fused, W4 against cuda
+                check = ("W3" if other == "v1" else "W4" if other == "v1cuda" else other) + c["experiment"][4:]
+            else:
+                check = "H2" if other == "loop_graph" else "H4" if c["experiment"] == "H4" else "H3" if other == "v1" else "loop"
             row = dict(name=c["name"], check=check, kind=c["kind"], cell=c["cell"], dtype=c["dtype"], width=c["width"],
                        heads=c["heads"], batch=c["batch"], steps=c["steps"], other=other, starts=statuses,
                        unstable=unstable)
@@ -102,7 +105,7 @@ def main():
                 row.update(ratio=None, holds=False)
             claims.append(row)
     rec["claims"] = claims
-    for check in ("H2", "H3", "H4", "loop"):
+    for check in sorted({r["check"] for r in claims} | {"H2", "H3", "H4", "loop"}):
         rows = [r for r in claims if r["check"] == check]
         rec[check] = dict(shapes=len(rows), holds=sum(r["holds"] for r in rows), measured=sum(r["ratio"] is not None for r in rows))
     # H5
@@ -122,7 +125,7 @@ def main():
     if a.out:
         a.out.write_text(text)
     print(json.dumps(dict(H1={p: f'{v["passed"]}/{v["cases"]}' for p, v in rec["H1"].items()},
-                          H2=rec["H2"], H3=rec["H3"], H4=rec["H4"], loop=rec["loop"],
+                          checks={k: rec[k] for k in sorted({r["check"] for r in claims})},
                           repro={r["name"]: r["status"] for r in rec["repro"]}, sweep_rows=len(sweep))))
 
 
