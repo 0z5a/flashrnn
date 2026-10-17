@@ -167,6 +167,45 @@ def setup(case):
     return (leaves, cot_h, cfg), dict(config=cfg.as_dict(), config_source=source, need_bytes=need, free_bytes=free)
 
 
+def profile(case, leaves, cot_h, cfg, calls=5):
+    """Training-step breakdown per backward variant (case "profile": list of backward_options dicts): total step time,
+    the training forward alone (full history, FP32 snapshot), and the backward's preactivation / kernel / weight-
+    gradient phases (triton_rtiled_bw diagnostics; CUDA events, so phases include launch gaps)."""
+    cell = case["cell"]
+    out = {}
+    with torch.no_grad():
+        fwd = lambda: dispatch.recurrence(*leaves, cell, output_mode="full", snapshot_dtype=torch.float32,  # noqa: E731
+                                          config=cfg)
+        fwd(); torch.cuda.synchronize()
+        ts, _ = event_ms(fwd, calls)
+    out["forward_full_ms"] = sorted(ts)[len(ts) // 2]
+    for i, variant in enumerate(case["profile"]):
+        rec = dict(options=variant)
+        try:
+            diag = {"time": True}
+            opts = dict(variant, diagnostics=diag)
+
+            def step():
+                xs = [x.detach().requires_grad_(True) for x in leaves]
+                y, _ = training.recurrence(*xs, cell, output_mode="hidden", config=cfg, backward_options=opts)
+                return torch.autograd.grad((y.float() * cot_h).sum(), xs)[0]
+            step(); torch.cuda.synchronize()
+            phases = []
+            ts = []
+            for _ in range(calls):
+                e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+                e0.record(); step(); e1.record(); torch.cuda.synchronize()
+                ts.append(e0.elapsed_time(e1))
+                phases.append(dict(diag.get("ms", {})))
+            rec.update(step_ms=sorted(ts)[len(ts) // 2],
+                       phases_ms={k: sorted(p[k] for p in phases)[len(phases) // 2] for k in phases[0]} if phases[0] else {})
+        except Exception:
+            rec["error"] = traceback.format_exc()[-1500:]
+        out[f"variant{i}"] = rec
+        torch.cuda.empty_cache()
+    return out
+
+
 def mode_sweep(args):
     case = json.loads(Path(args.case).read_text())
     rec = dict(case=case, started=time.time(), gpu=torch.cuda.get_device_name(), arms={})
@@ -175,6 +214,8 @@ def mode_sweep(args):
         rec.update(info)
         if state is not None:
             leaves, cot_h, cfg = state
+            if case.get("profile"):
+                rec["profile"] = profile(case, leaves, cot_h, cfg)
             ref = None
             for name in case["arms"]:
                 try:

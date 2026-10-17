@@ -148,3 +148,12 @@ FlashRNN1 at H > 1 (0.47-0.94x; at H = 256/1024 about 0.47-0.67x). The H > 1 tra
 preactivations and forms dR / dbias with einsum (H = 1 uses addmm) and runs the untuned default backward; where the
 time goes is not measured here and is the next profiling target.
 
+
+## 7. Profiling the H > 1 training step (diagnostic batch "heads prof", 2026-10-17, report only)
+
+Section 6 found the H > 1 training step 0.47-0.94x of FlashRNN1 and growing linearly in H from H = 16. This batch
+measures where the time goes; it has no pass/fail checks. Per shape (D ∈ {64, 128}, H ∈ {16, 256, 1024}, LSTM FP16;
+sLSTM BF16 at D = 128, H ∈ {256, 1024}; B = 16, T = 256, 128 at H = 1024): the training forward alone (full FP32
+history), and for four backward variants (default; TF32 GEMMs; `fast` + TF32; `fast` + TF32 + preactivations fused
+into the kernel) the step time and the backward's phases (preactivation recompute, kernel, dR/dbias GEMMs), next to
+FlashRNN1's step; Nsight Systems kernel timelines of FlashRNN2 and FlashRNN1 at D = 64, H = 1024 and D = 128, H = 256.
