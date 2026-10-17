@@ -299,3 +299,86 @@ need a CUDA recurrence kernel with network puts (Triton cannot issue them) and a
   map the same NVLink peer memory, and the exchange per step is a few KB; a difference would point to the mapping
   (cuMem granularity, TLB) or to the flag placement, and would be reported as such. Starts whose outputs were not
   bitwise stable are excluded and listed.
+
+## 10. Results of the symmetric-buffer batch (job "symm", 2026-10-17) and the repairs that followed
+
+Evidence: `scale-out-evidence/symm-analysis.json` (`tools/scale_symm_analyze.py`), archive verified by SHA-256.
+
+**Preflight.** PyTorch's NCCL 2.20.5 and the opened NCCL 2.32.3 coexisted in one process; the symmetric session over
+four GPUs came up and its peer-table probe passed (every rank's store through its LSA table landed in the right
+buffer). No GPU reports multicast (NVLS) support.
+
+**Micro (repair 2).** The hypothesis holds by the pre-registered numbers: without warm-up pair 0-1 took 130 µs at
+16 B, 53x the median pair (2.45 µs), and moved 0.1 GB/s at 1 MiB; with one untimed launch per size it took 2.53 µs
+(1.05x the median) and 23.5 GB/s. The slow pair of phase A was Triton compiling the ping-pong kernel for every message
+size inside the timed window of the first pair. Symmetric buffers: 2.16-2.26 µs per pair at 16 B (uva 2.13-2.53 µs),
+23.1-24.2 GB/s at 1 MiB (uva 23.0-23.9).
+
+**S1: 0/34 by the rule.** 21 rows are clean: FP64 4-6e-5, one output digest per (cell, D, S) across every P and
+schedule, and the symmetric run bitwise equal to the uva run in all 21. 5 rows timed out on rank 0 (all at D = 1024; four
+of them direct). 8 rows returned corrupted outputs without a timeout (FP64 error 0.005-0.25, uva and symmetric runs
+different from each other): ring or recursive doubling in every case (P = 2 doubling at D = 2048, P = 3 ring at
+D = 1536, P = 4 ring/doubling and P = 2 doubling at D = 1024). Cross-P agreement fails for every (cell, D, S) because
+of these rows.
+
+**S2.** 28 of 34 rows had bitwise-stable outputs in every start: uva / symmetric 0.94-0.97 (uva faster) in 10 rows,
+all at D = 1024; symmetric faster in 1 row (P = 2, D = 2048, direct, LSTM, 1.035); not resolved in 17. The 6 rows
+without data are the ring/doubling configurations whose outputs changed between calls.
+
+**Diagnosis (post hoc).** Both failures are in the phase A forward kernel, not in the allocation:
+* *Ring and recursive doubling had no barrier among the CTAs of one GPU.* Their waits count only the round
+  partner's CTAs. A CTA that finished a step early went on to the next step's publish and overwrote, in the double
+  buffer, h that a slower CTA of the same GPU was still reading for the previous step. The direct schedule's wait
+  counts every CTA on every GPU, a full barrier, so it was never affected. This also means phase A's ring/doubling
+  timings omitted the intra-GPU barrier that the cost model charges (α_l2).
+* *Rank-0 timeouts.* The first GPU spins on the exchange from its launch on, while the host still built the later GPUs'
+  address tables (synchronous host-to-device copies) between launches. The spin limit (2^20 polls) is shorter than
+  that skew can be.
+
+**Repairs (commit after this section).** Ring and doubling now signal and wait on a per-GPU counter before overwriting
+the buffer half (all CTAs of the GPU must have published the previous step); every address table is built before the
+first launch; the cross-GPU spin limit is 2^26 polls. Phase A's and this batch's ring/doubling results are superseded
+until they are re-measured.
+
+## 11. NVSHMEM, the multi-GPU backward, and the repaired forward (pre-registration, 2026-10-17, before any run of it)
+
+**Multi-GPU backward (dG exchange).** `hybrid_bw.cu` with `FRNN_MG = 1`: the D / 16 column slices are split over P GPUs;
+every CTA publishes its rounded dG columns into the exchange buffer of every GPU (direct schedule), fences at system
+scope and joins its grid barrier; one CTA per GPU then adds one to every GPU's arrival counter and every CTA waits for P
+arrivals per step. This is a full barrier over all CTAs of all GPUs every step, so the double buffer is safe across GPUs
+(the argument is in the source). The address tables come from the PyTorch allocator ("uva"), NCCL symmetric windows,
+or NVSHMEM. The per-CTA arithmetic is the single-GPU kernel's, so dG and the initial-state gradient must be bitwise
+equal to the single-GPU kernel with the same batch tile and register split. `hybrid_bw.backward_mg` (one process) and
+`hybrid_bw.mg_rank_kernel` (one GPU's share). ptxas: no spill in any MG build (D = 2048: 168 registers at BM = 16,
+255 at BM = 64).
+
+**NVSHMEM.** One process per GPU (`tools/scale_nvshmem.py`): unique-ID bootstrap, `nvshmem_malloc` buffers and
+counters, peer addresses from `nvshmem_ptr` (NVLink peers), NVSHMEM barrier before every call; the same forward and
+backward kernels. NVSHMEM 3.9 is the copy staged for phase B; its host library has no CUDA runtime dependency and
+PyTorch here ships none.
+
+**Runs (batch "mg", one node, four H100):**
+* **F1, repaired forward qualification**: the 17 configurations of section 9 × LSTM/sLSTM, uva and symmetric, rule of
+  section 9, run three times in three processes; additionally all digests of a (cell, D, S) must agree across the
+  three runs. Prediction from the diagnosis: no corrupted row and no timeout.
+* **F2, uva / symmetric paired timing** on the repaired kernel, protocol and reading of section 9 (S2).
+* **G1, multi-GPU backward qualification**: D ∈ {1024, 1536, 2048} × P ∈ {2, 4} (and P = 3 at D = 1536) × (B = 16,
+  BM = 16; B = 64, BM = 16; B = 64, BM = 64) × LSTM/sLSTM, FP16, T = 32: dG and d_initial bitwise equal to the
+  single-GPU kernel, with uva and with symmetric buffers.
+* **G2, race verification of the multi-GPU backward** (rule of max-width.md section 12): P = 4 at D ∈ {1024, 2048}
+  (LSTM, BM = 16, B = 40) and D = 2048 (sLSTM, BM = 64, B = 100); P = 3 at D = 1536 (sLSTM, BM = 16, B = 40); T = 48,
+  21 runs per variant. The content check reads every exchanged operand against the owning GPU's stored dG. Broken
+  variants: single buffer, no grid barrier, no cross-GPU wait (each keeps its last barrier).
+* **G3, multi-GPU backward against one GPU**, kernel time, B = 64, T = 256, LSTM/sLSTM: P = 4 at D ∈ {1536, 2048} and
+  P = 2 at D = 2048, batch tile 16 (the split leaves room for 2-4 batch tiles at once per GPU), against the single-GPU
+  kernel with the library's batch tile (64), and uva against symmetric buffers; plus B = 16 at D = 2048, P = 4 (LSTM;
+  one tile, where splitting cannot add concurrency). Paired, three process starts × 20 blocks × 3 calls, order rotated
+  per block. Reading: one / multi-GPU ratio with the 95% hierarchical bootstrap; multi-GPU faster if the lower bound is
+  ≥ 1.02, slower if the upper bound is ≤ 0.98, else not resolved. Expectation: faster at B = 64 (more tiles at once),
+  slower at B = 16 (same per-step work plus a cross-GPU barrier).
+* **N1, NVSHMEM correctness**: P = 4 (forward 4:1024:16 and 4:2048:8 with direct, ring, doubling; backward D ∈ {1024,
+  2048} at B = 16/BM = 16 and B = 64/BM = 16, LSTM, and D = 2048 sLSTM B = 64), P = 2 (forward 2:1024:16 direct and
+  ring, 2:2048:8 direct; backward D = 2048, B = 64), P = 3 (forward 3:1536:8 direct and ring; backward D = 1536, B = 64):
+  outputs bitwise equal to the one-process reference (forward: the same configuration on uva buffers; backward: the
+  single-GPU kernel), no wait timeout. Kernel times per call (slowest PE, 9 calls) are reported next to the reference's
+  median, not paired (different processes).

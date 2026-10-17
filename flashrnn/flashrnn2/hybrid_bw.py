@@ -41,7 +41,7 @@ def supported(width, sms=132):
     return width % 16 == 0 and (4 * width // WARPS) % 16 == 0 and 2 <= width // S <= sms and width >= 256
 
 
-VERIFY_BITS = dict(check=1, delay=2, single=4, no_sync=8, prof=16, cl_single=32, cl_no_sync=64)
+VERIFY_BITS = dict(check=1, delay=2, single=4, no_sync=8, prof=16, cl_single=32, cl_no_sync=64, mg_no_wait=128)
 
 
 def verify_bits(verify):
@@ -58,13 +58,15 @@ def verify_bits(verify):
     return bits, int(verify.get("delay_seed") or 0)
 
 
-def build(width, krw, slstm, bf16, cache_dir=None, verify=0, bm=16, cluster=0):
+def build(width, krw, slstm, bf16, cache_dir=None, verify=0, bm=16, cluster=0, mg=False):
     cuda_home = os.environ.get("FRNN_HYBRID_CUDA_HOME", "/apps/ACC/CUDA/12.8")
     nvcc = os.path.join(cuda_home, "bin", "nvcc")
     flags = [f"-DFRNN_D={width}", f"-DFRNN_KRW={krw}", f"-DFRNN_SLSTM={int(slstm)}", f"-DFRNN_BF16={int(bf16)}",
              f"-DFRNN_VERIFY={int(verify)}", f"-DFRNN_BM={int(bm)}"]
     if cluster:
         flags.append(f"-DFRNN_CLUSTER={int(cluster)}")
+    if mg:
+        flags.append("-DFRNN_MG=1")
     digest = hashlib.sha256(SOURCE.read_bytes() + " ".join(flags).encode()).hexdigest()[:16]
     cache = Path(cache_dir or os.environ.get("FRNN_HYBRID_CACHE",
                                              os.environ.get("TMPDIR", str(Path.home() / ".cache")) + "/frnn_hybrid_bw"))
@@ -79,10 +81,14 @@ def build(width, krw, slstm, bf16, cache_dir=None, verify=0, bm=16, cluster=0):
     return lib
 
 
-def _lib(width, krw, slstm, bf16, verify=0, bm=16, cluster=0):
-    key = (width, krw, slstm, bf16, verify, bm, cluster)
+def _lib(width, krw, slstm, bf16, verify=0, bm=16, cluster=0, mg=False):
+    key = (width, krw, slstm, bf16, verify, bm, cluster, mg)
     if key not in _LIBS:
-        lib = ctypes.CDLL(str(build(width, krw, slstm, bf16, verify=verify, bm=bm, cluster=cluster)))
+        lib = ctypes.CDLL(str(build(width, krw, slstm, bf16, verify=verify, bm=bm, cluster=cluster, mg=mg)))
+        if mg:
+            lib.frnn_hybrid_bw_mg.restype = ctypes.c_int
+            lib.frnn_hybrid_bw_mg.argtypes = ([ctypes.c_void_p] * 10 + [ctypes.c_int] * 7 + [ctypes.c_void_p] * 3
+                                              + [ctypes.c_int] * 2 + [ctypes.c_void_p])
         lib.frnn_hybrid_bw.restype = ctypes.c_int
         lib.frnn_hybrid_bw.argtypes = [ctypes.c_void_p] * 10 + [ctypes.c_int] * 7 + [ctypes.c_void_p]
         lib.frnn_hybrid_bw_smem.restype = ctypes.c_int
@@ -164,4 +170,120 @@ def backward(wx, recurrent, bias, initial, history, d_history, d_final, cell, *,
     if diagnostics is not None:
         diagnostics.update(reg_rows_per_warp=krw, batch_rows=bm, shared_bytes=lib.frnn_hybrid_bw_smem(), ctas=k * resident,
                            groups=groups, resident=resident, slots=slots)
+    return dg, d_recurrent, d_bias, d_init
+
+
+def mg_layout(width, batch, heads, peers, bm, sms=132):
+    """Per-GPU grid of the multi-GPU backward: CTAs per group (D / 16 / P), resident groups, slots."""
+    if (width // S) % peers:
+        raise ValueError("D / 16 must be a multiple of the GPU count")
+    k = width // S // peers
+    tiles = (batch + bm - 1) // bm
+    groups = tiles * heads
+    resident = max(1, min(groups, sms // k))
+    return dict(k=k, tiles=tiles, groups=groups, resident=resident, slots=(groups + resident - 1) // resident)
+
+
+def mg_rank_kernel(rank, peers, cell, dtype, width, batch, steps, heads, bm, krw, tensors, xbuf_ptr, xtable, stable,
+                   dgtable, err, verify_bits=0, stream=None):
+    """Launch one GPU's share of the multi-GPU backward kernel (current device). ``tensors``: pre, history, initial32,
+    d_history, d_final32, R, dg, d_init (that GPU's copies); tables: int64 device tensors with one entry per GPU."""
+    lay = mg_layout(width, batch, heads, peers, bm)
+    lib = _lib(width, krw, cell == "slstm", dtype == torch.bfloat16, verify_bits, bm, 0, True)
+    ptr = lambda x: ctypes.c_void_p(x if isinstance(x, int) else x.data_ptr())  # noqa: E731
+    stream = stream if stream is not None else torch.cuda.current_stream().cuda_stream
+    rc = lib.frnn_hybrid_bw_mg(*[ptr(x) for x in tensors], ptr(xbuf_ptr), ptr(err), batch, steps, heads,
+                               lay["groups"], lay["resident"], lay["slots"], lay["tiles"], ptr(xtable), ptr(stable),
+                               ptr(dgtable), rank, peers, ctypes.c_void_p(stream))
+    if rc != 0:
+        raise RuntimeError(f"multi-GPU hybrid backward launch failed on rank {rank} (cudaError {rc})")
+    return lay
+
+
+def backward_mg(wx, recurrent, bias, initial, history, d_history, d_final, cell, *, devices, alloc="uva",
+                batch_rows=None, reg_rows_per_warp=None, wgrad="bmm", diagnostics=None, _verify=None):
+    """Multi-GPU backward, one process: the D / 16 column slices split over ``devices``; exchange buffers and arrival
+    counters from the PyTorch allocator ("uva", peer access enabled) or NCCL symmetric windows ("nccl_symm").
+    Returns what ``backward`` returns, on the first device. The kernel time is that of the slowest GPU."""
+    from .triton_rtiled_bw import preactivations, weight_gradients
+
+    peers = len(devices)
+    batch, steps, gates, heads, width = wx.shape
+    bm = batch_tile(batch) if batch_rows is None else batch_rows
+    krw = reg_rows(width, bm) if reg_rows_per_warp is None else reg_rows_per_warp
+    lay = mg_layout(width, batch, heads, peers, bm)
+    dtype = wx.dtype
+    first = f"cuda:{devices[0]}"
+    pre, h_prev = preactivations(wx, recurrent, bias, initial, history, False)
+    shared = [pre.contiguous(), history.contiguous(), initial.float().contiguous(), d_history.contiguous(),
+              d_final.float().contiguous(), recurrent.contiguous()]
+    per = {}
+    for d in devices:
+        dev = f"cuda:{d}"
+        per[d] = dict(inputs=[x.to(dev) for x in shared],
+                      dg=torch.zeros((batch, steps, 4, heads, width), device=dev, dtype=torch.float32),
+                      d_init=torch.zeros(initial.shape, device=dev, dtype=torch.float32),
+                      err=torch.zeros(12, device=dev, dtype=torch.int32))
+    bits, seed = verify_bits(_verify)
+    for d in devices:
+        per[d]["err"][3] = seed
+    xbytes = lay["resident"] * 2 * bm * 4 * width * wx.element_size()
+    if alloc == "uva":
+        for d in devices:
+            per[d]["xbuf"] = torch.zeros(xbytes // wx.element_size(), device=f"cuda:{d}", dtype=dtype)
+            per[d]["sync"] = torch.zeros(8, device=f"cuda:{d}", dtype=torch.int32)
+        xaddr = [per[d]["xbuf"].data_ptr() for d in devices]
+        saddr = [per[d]["sync"].data_ptr() for d in devices]
+    elif alloc == "nccl_symm":
+        from . import symm_mem
+        sess = symm_mem.session(devices)
+        xid, sid = sess.buffer("bw_xbuf", xbytes), sess.buffer("bw_sync", 32)
+        for r, d in enumerate(devices):
+            torch.cuda.set_device(d)
+            sess.zero(xid, r, xbytes)
+            sess.zero(sid, r, 32)
+    else:
+        raise ValueError("alloc uva or nccl_symm (NVSHMEM runs one process per GPU: tools/scale_nvshmem.py)")
+    dgaddr = [per[d]["dg"].data_ptr() for d in devices]
+    for d in devices:
+        torch.cuda.synchronize(d)
+    events = {}
+    for r, d in enumerate(devices):
+        torch.cuda.set_device(d)
+        dev = f"cuda:{d}"
+        if alloc == "uva":
+            xt = torch.tensor(xaddr, device=dev, dtype=torch.int64)
+            st = torch.tensor(saddr, device=dev, dtype=torch.int64)
+            xlocal = per[d]["xbuf"].data_ptr()
+        else:
+            xt, st = sess.table(xid, r)[:peers].clone(), sess.table(sid, r)[:peers].clone()
+            xlocal = sess.local(xid, r)
+        dt = torch.tensor(dgaddr, device=dev, dtype=torch.int64)
+        per[d]["tables"] = (xt, st, dt)
+        e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+        e0.record()
+        mg_rank_kernel(r, peers, cell, dtype, width, batch, steps, heads, bm, krw,
+                       per[d]["inputs"] + [per[d]["dg"], per[d]["d_init"]], xlocal, xt, st, dt, per[d]["err"], bits)
+        e1.record()
+        events[d] = (e0, e1)
+    for d in devices:
+        torch.cuda.synchronize(d)
+    ms = {d: events[d][0].elapsed_time(events[d][1]) for d in devices}
+    errs = {d: per[d]["err"].tolist() for d in devices}
+    if _verify is not None:
+        _verify.update(after_read=sum(e[1] for e in errs.values()), after_mma=sum(e[2] for e in errs.values()),
+                       after_stage=0, wait_timeouts=sum(e[9] for e in errs.values()))
+    elif any(e[9] for e in errs.values()):
+        raise RuntimeError(f"multi-GPU backward: cross-GPU wait timed out {errs}")
+    torch.cuda.set_device(devices[0])
+    dg = per[devices[0]]["dg"].clone()
+    d_init = per[devices[0]]["d_init"].clone()
+    cols = width // peers
+    for r, d in enumerate(devices[1:], start=1):
+        sl = slice(r * cols, (r + 1) * cols)
+        dg[..., sl] = per[d]["dg"][..., sl].to(first)
+        d_init[..., sl] = per[d]["d_init"][..., sl].to(first)
+    d_recurrent, d_bias = weight_gradients(dg, h_prev, False, wgrad)
+    if diagnostics is not None:
+        diagnostics.update(alloc=alloc, ms=ms, kernel_ms=max(ms.values()), batch_rows=bm, reg_rows_per_warp=krw, **lay)
     return dg, d_recurrent, d_bias, d_init

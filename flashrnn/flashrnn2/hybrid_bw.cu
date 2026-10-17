@@ -17,6 +17,15 @@
 // bit 4 broken: single buffer; bit 8 broken: no grid barrier (except before the tail); bit 16 phase timing
 // (globaltimer, thread 0 of every CTA, units of 64 ns summed into err[4..7]: reduction = exchange loads + MMAs + partial
 // sums, pointwise + dG stores + publish, grid barrier, steps).
+//
+// Multi-GPU (FRNN_MG = 1): the D / 16 column slices are split over np GPUs (GPU r runs slices r * gridDim.x + x).
+// Every CTA publishes its rounded dG columns into the exchange buffer of every GPU (peer-address table xpeers: unified
+// addresses, NCCL symmetric windows or NVSHMEM symmetric memory, chosen by the caller), fences at system scope and joins
+// its grid barrier; then CTA 0 adds one to the arrival counter of every GPU (speers) and every CTA waits until its own
+// counter holds np arrivals per publish. A GPU reads the buffer it is about to overwrite only one step earlier, and it
+// signals that step only after its grid barrier, so the double buffer stays safe across GPUs. Verification: the content
+// check reads the owner GPU's stored dG (dgpeers); bit 128 broken: no cross-GPU wait (except before the tail); a wait
+// that exceeds 5 s counts err[9] and gives up.
 #include <cooperative_groups.h>
 #include <type_traits>
 #include <cuda_bf16.h>
@@ -39,7 +48,11 @@ __device__ __forceinline__ elem_t to_elem(float x) { return __float2half_rn(x); 
 #define FRNN_VERIFY 0
 #endif
 constexpr int VERIFY = FRNN_VERIFY;
-constexpr int V_CHECK = 1, V_DELAY = 2, V_SINGLE = 4, V_NO_SYNC = 8, V_PROF = 16, V_CL_SINGLE = 32, V_CL_NO_SYNC = 64;
+constexpr int V_CHECK = 1, V_DELAY = 2, V_SINGLE = 4, V_NO_SYNC = 8, V_PROF = 16, V_CL_SINGLE = 32, V_CL_NO_SYNC = 64,
+              V_MG_NO_WAIT = 128;
+#ifndef FRNN_MG
+#define FRNN_MG 0
+#endif
 constexpr int D = FRNN_D;
 constexpr int KRW = FRNN_KRW;
 constexpr bool SLSTM = FRNN_SLSTM != 0;
@@ -60,6 +73,7 @@ static_assert(BM == 16 || BM == 32 || BM == 64, "BM must be 16, 32 or 64");
 // fragments from rank w's stage. L2 reads of the exchange drop by 8; one cluster barrier per round.
 constexpr int CLUSTER = FRNN_CLUSTER, KC_STAGE = 64, LDS_STAGE = KC_STAGE + 8;
 static_assert(CLUSTER == 0 || CLUSTER == WARPS, "cluster rank q stages warp q's chunk");
+static_assert(!(CLUSTER && FRNN_MG), "the multi-GPU exchange runs without clusters");
 constexpr int K = 4 * D;
 constexpr int KW = K / WARPS;
 constexpr int KSW = KW - KRW;
@@ -124,6 +138,11 @@ struct Args {
   int* err;              // verification: [0] unused, [1] after read, [2] after MMA, [3] delay seed, [4..7] phase
                          // timers, [8] cluster stage reads (A operands read through distributed shared memory)
   int B, T, H, groups, resident, slots, tiles;
+  // Multi-GPU (FRNN_MG): int64 address tables, one entry per GPU: exchange buffers, arrival counters, stored dG.
+  const long long* xpeers;
+  const long long* speers;
+  const long long* dgpeers;
+  int rank, np;
 };
 
 __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw_kernel(Args a) {
@@ -131,7 +150,8 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw_kernel(Args a) {
   uint32_t* sr = reinterpret_cast<uint32_t*>(smem);                                   // [WARPS][CS][2][32][2]
   float* red = reinterpret_cast<float*>(smem + (size_t)WARPS * CS * 2 * 32 * 2 * 4);  // [WARPS][BM][16]
   cg::grid_group grid = cg::this_grid();
-  const int s = blockIdx.x, gy = blockIdx.y, tid = threadIdx.x, warp = tid >> 5, lane = tid & 31;
+  const int s = blockIdx.x + (FRNN_MG ? a.rank * (int)gridDim.x : 0), gy = blockIdx.y, tid = threadIdx.x,
+            warp = tid >> 5, lane = tid & 31;
   const int fg = lane >> 2, ft = lane & 3;  // mma fragment row group / thread-in-group
   const int pb = tid >> 4, pj = tid & 15;   // pointwise element (batch row pb + 16 e, column pj)
   const int p = s * S + pj;
@@ -168,6 +188,10 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw_kernel(Args a) {
 #pragma unroll
     for (int e = 0; e < PE; ++e) dc[e] = dn[e] = dh_in[e] = 0.f;
 
+    // Stored dG of reduction index k: this GPU's, or with FRNN_MG the GPU owning column k % D.
+    auto dgsrc = [&](int k) -> const float* {
+      return FRNN_MG ? reinterpret_cast<const float*>(a.dgpeers[(k % D) / (D / a.np)]) : a.dg;
+    };
     // Content check of the A elements this thread reads (rows mt*16 + fg / + 8 of the tile).
     auto check = [&](const elem_t* xa, int t1) -> int {
       int bad = 0;
@@ -177,10 +201,10 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw_kernel(Args a) {
         int row0 = bt * BM + mt * 16 + fg;
         for (int c = 0; c < CR + CS; ++c) {
           int k = warp * KW + c * 16 + 2 * ft;
-          bad += check_pair(__ldcg(r0 + c * 8), a.dg, a.B, a.T, a.H, head, row0, t1, k);
-          bad += check_pair(__ldcg(r8 + c * 8), a.dg, a.B, a.T, a.H, head, row0 + 8, t1, k);
-          bad += check_pair(__ldcg(r0 + c * 8 + 4), a.dg, a.B, a.T, a.H, head, row0, t1, k + 8);
-          bad += check_pair(__ldcg(r8 + c * 8 + 4), a.dg, a.B, a.T, a.H, head, row0 + 8, t1, k + 8);
+          bad += check_pair(__ldcg(r0 + c * 8), dgsrc(k), a.B, a.T, a.H, head, row0, t1, k);
+          bad += check_pair(__ldcg(r8 + c * 8), dgsrc(k), a.B, a.T, a.H, head, row0 + 8, t1, k);
+          bad += check_pair(__ldcg(r0 + c * 8 + 4), dgsrc(k), a.B, a.T, a.H, head, row0, t1, k + 8);
+          bad += check_pair(__ldcg(r8 + c * 8 + 4), dgsrc(k), a.B, a.T, a.H, head, row0 + 8, t1, k + 8);
         }
       }
       return bad;
@@ -387,16 +411,53 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw_kernel(Args a) {
           a.dg[pre + 3 * hd] = d_o;
         }
         if (active) {
-          elem_t* w = a.xbuf + ((size_t)(gy * 2 + ((VERIFY & V_SINGLE) ? 0 : (cnt & 1))) * BM + lrow) * K + p;
+          const size_t off = ((size_t)(gy * 2 + ((VERIFY & V_SINGLE) ? 0 : (cnt & 1))) * BM + lrow) * K + p;
+#if FRNN_MG
+          for (int q = 0; q < a.np; ++q) {
+            elem_t* w = reinterpret_cast<elem_t*>(a.xpeers[q]) + off;
+            w[0] = to_elem(d_i);
+            w[D] = to_elem(d_f);
+            w[2 * D] = to_elem(d_z);
+            w[3 * D] = to_elem(d_o);
+          }
+#else
+          elem_t* w = a.xbuf + off;
           w[0] = to_elem(d_i);
           w[D] = to_elem(d_f);
           w[2 * D] = to_elem(d_z);
           w[3 * D] = to_elem(d_o);
+#endif
         }
       }
       ++cnt;
       unsigned long long t_c = (VERIFY & V_PROF) ? gtime() : 0;
+#if FRNN_MG
+      __threadfence_system();  // the peer stores above, before this GPU signals the step
+#endif
       if (!(VERIFY & V_NO_SYNC) || idx == a.T - 1) grid.sync();
+#if FRNN_MG
+      if (!(VERIFY & V_MG_NO_WAIT) || idx == a.T - 1) {
+        if (blockIdx.x == 0 && blockIdx.y == 0 && tid == 0) {
+          __threadfence_system();
+          for (int q = 0; q < a.np; ++q) atomicAdd_system(reinterpret_cast<int*>(a.speers[q]), 1);
+        }
+        if (tid == 0) {
+          const int* mine = reinterpret_cast<const int*>(a.speers[a.rank]);
+          const int target = a.np * cnt;
+          const unsigned long long t0 = gtime();
+          int seen;
+          while (true) {
+            asm volatile("ld.acquire.sys.global.b32 %0, [%1];" : "=r"(seen) : "l"(mine) : "memory");
+            if (seen >= target) break;
+            if (gtime() - t0 > 5000000000ull) {
+              atomicAdd(a.err + 9, 1);
+              break;
+            }
+          }
+        }
+        __syncthreads();
+      }
+#endif
       if ((VERIFY & V_PROF) && tid == 0 && active) {
         unsigned long long t_d = gtime();
         atomicAdd(a.err + 4, (int)((t_b - t_a) >> 6));
@@ -452,11 +513,31 @@ extern "C" int frnn_hybrid_bw_max_clusters() {
 #endif
 }
 
+#if FRNN_MG
+// One GPU's share (the caller's current device): slices rank * D / 16 / np ..; tables as in Args.
+extern "C" int frnn_hybrid_bw_mg(const float* pre, const float* states, const float* initial, const float* dstates,
+                                 const float* dfinal, const void* R, float* dg, float* dinit, void* xbuf, int* err,
+                                 int B, int T, int H, int groups, int resident, int slots, int tiles,
+                                 const long long* xpeers, const long long* speers, const long long* dgpeers, int rank,
+                                 int np, void* stream) {
+  if ((D / S) % np) return -1;
+  Args a{pre, states, initial, dstates, dfinal, reinterpret_cast<const elem_t*>(R), dg, dinit,
+         reinterpret_cast<elem_t*>(xbuf), err, B, T, H, groups, resident, slots, tiles, xpeers, speers, dgpeers, rank, np};
+  int smem = frnn_hybrid_bw_smem();
+  cudaError_t e = cudaFuncSetAttribute(frnn_hybrid_bw_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem);
+  if (e != cudaSuccess) return (int)e;
+  void* args[] = {&a};
+  e = cudaLaunchCooperativeKernel((void*)frnn_hybrid_bw_kernel, dim3(D / S / np, resident), dim3(THREADS), args, smem,
+                                  (cudaStream_t)stream);
+  return (int)e;
+}
+#endif
+
 extern "C" int frnn_hybrid_bw(const float* pre, const float* states, const float* initial, const float* dstates,
                               const float* dfinal, const void* R, float* dg, float* dinit, void* xbuf, int* err,
                               int B, int T, int H, int groups, int resident, int slots, int tiles, void* stream) {
   Args a{pre, states, initial, dstates, dfinal, reinterpret_cast<const elem_t*>(R), dg, dinit,
-         reinterpret_cast<elem_t*>(xbuf), err, B, T, H, groups, resident, slots, tiles};
+         reinterpret_cast<elem_t*>(xbuf), err, B, T, H, groups, resident, slots, tiles, nullptr, nullptr, nullptr, 0, 1};
   int smem = frnn_hybrid_bw_smem();
   cudaError_t e = cudaFuncSetAttribute(frnn_hybrid_bw_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem);
   if (e != cudaSuccess) return (int)e;

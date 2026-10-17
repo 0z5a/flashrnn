@@ -25,7 +25,11 @@ import triton
 import triton.language as tl
 
 from .state_contract import begin_sequence
-from .triton_rtiled import SPIN_LIMIT
+from .triton_rtiled import SPIN_LIMIT  # noqa: F401  (single-GPU kernels' limit, kept for reference)
+
+# Spin limit of the cross-GPU waits: 64x the single-GPU kernels' limit (seconds, not milliseconds), so that the launch
+# skew between GPUs of one call cannot end a wait early (scale-out-plan.md section 10).
+SPIN_MG = 1 << 26
 from .triton_rtiled_bw import _now
 
 
@@ -216,6 +220,13 @@ def _rtiled_mg(
                         t_c = _now()
                     _wait(SYNCS, RANK, slot, bars * TOTAL_SPLITS, ERR, SPIN)
                 else:
+                    # Ring and doubling wait only for their round partners, not for this GPU's other CTAs: before
+                    # overwriting the buffer half that this step read, every CTA of this GPU must have finished the
+                    # previous step (it signalled its previous publish). Without this barrier a fast CTA overwrote h
+                    # that a slow CTA of the same GPU was still reading (section 10).
+                    tl.debug_barrier()
+                    _signal(SYNCS, RANK, SLOTS * ROUNDS + slot)
+                    _wait(SYNCS, RANK, SLOTS * ROUNDS + slot, (bars - 1) * SPLITS_PER, ERR, SPIN)
                     tl.store(_peer(PEERS, RANK, dtype) + wrow + o[None, :], hv, o_valid[None, :])
                     tl.debug_barrier()
                     for rnd in tl.static_range(ROUNDS):
@@ -352,7 +363,7 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, devices, slice_widt
                             else (batch, steps, heads, width), device=dev, dtype=torch.float32),
             final=torch.empty((states, batch, 1, heads, width), device=dev, dtype=torch.float32),
             xbuf=torch.zeros((slots, 2, 16, width), device=dev, dtype=wx.dtype) if alloc == "uva" else None,
-            sync=torch.zeros((slots * rounds + 8,), device=dev, dtype=torch.int32) if alloc == "uva" else None,
+            sync=torch.zeros((slots * (rounds + 1) + 8,), device=dev, dtype=torch.int32) if alloc == "uva" else None,
             err=torch.zeros((32 + 8 * splits_per * slots if profile else 1,), device=dev, dtype=torch.int32),
         )
     if alloc == "nccl_symm":
@@ -360,7 +371,7 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, devices, slice_widt
 
         sess = symm_mem.session(devices)
         xbytes = slots * 2 * 16 * width * wx.element_size()
-        sbytes = (slots * rounds + 8) * 4
+        sbytes = (slots * (rounds + 1) + 8) * 4
         xid, sid = sess.buffer("xbuf", xbytes), sess.buffer("sync", sbytes)
         for rank, d in enumerate(devices):
             torch.cuda.set_device(d)
@@ -373,21 +384,27 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, devices, slice_widt
         saddr = [per[d]["sync"].data_ptr() for d in devices]
     events = {}
     kernel = None
+    # Every address table exists before the first GPU starts: the first GPU spins on the exchange from its launch on.
     for rank, d in enumerate(devices):
         torch.cuda.set_device(d)
         p = per[d]
         if alloc == "uva":
-            peers_t = torch.tensor(xaddr, device=f"cuda:{d}", dtype=torch.int64)
-            syncs_t = torch.tensor(saddr, device=f"cuda:{d}", dtype=torch.int64)
+            p["peers_t"] = torch.tensor(xaddr, device=f"cuda:{d}", dtype=torch.int64)
+            p["syncs_t"] = torch.tensor(saddr, device=f"cuda:{d}", dtype=torch.int64)
         else:  # LSA addresses of the session's ranks; the kernel reads the first P entries
-            peers_t, syncs_t = sess.table(xid, rank), sess.table(sid, rank)
-        p["peers_t"], p["syncs_t"] = peers_t, syncs_t
+            p["peers_t"], p["syncs_t"] = sess.table(xid, rank), sess.table(sid, rank)
+    for d in devices:
+        torch.cuda.synchronize(d)
+    for rank, d in enumerate(devices):
+        torch.cuda.set_device(d)
+        p = per[d]
+        peers_t, syncs_t = p["peers_t"], p["syncs_t"]
         e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
         e0.record()
         kernel = _rtiled_mg[(splits_per, slots)](
             p["wx"], p["r"], p["bias"], p["init"], p["out"], p["final"], peers_t, syncs_t, p["err"], p["zero"],
             batch, steps, groups, slots, rank, rank * dg, splits_per, width // slice_width,
-            heads, width, cell == "slstm", 16, slice_width, kc, nch, 0 if output_mode == "full" else 1, SPIN_LIMIT,
+            heads, width, cell == "slstm", 16, slice_width, kc, nch, 0 if output_mode == "full" else 1, SPIN_MG,
             peers, SCHEDULES[schedule], stride, rounds, dg, 0 if rmode == "smem" else 1, int(profile),
             num_warps=num_warps, enable_fp_fusion=False, launch_cooperative_grid=True)
         e1.record()
@@ -419,3 +436,43 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, devices, slice_widt
                                  max_ns=[max(r[i] for r in sums) / n for i in range(3)], steps=n)
             diagnostics["phases"] = phases
     return out, final, ms
+
+
+def geometry(batch, heads, width, peers, slice_width=16, schedule="direct", k_chunk=512, sms=132, element_size=2):
+    """Per-GPU launch geometry of a P-GPU call and its exchange-buffer sizes (identical GPUs assumed)."""
+    kc = min(k_chunk, triton.next_power_of_2(width))
+    splits_per = width // peers // slice_width
+    rounds = rounds_of(schedule, peers)
+    groups = triton.cdiv(batch, 16) * heads
+    slots = min(groups, sms // splits_per)
+    return dict(kc=kc, nch=triton.cdiv(width, kc), dg=width // peers, splits_per=splits_per, rounds=rounds,
+                groups=groups, slots=slots, xbytes=slots * 2 * 16 * width * element_size,
+                sbytes=(slots * (rounds + 1) + 8) * 4)
+
+
+def recurrence_rank(wx, recurrent, bias, initial, cell="lstm", *, rank, peers, xtable, stable, slice_width=16,
+                    schedule="direct", stride=1, rmode="smem", num_warps=4, output_mode="hidden", k_chunk=512):
+    """One GPU's share of a P-GPU call, for one process per GPU (e.g. NVSHMEM): inputs on the current device, the
+    exchange buffers already zeroed on every GPU, ``xtable`` / ``stable`` int64 device tensors with every GPU's
+    exchange-buffer / counter address as seen from this GPU. Launches on the current stream and returns
+    (output, FP32 final carry, events); only this GPU's columns rank * D / P .. of the outputs are written."""
+    batch, steps, gates, heads, width = wx.shape
+    dev = wx.device
+    g = geometry(batch, heads, width, peers, slice_width, schedule, k_chunk,
+                 torch.cuda.get_device_properties(dev).multi_processor_count, wx.element_size())
+    states = 4 if cell == "slstm" else 2
+    ctx = begin_sequence(initial, cell, wx.dtype)
+    out = torch.zeros((states, batch, steps, heads, width) if output_mode == "full" else (batch, steps, heads, width),
+                      device=dev, dtype=torch.float32)
+    final = torch.zeros((states, batch, 1, heads, width), device=dev, dtype=torch.float32)
+    err = torch.zeros((1,), device=dev, dtype=torch.int32)
+    e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+    e0.record()
+    _rtiled_mg[(g["splits_per"], g["slots"])](
+        wx.contiguous(), recurrent.contiguous(), bias.contiguous(), initial.contiguous(), out, final, xtable, stable,
+        err, ctx.zero_normalizer.to(dev), batch, steps, g["groups"], g["slots"], rank, rank * g["dg"], g["splits_per"],
+        width // slice_width, heads, width, cell == "slstm", 16, slice_width, g["kc"], g["nch"],
+        0 if output_mode == "full" else 1, SPIN_MG, peers, SCHEDULES[schedule], stride, g["rounds"], g["dg"],
+        0 if rmode == "smem" else 1, 0, num_warps=num_warps, enable_fp_fusion=False, launch_cooperative_grid=True)
+    e1.record()
+    return out, final, (e0, e1, err)
