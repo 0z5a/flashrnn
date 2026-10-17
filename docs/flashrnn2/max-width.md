@@ -297,3 +297,40 @@ only the consumer branch reaches the per-step cooperative grid barrier, so the g
 login-node trace check compiled the kernel but did not compare the block size. Fixes: `tilelang_stream` compiles with
 `tl.disable_warp_specialized`; `tl_trace_check.py` now fails any kernel whose `__launch_bounds__` differs from the
 configured thread count. The batch is rerun unchanged otherwise ("bm64 v3").
+
+## 14. Training to D = 2048 (job "bw 2048 v2", 2026-10-17)
+
+**W1-train**: 16/16 large-D training cases pass (D = 1024 with the CUDA backward forced, D = 1536, 1792, 2048 with the library choice; LSTM/sLSTM, FP16/BF16); Triton-backward control 4/4. **W3-train** holds 18/24, **W4-train** 10/24 (training step, T = 256).
+
+| cell | dtype | B | D | vs cuda_fused | vs cuda |
+| --- | --- | --- | --- | --- | --- |
+| lstm | bflo | 16 | 1536 | 0.85 [0.85, 0.85] (no) | 1.15 [1.13, 1.16] |
+| lstm | bflo | 16 | 1792 | 1.17 [1.17, 1.17] | 1.08 [1.07, 1.09] |
+| lstm | bflo | 16 | 2048 | 1.59 [1.59, 1.59] | 1.51 [1.50, 1.52] |
+| lstm | bflo | 64 | 1536 | 1.06 [1.06, 1.06] | 0.36 [0.36, 0.37] (no) |
+| lstm | bflo | 64 | 1792 | 1.06 [1.06, 1.06] | 0.31 [0.31, 0.32] (no) |
+| lstm | bflo | 64 | 2048 | 1.25 [1.22, 1.26] | 0.56 [0.56, 0.56] (no) |
+| lstm | floa | 16 | 1536 | 0.73 [0.61, 0.79] (no) | 1.07 [1.07, 1.08] |
+| lstm | floa | 16 | 1792 | 0.86 [0.86, 0.86] (no) | 0.85 [0.84, 0.86] (no) |
+| lstm | floa | 16 | 2048 | 1.35 [1.27, 1.38] | 1.45 [1.44, 1.46] |
+| lstm | floa | 64 | 1536 | 1.08 [1.08, 1.08] | 0.40 [0.39, 0.40] (no) |
+| lstm | floa | 64 | 1792 | 1.30 [1.30, 1.30] | 0.34 [0.34, 0.35] (no) |
+| lstm | floa | 64 | 2048 | 1.49 [1.49, 1.50] | 0.57 [0.56, 0.57] (no) |
+| slstm | bflo | 16 | 1536 | 0.94 [0.94, 0.94] (no) | 1.27 [1.26, 1.27] |
+| slstm | bflo | 16 | 1792 | 1.18 [1.18, 1.18] | 1.15 [1.12, 1.17] |
+| slstm | bflo | 16 | 2048 | 1.79 [1.79, 1.79] | 1.74 [1.73, 1.75] |
+| slstm | bflo | 64 | 1536 | 1.24 [1.24, 1.25] | 0.40 [0.39, 0.40] (no) |
+| slstm | bflo | 64 | 1792 | 1.19 [1.19, 1.19] | 0.36 [0.36, 0.37] (no) |
+| slstm | bflo | 64 | 2048 | 1.25 [1.25, 1.25] | 0.57 [0.56, 0.57] (no) |
+| slstm | floa | 16 | 1536 | 0.84 [0.84, 0.84] (no) | 1.16 [1.14, 1.17] |
+| slstm | floa | 16 | 1792 | 0.87 [0.81, 0.90] (no) | 0.91 [0.90, 0.92] (no) |
+| slstm | floa | 16 | 2048 | 1.57 [1.57, 1.58] | 1.73 [1.71, 1.73] |
+| slstm | floa | 64 | 1536 | 1.12 [1.12, 1.13] | 0.44 [0.44, 0.44] (no) |
+| slstm | floa | 64 | 1792 | 1.45 [1.45, 1.45] | 0.39 [0.39, 0.39] (no) |
+| slstm | floa | 64 | 2048 | 1.51 [1.51, 1.51] | 0.57 [0.57, 0.58] (no) |
+
+Reading (post hoc): at B = 16 the step is faster than both FlashRNN1 backends at D = 2048 (1.35-1.79x) and mixed at
+D = 1536-1792; at B = 64 it beats `cuda_fused` (1.06-1.49x) but loses to `cuda` (0.31-0.57x): forward and backward
+both run the four 16-row batch tiles one after another. The B = 64 forward fix is section 10/13; the backward needs the
+same widening.
+
