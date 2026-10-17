@@ -230,17 +230,30 @@ def _rtiled_mg(
                     tl.store(_peer(PEERS, RANK, dtype) + wrow + o[None, :], hv, o_valid[None, :])
                     tl.debug_barrier()
                     for rnd in tl.static_range(ROUNDS):
+                        # Round 0 sends this GPU's own block from registers. Reading it back from the local
+                        # buffer (L2-only loads after a CTA-scope barrier) could see the L2 copy before this
+                        # CTA's store reached it (section 12). Later rounds forward blocks that arrived from
+                        # peers, ordered by the system-scope acquire of the previous round's wait.
                         if SCHED == 1:
                             # Ring: forward the block received last round (own block first) to the next GPU.
                             dest = (RANK + 1) % NP
                             origin = (RANK - rnd + NP) % NP
-                            _forward_block(PEERS, RANK, dest, wrow, origin * DG, split, S, dtype)
+                            if rnd == 0:
+                                tl.store(_peer(PEERS, dest, dtype) + wrow + o[None, :], hv, o_valid[None, :])
+                            else:
+                                _forward_block(PEERS, RANK, dest, wrow, origin * DG, split, S, dtype)
                         else:
                             # Recursive doubling: forward every block owned so far to the partner of this round.
                             dest = RANK ^ (1 << rnd)
                             low = RANK - (RANK % (1 << rnd))
-                            for b in tl.static_range(1 << rnd):
-                                _forward_block(PEERS, RANK, dest, wrow, (low + b) * DG, split, S, dtype)
+                            if rnd == 0:
+                                tl.store(_peer(PEERS, dest, dtype) + wrow + o[None, :], hv, o_valid[None, :])
+                            else:
+                                for b in tl.static_range(1 << rnd):
+                                    if low + b == RANK:
+                                        tl.store(_peer(PEERS, dest, dtype) + wrow + o[None, :], hv, o_valid[None, :])
+                                    else:
+                                        _forward_block(PEERS, RANK, dest, wrow, (low + b) * DG, split, S, dtype)
                         tl.debug_barrier()
                         _signal(SYNCS, dest, slot * ROUNDS + rnd)  # one arrival per CTA per round, after its blocks
                         if PROF:

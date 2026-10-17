@@ -14,9 +14,13 @@ SOURCE = Path(__file__).with_name("nvshmem_mem.cu")
 
 def build(cache_dir=None):
     home = os.environ["FRNN_NVSHMEM_HOME"]
-    cuda_home = os.environ.get("FRNN_HYBRID_CUDA_HOME", "/apps/ACC/CUDA/12.8")
-    flags = ["-std=c++17", "-O2", "-arch=sm_90", "-shared", "-Xcompiler=-fPIC", "-cudart=static", f"-I{home}/include"]
-    link = [f"-L{home}/lib", "-lnvshmem_host", "-Xlinker", "-rpath", "-Xlinker", f"{home}/lib"]
+    # nvshmemx_init_attr (inline in the headers) calls into libnvshmem_device.a: relocatable device code, linked with
+    # the toolkit that built that library (CUDA 13.2; 12.8's nvlink rejects its ABI).
+    cuda_home = os.environ.get("FRNN_NVSHMEM_CUDA_HOME", "/apps/ACC/CUDA/13.2")
+    flags = ["-std=c++17", "-O2", "-arch=sm_90", "-rdc=true", "-shared", "-Xcompiler=-fPIC", "-cudart=static",
+             f"-I{home}/include"]
+    link = [f"-L{home}/lib", "-lnvshmem_host", "-lnvshmem_device", "-lcuda", "-Xlinker", "-rpath", "-Xlinker",
+            f"{home}/lib"]
     header = (Path(home) / "include" / "nvshmem.h").read_bytes()
     digest = hashlib.sha256(SOURCE.read_bytes() + header + " ".join(flags + link).encode()).hexdigest()[:16]
     cache = Path(cache_dir or os.environ.get("FRNN_HYBRID_CACHE",

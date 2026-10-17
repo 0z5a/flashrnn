@@ -438,3 +438,25 @@ The multi-GPU forward is not qualified. Its timings (F2; phase A's ring/doubling
 login gate compiled the helper but never loaded it. The repaired build is relocatable device code, linked against
 `libnvshmem_device.a` with CUDA 13.2 (the toolkit that built that library; 12.8 rejects its ABI), and it now passes a
 login-node `dlopen` check.
+
+## 13. Diagnosis batch "mg2" (pre-registration, 2026-10-18, before any run of it)
+
+**Kernel change.** Round 0 of ring and doubling stores the GPU's own block to the round's partner from registers. In
+doubling's later rounds the own block is also sent from registers. Every block that arrived from a peer is still read
+from the local buffer, behind the previous round's system-scope acquire.
+
+**F3, forward correctness with this change** (`tools/scale_fwd_diag.py`, uva buffers, B = 16, T = 48, LSTM/sLSTM, the
+17 configurations of section 9). Each configuration runs in three sequences of five calls:
+* five plain multi-GPU calls in a row;
+* five multi-GPU calls, each right after the single-GPU R-tiled reference (only D = 1024 can run it);
+* five multi-GPU calls, each right after the P = 1 run.
+
+The process has no NCCL communicator. Once more, at D = 1024, it has one. Rule (per configuration and cell): every
+call completes without an exchange error, the FP64 error is below 2e-2, and every call of every configuration of the
+same (cell, D, S) has one output digest. Readings fixed now:
+* If ring/doubling pass and direct still fails only right after the single-GPU reference, the timeout is an
+  interaction with that kernel, not with the exchange.
+* If failures appear only with the NCCL communicator, NCCL's presence is the cause.
+* If ring/doubling still fail without either, the round-0 change did not address the defect.
+
+**N1 again** with the repaired NVSHMEM helper (the cases of section 11).
