@@ -536,3 +536,39 @@ Reading (post hoc; the pre-registered counters are missing, so the rule's cases 
   element sizes.)
 
 The cluster variant stays opt-in (`cluster=8`) and is not a default.
+
+## 20. R split in two dimensions in the CUDA backward (pre-registration, 2026-10-18, before any run of it)
+
+**Change.** `hybrid_bw2d.cu` / `hybrid_bw2d.py`, training option `backend="hybrid2d"` (opt-in, not a default). The
+PC × Q CTAs of a group form a grid; CTA (i, j) keeps the R block [K block j (4D / Q rows) × column block i (D / PC
+columns)] resident and per step: pointwise update of its D / PC / Q owned columns (dh → dG_t, into dg and the
+exchange buffer) → grid barrier B2 → GEMM of its staged dG K block (128-bit loads, double-buffered 64-row chunks) with
+the resident R block → FP32 partial dh → grid barrier B1 → owners sum the Q partials of their columns in fixed order.
+The first step takes dh from d_final, the GEMM of step 0 gives the initial-state gradient; single exchange and partial
+buffers (the two barriers separate every write from every read; argument in the source). Grids (CTAs = PC · Q):
+D = 1024 8 × 16, D = 1280 5 × 16, D = 1536 8 × 16 (R block in shared memory), D = 2048 8 × 16 with 8 of 32 k-steps per
+warp in registers; D = 1792 has no fitting grid and is not supported. ptxas (sm_90a, FP16, BM = 64): 116 / 184 / 156 /
+238 registers at D = 1024 / 1280 / 1536 / 2048, no spill in any build including the verification builds (≤ 255);
+shared memory 82 / 182 / 166 / 215 KB (limit 227 KB).
+
+**Bytes per step** (section 19, corrected): 8 · (PC + Q) · B · D against 8 · (D / 16) · B · D for the 1-D kernel:
+at D = 1536, B = 64 about 19 MB against 75 MB, at D = 2048 about 25 MB against 134 MB — the same order as the R bytes
+cuBLAS reads per step (19 / 34 MB). The win, if any, comes from staying inside one kernel; the price is a second grid
+barrier per step (the 1-D kernel's barrier phase was 4-5 µs per step).
+
+**Runs (batch "bw2d"):**
+* **R-2d, race verification** (rule of section 12): D ∈ {1536, 2048} × LSTM/sLSTM at BM = 64 (B = 100, two tiles) and
+  D = 2048 × LSTM at BM = 16 (B = 40), T = 48, 21 runs per variant. Detectors: content check of every staged dG
+  operand against the stored FP32 dG (barrier B2), and a step stamp per K block written after each partial (release)
+  and checked (acquire) by every partial reader (barrier B1). Broken variants: no B1, no B2. Also recorded: the largest
+  difference to the 1-D kernel (not bitwise: different summation order).
+* **W1-2d, qualification**: training step within the FP64 budgets of the earlier W1 runs with `backend="hybrid2d"`,
+  D ∈ {1024, 1536, 2048}, B ∈ {64, 40}, LSTM/sLSTM, FP16/BF16, T = 24 (24 cases; forward as in sections 15/18).
+* **Paired timing**, training step, B = 64, T = 256, D ∈ {1024, 1536, 2048} × LSTM/sLSTM × FP16/BF16, 2-D backward
+  against **W6-2d** the 1-D BM = 64 backward (same forward) and **W4-2d** FlashRNN1 `cuda`; protocol and rule of
+  section 3. Prediction band (stated now): against the 1-D kernel 1.0-2.0x; against `cuda` anywhere between 0.6x and
+  1.2x — a loss to `cuda` remains a legitimate outcome.
+* **Profile, report only**: step breakdown with in-kernel phases (pointwise, B2, GEMM, B1, partial sum) at
+  D ∈ {1536, 2048}, LSTM FP16 and sLSTM BF16; Nsight Systems of the 2-D step at D ∈ {1536, 2048}; Nsight Compute of the
+  first 2-D and 1-D backward launch at D ∈ {1536, 2048}, T = 32 (sections checked against `ncu --list-sections` on
+  the login node before sealing).

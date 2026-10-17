@@ -123,6 +123,17 @@ class _Recurrence(torch.autograd.Function):
             d_final += d_carry.float()
         options = dict(ctx.backward_options)
         backend = options.pop("backend", None)
+        if backend == "hybrid2d":
+            # R split over column blocks and K blocks (max-width.md section 20); opt-in.
+            from . import hybrid_bw2d
+
+            dg, d_recurrent, d_bias, d_initial = hybrid_bw2d.backward(
+                wx, recurrent, bias, initial, history, d_history, d_final, ctx.cell,
+                batch_rows=options.get("batch_rows"), wgrad=options.get("wgrad", "bmm"),
+                prof=options.get("prof_phases", False), tf32=options.get("tf32", False),
+                diagnostics=options.get("diagnostics"))
+            return (dg.to(wx.dtype), d_recurrent.to(recurrent.dtype), d_bias.to(bias.dtype),
+                    d_initial.to(initial.dtype), None, None, None, None, None)
         if backend == "hybrid" or (backend is None and wx.shape[-1] > HYBRID_BACKWARD_ABOVE):
             # D > 1280: R does not fit the Triton kernel's shared memory; the CUDA kernel keeps part of it in registers.
             from . import hybrid_bw
