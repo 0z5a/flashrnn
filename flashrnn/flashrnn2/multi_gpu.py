@@ -220,15 +220,12 @@ def _rtiled_mg(
                         t_c = _now()
                     _wait(SYNCS, RANK, slot, bars * TOTAL_SPLITS, ERR, SPIN)
                 else:
-                    # Ring and doubling wait only for their round partners, not for this GPU's other CTAs: before
-                    # overwriting the buffer half that this step read, every CTA of this GPU must have finished the
-                    # previous step (it signalled its previous publish). Without this barrier a fast CTA overwrote h
-                    # that a slow CTA of the same GPU was still reading (section 10).
-                    tl.debug_barrier()
-                    _signal(SYNCS, RANK, SLOTS * ROUNDS + slot)
-                    _wait(SYNCS, RANK, SLOTS * ROUNDS + slot, (bars - 1) * SPLITS_PER, ERR, SPIN)
+                    # Ring and doubling wait for their round partners only, so the CTAs of this GPU also meet at a
+                    # per-GPU counter after the rounds (sections 10, 14): each CTA signals it once its slice of the
+                    # own block is stored.
                     tl.store(_peer(PEERS, RANK, dtype) + wrow + o[None, :], hv, o_valid[None, :])
                     tl.debug_barrier()
+                    _signal(SYNCS, RANK, SLOTS * ROUNDS + slot)  # this CTA's slice of the own block is stored
                     for rnd in tl.static_range(ROUNDS):
                         # Round 0 sends this GPU's own block from registers. Reading it back from the local
                         # buffer (L2-only loads after a CTA-scope barrier) could see the L2 copy before this
@@ -260,6 +257,10 @@ def _rtiled_mg(
                             if rnd == 0:
                                 t_c = _now()
                         _wait(SYNCS, RANK, slot * ROUNDS + rnd, bars * SPLITS_PER, ERR, SPIN)
+                    # Every CTA of this GPU has stored its slice of this step's own block: the next step may read
+                    # the whole block, and (each CTA signalled after its compute) nobody still reads the buffer
+                    # half that the next publish overwrites.
+                    _wait(SYNCS, RANK, SLOTS * ROUNDS + slot, bars * SPLITS_PER, ERR, SPIN)
             if PROF:
                 t_d = _now()
                 p_comp += t_b - t_a
@@ -324,12 +325,23 @@ def _probe_store(ADDRS, value, slot):
     tl.store(base + slot, value)
 
 
-def recurrence(wx, recurrent, bias, initial, cell="lstm", *, devices, slice_width=16, schedule="direct", stride=1,
-               rmode="smem", num_warps=4, output_mode="hidden", k_chunk=512, profile=False, diagnostics=None,
-               alloc="uva"):
+def recurrence(wx, recurrent, bias, initial, cell="lstm", *, devices, **kw):
     """One logical call on ``devices`` (list of CUDA device indices). Inputs may live anywhere; each GPU gets a copy
     of Wx, R, bias and the initial state and computes its own D/P output columns. Returns the gathered hidden output
-    ([B,T,H,D] or [S,B,T,H,D] for ``full``) on the first device, the FP32 final carry gathered likewise, and timing."""
+    ([B,T,H,D] or [S,B,T,H,D] for ``full``) on the first device, the FP32 final carry gathered likewise, and timing.
+    Keyword options: see ``_recurrence``. The caller's current CUDA device is restored: Triton and the CUDA runtime
+    launch on the current device, and a later launch on another GPU's tensors would otherwise run on the last GPU of
+    this call (section 14)."""
+    previous = torch.cuda.current_device()
+    try:
+        return _recurrence(wx, recurrent, bias, initial, cell, devices=devices, **kw)
+    finally:
+        torch.cuda.set_device(previous)
+
+
+def _recurrence(wx, recurrent, bias, initial, cell="lstm", *, devices, slice_width=16, schedule="direct", stride=1,
+                rmode="smem", num_warps=4, output_mode="hidden", k_chunk=512, profile=False, diagnostics=None,
+                alloc="uva"):
     if cell not in ("lstm", "slstm"):
         raise ValueError("LSTM/sLSTM only")
     if output_mode not in ("full", "hidden"):

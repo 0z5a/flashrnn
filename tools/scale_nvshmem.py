@@ -213,7 +213,8 @@ def main():
             errs = [x.get("error") for x in per if x.get("error")]
             if errs:
                 raise RuntimeError(errs[0])
-            ref, ref_ms, ref_kind = reference(case, devices, len(devices))
+            with torch.cuda.device(devices[0]):  # launches on the inputs' GPU (section 14)
+                ref, ref_ms, ref_kind = reference(case, devices, len(devices))
             parts = [torch.load(out / f"case{ci}-rank{r}.pt") for r in range(len(devices))]
             got = [torch.cat([parts[r][i] for r in range(len(devices))], dim=-1) for i in range(len(ref))]
             row.update(bitwise=[bool(torch.equal(g.cpu(), x.cpu())) for g, x in zip(got, ref)],

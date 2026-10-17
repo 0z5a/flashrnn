@@ -460,3 +460,48 @@ same (cell, D, S) has one output digest. Readings fixed now:
 * If ring/doubling still fail without either, the round-0 change did not address the defect.
 
 **N1 again** with the repaired NVSHMEM helper (the cases of section 11).
+
+## 14. Results of the diagnosis batch "mg2" (2026-10-18) and the repairs
+
+Evidence: `scale-out-evidence/mg2/` (diag and NVSHMEM records), archive verified by SHA-256.
+
+**F3 separates two defects.** Pre-registered reading 1 holds for D = 1024, reading 3 for S = 8.
+* *D = 1024: a harness defect, not an exchange defect.*
+  * Every configuration and cell gives one output digest (FP64 5-6e-5) in all five plain calls and all five calls after
+    the P = 1 run, with or without an NCCL communicator.
+  * Every failure, timeouts included (direct too), happens on a call right after the single-GPU reference.
+  * The cause: Triton and the CUDA runtime launch on the current device. `multi_gpu.recurrence` left the current device
+    at the call's last GPU, and the reference did not set it. So the single-GPU kernel ran on another GPU, reading the
+    first GPU's memory over NVLink, and was not covered by the synchronize of the first GPU. It was still running when
+    the next multi-GPU call started.
+  * This also explains the fast "timeouts" of sections 9 and 12, and probably phase A's "bitwise against the
+    single-GPU kernel: false everywhere".
+* *S = 8, P = 2 / 3, ring and doubling: a real exchange race.* Wrong outputs appear in any sequence, including plain
+  calls (2:2048 ring/doubling, 3:1536 ring). After the rounds, ring and doubling did not make the CTAs of one GPU wait
+  for each other. A CTA of the next step could therefore read the GPU's own block before another CTA of the same GPU
+  had stored its slice. The barrier of section 10 only protected the overwrite of the previous buffer half.
+* The NCCL communicator changes nothing: diag-nccl-k512 equals diag-nonccl-k512.
+
+**N1 with the repaired helper: 15/17.** NVSHMEM (one process per GPU, `nvshmem_malloc`, `nvshmem_ptr`) gives outputs
+bitwise equal to the one-process reference in:
+* every direct forward;
+* ring/doubling at P = 4;
+* 2:1024 ring;
+* the multi-GPU backward at D = 1536 / 2048 and at D = 1024, B = 16.
+
+The two failures:
+* 3:1536 ring: the race above.
+* Backward at D = 1024, B = 64 at P = 4: its single-GPU reference ran into the same current-device defect (28 ms
+  against 0.5 ms), so that comparison is void.
+
+Kernel times (slowest PE, unpaired against the one-process reference, report only):
+* forward 0.64-1.15 ms, against 0.71-1.32 ms on uva in one process;
+* multi-GPU backward at T = 32: 0.8-1.0 ms.
+
+**Repairs.**
+* `multi_gpu.recurrence` restores the caller's current device.
+* The harness launches each single-GPU reference inside its device context (`scale_bench.single_gpu`, the NVSHMEM
+  reference).
+* Ring and doubling signal a per-GPU counter once a CTA's slice of the own block is stored, and wait after the rounds
+  until every CTA of the GPU has done so. That one barrier gives visibility of the own block for the next step, and also
+  guarantees that the half overwritten next was read completely. It replaces the section 10 barrier.

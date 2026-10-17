@@ -60,8 +60,10 @@ def inputs(cell, batch, steps, heads, width, seed, device):
 def single_gpu(leaves, cell, s, warps, device):
     wx, r, b, init = leaves
     ctx = begin_sequence(init, cell, wx.dtype)
-    out, carry = triton_rtiled.recurrence(wx, r, b, init, cell, sequence_context=ctx, slice_width=s,
-                                          num_warps=warps, output_mode="hidden", snapshot_dtype=torch.float32)
+    # Triton launches on the current device; make it the inputs' device (scale-out-plan.md section 14).
+    with torch.cuda.device(device):
+        out, carry = triton_rtiled.recurrence(wx, r, b, init, cell, sequence_context=ctx, slice_width=s,
+                                              num_warps=warps, output_mode="hidden", snapshot_dtype=torch.float32)
     torch.cuda.synchronize(device)
     return out, carry
 
