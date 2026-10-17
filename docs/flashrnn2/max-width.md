@@ -334,3 +334,22 @@ D = 1536-1792; at B = 64 it beats `cuda_fused` (1.06-1.49x) but loses to `cuda` 
 both run the four 16-row batch tiles one after another. The B = 64 forward fix is section 10/13; the backward needs the
 same widening.
 
+
+## 15. Wide batch tiles in the CUDA backward, B = 64 training (pre-registration, 2026-10-17, before any run of it)
+
+`hybrid_bw.cu` now carries BM ∈ {16, 32, 64} batch rows per CTA (`FRNN_BM`; `hybrid_bw.batch_tile`: 16 up to B = 16,
+32 up to 32, else 64): every warp runs BM/16 mma row tiles against each R fragment, every thread PE = BM·16/256 pointwise
+elements, the partial-sum buffer is [8, BM, 16]. At BM = 16 the arithmetic is unchanged. ptxas (FP16, LSTM/sLSTM,
+sm_90a): BM = 64 at D = 1536 113-128 registers, D = 1792 252-254, D = 2048 254-255 (LSTM: 4 bytes spill), BM = 32 at
+D = 2048 250, all others 0 spill. The kernel body changed, so the race verification of section 12 (job "bw race", not
+yet started) was cancelled and is folded into this batch for the new kernel.
+
+Runs (batch "train64"):
+* **Race verification** (rule of section 12): D ∈ {1536, 2048} × LSTM/sLSTM × BM ∈ {16 (B = 40, three tiles), 64
+  (B = 100, two tiles, one partial)}, T = 48, 21 runs per variant.
+* **Qualification** (W1-train64): training step within the FP64 budgets with the B = 64 configuration — forward: the
+  streamed-h BM = 64 kernel (section 10) at D ∈ {1024, 1536, 1792}, the two-warpgroup kernel at D = 2048; backward:
+  BM = 64 — at B ∈ {64, 40}, LSTM/sLSTM, FP16/BF16, T = 24.
+* **Paired timing**, training step, B = 64, T = 256, D ∈ {1536, 1792, 2048}, LSTM/sLSTM, FP16/BF16: **W6-train64** against
+  the previous configuration (BM = 16 forward and backward), **W3-train64** against FlashRNN1 `cuda_fused`,
+  **W4-train64** against `cuda`; protocol and rule of section 3.

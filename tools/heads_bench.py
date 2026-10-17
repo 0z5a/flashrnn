@@ -98,7 +98,7 @@ def make_arm(name, case, leaves, cot_h, cfg):
         def trn_alt(xs, cot):
             xs = [x.detach().requires_grad_(True) for x in xs]
             y, _ = training.recurrence(*xs, cell, output_mode="hidden", config=alt,
-                                       backward_options=dict(case.get("backward") or {}))
+                                       backward_options=dict(case.get("alt_backward") or case.get("backward") or {}))
             return torch.autograd.grad((y.float() * cot).sum(), xs)[0]
         return (lambda: fwd_alt(leaves)) if kind == "forward" else (lambda: trn_alt(leaves, cot_h))
     if name in ("loop", "loop_graph"):

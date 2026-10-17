@@ -128,7 +128,8 @@ class _Recurrence(torch.autograd.Function):
 
             dg, d_recurrent, d_bias, d_initial = hybrid_bw.backward(
                 wx, recurrent, bias, initial, history, d_history, d_final, ctx.cell,
-                reg_rows_per_warp=options.get("reg_rows_per_warp"), tf32=options.get("tf32", False),
+                reg_rows_per_warp=options.get("reg_rows_per_warp"), batch_rows=options.get("batch_rows"),
+                tf32=options.get("tf32", False),
                 diagnostics=options.get("diagnostics"))
             return (dg.to(wx.dtype), d_recurrent.to(recurrent.dtype), d_bias.to(bias.dtype),
                     d_initial.to(initial.dtype), None, None, None, None, None)

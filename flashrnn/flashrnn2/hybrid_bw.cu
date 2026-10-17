@@ -40,7 +40,13 @@ constexpr int V_CHECK = 1, V_DELAY = 2, V_SINGLE = 4, V_NO_SYNC = 8;
 constexpr int D = FRNN_D;
 constexpr int KRW = FRNN_KRW;
 constexpr bool SLSTM = FRNN_SLSTM != 0;
-constexpr int S = 16, BM = 16, WARPS = 8, THREADS = 256;
+#ifndef FRNN_BM
+#define FRNN_BM 16
+#endif
+// BM batch rows per CTA (16 / 32 / 64): MT = BM / 16 mma row tiles per warp share every R fragment; each of the 256
+// threads runs PE = BM * 16 / 256 pointwise elements (rows pb + 16 e, column pj).
+constexpr int S = 16, BM = FRNN_BM, WARPS = 8, THREADS = 256, MT = BM / 16, PE = BM * S / THREADS;
+static_assert(BM == 16 || BM == 32 || BM == 64, "BM must be 16, 32 or 64");
 constexpr int K = 4 * D;
 constexpr int KW = K / WARPS;
 constexpr int KSW = KW - KRW;
@@ -103,11 +109,11 @@ struct Args {
 __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw_kernel(Args a) {
   extern __shared__ __align__(16) unsigned char smem[];
   uint32_t* sr = reinterpret_cast<uint32_t*>(smem);                                   // [WARPS][CS][2][32][2]
-  float* red = reinterpret_cast<float*>(smem + (size_t)WARPS * CS * 2 * 32 * 2 * 4);  // [WARPS][16][16]
+  float* red = reinterpret_cast<float*>(smem + (size_t)WARPS * CS * 2 * 32 * 2 * 4);  // [WARPS][BM][16]
   cg::grid_group grid = cg::this_grid();
   const int s = blockIdx.x, gy = blockIdx.y, tid = threadIdx.x, warp = tid >> 5, lane = tid & 31;
   const int fg = lane >> 2, ft = lane & 3;  // mma fragment row group / thread-in-group
-  const int pb = tid >> 4, pj = tid & 15;   // pointwise element (batch row, column)
+  const int pb = tid >> 4, pj = tid & 15;   // pointwise element (batch row pb + 16 e, column pj)
   const int p = s * S + pj;
   const size_t hd = (size_t)a.H * D, state_stride = (size_t)a.B * hd, history_stride = (size_t)a.B * a.T * hd;
   uint32_t rreg[CR > 0 ? CR : 1][2][2];
@@ -118,8 +124,6 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw_kernel(Args a) {
     const bool active = group < a.groups;
     const int g = active ? group : a.groups - 1;
     const int head = g / a.tiles, bt = g % a.tiles;
-    const int row = bt * BM + pb;
-    const bool valid = active && row < a.B;
     if (active) {
       // R[:, :, p] of this CTA: registers for the first KRW rows of every warp's K range, shared memory for the rest.
 #pragma unroll
@@ -140,143 +144,182 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw_kernel(Args a) {
     }
     __syncthreads();
 
-    const size_t unit = ((size_t)row * a.H + head) * D + p;
-    float dc = 0.f, dn = 0.f, dh_in = 0.f;
+    float dc[PE], dn[PE], dh_in[PE];
+#pragma unroll
+    for (int e = 0; e < PE; ++e) dc[e] = dn[e] = dh_in[e] = 0.f;
 
-    // dh from the exchanged, rounded dG of every CTA of the group (parity par); all 256 threads take part.
-    auto reduce = [&](int par, int t1) -> float {
-      float acc[2][4] = {{0.f, 0.f, 0.f, 0.f}, {0.f, 0.f, 0.f, 0.f}};
-      const elem_t* xa = a.xbuf + ((size_t)(gy * 2 + par) * BM) * K + warp * KW;
-      const uint32_t* r0 = reinterpret_cast<const uint32_t*>(xa + (size_t)fg * K + 2 * ft);
-      const uint32_t* r8 = reinterpret_cast<const uint32_t*>(xa + (size_t)(fg + 8) * K + 2 * ft);
-      if (VERIFY & V_CHECK) {
-        int bad = 0;
+    // Content check of the A elements this thread reads (rows mt*16 + fg / + 8 of the tile).
+    auto check = [&](const elem_t* xa, int t1) -> int {
+      int bad = 0;
+      for (int mt = 0; mt < MT; ++mt) {
+        const uint32_t* r0 = reinterpret_cast<const uint32_t*>(xa + (size_t)(mt * 16 + fg) * K + 2 * ft);
+        const uint32_t* r8 = reinterpret_cast<const uint32_t*>(xa + (size_t)(mt * 16 + fg + 8) * K + 2 * ft);
+        int row0 = bt * BM + mt * 16 + fg;
         for (int c = 0; c < CR + CS; ++c) {
           int k = warp * KW + c * 16 + 2 * ft;
-          bad += check_pair(__ldcg(r0 + c * 8), a.dg, a.B, a.T, a.H, head, bt * BM + fg, t1, k);
-          bad += check_pair(__ldcg(r8 + c * 8), a.dg, a.B, a.T, a.H, head, bt * BM + fg + 8, t1, k);
-          bad += check_pair(__ldcg(r0 + c * 8 + 4), a.dg, a.B, a.T, a.H, head, bt * BM + fg, t1, k + 8);
-          bad += check_pair(__ldcg(r8 + c * 8 + 4), a.dg, a.B, a.T, a.H, head, bt * BM + fg + 8, t1, k + 8);
+          bad += check_pair(__ldcg(r0 + c * 8), a.dg, a.B, a.T, a.H, head, row0, t1, k);
+          bad += check_pair(__ldcg(r8 + c * 8), a.dg, a.B, a.T, a.H, head, row0 + 8, t1, k);
+          bad += check_pair(__ldcg(r0 + c * 8 + 4), a.dg, a.B, a.T, a.H, head, row0, t1, k + 8);
+          bad += check_pair(__ldcg(r8 + c * 8 + 4), a.dg, a.B, a.T, a.H, head, row0 + 8, t1, k + 8);
         }
+      }
+      return bad;
+    };
+
+    // dh from the exchanged, rounded dG of every CTA of the group (parity par); all 256 threads take part.
+    auto reduce = [&](int par, int t1) {
+      float acc[MT][2][4];
+#pragma unroll
+      for (int mt = 0; mt < MT; ++mt)
+#pragma unroll
+        for (int nt = 0; nt < 2; ++nt)
+#pragma unroll
+          for (int q = 0; q < 4; ++q) acc[mt][nt][q] = 0.f;
+      const elem_t* xa = a.xbuf + ((size_t)(gy * 2 + par) * BM) * K + warp * KW;
+      if (VERIFY & V_CHECK) {
+        int bad = check(xa, t1);
         if (bad) atomicAdd(a.err + 1, bad);
       }
 #pragma unroll
       for (int c = 0; c < CR; ++c) {
-        uint32_t a0 = __ldcg(r0 + c * 8), a1 = __ldcg(r8 + c * 8), a2 = __ldcg(r0 + c * 8 + 4), a3 = __ldcg(r8 + c * 8 + 4);
-        mma(acc[0], a0, a1, a2, a3, rreg[c][0][0], rreg[c][0][1]);
-        mma(acc[1], a0, a1, a2, a3, rreg[c][1][0], rreg[c][1][1]);
+#pragma unroll
+        for (int mt = 0; mt < MT; ++mt) {
+          const uint32_t* r0 = reinterpret_cast<const uint32_t*>(xa + (size_t)(mt * 16 + fg) * K + 2 * ft);
+          const uint32_t* r8 = reinterpret_cast<const uint32_t*>(xa + (size_t)(mt * 16 + fg + 8) * K + 2 * ft);
+          uint32_t a0 = __ldcg(r0 + c * 8), a1 = __ldcg(r8 + c * 8), a2 = __ldcg(r0 + c * 8 + 4), a3 = __ldcg(r8 + c * 8 + 4);
+          mma(acc[mt][0], a0, a1, a2, a3, rreg[c][0][0], rreg[c][0][1]);
+          mma(acc[mt][1], a0, a1, a2, a3, rreg[c][1][0], rreg[c][1][1]);
+        }
       }
       const uint2* sb = reinterpret_cast<const uint2*>(sr) + (size_t)warp * CS * 2 * 32 + lane;
-#pragma unroll 4
+#pragma unroll 2
       for (int c = 0; c < CS; ++c) {
         int off = (CR + c) * 8;
-        uint32_t a0 = __ldcg(r0 + off), a1 = __ldcg(r8 + off), a2 = __ldcg(r0 + off + 4), a3 = __ldcg(r8 + off + 4);
         uint2 b0 = sb[(c * 2) * 32], b1 = sb[(c * 2 + 1) * 32];
-        mma(acc[0], a0, a1, a2, a3, b0.x, b0.y);
-        mma(acc[1], a0, a1, a2, a3, b1.x, b1.y);
+#pragma unroll
+        for (int mt = 0; mt < MT; ++mt) {
+          const uint32_t* r0 = reinterpret_cast<const uint32_t*>(xa + (size_t)(mt * 16 + fg) * K + 2 * ft);
+          const uint32_t* r8 = reinterpret_cast<const uint32_t*>(xa + (size_t)(mt * 16 + fg + 8) * K + 2 * ft);
+          uint32_t a0 = __ldcg(r0 + off), a1 = __ldcg(r8 + off), a2 = __ldcg(r0 + off + 4), a3 = __ldcg(r8 + off + 4);
+          mma(acc[mt][0], a0, a1, a2, a3, b0.x, b0.y);
+          mma(acc[mt][1], a0, a1, a2, a3, b1.x, b1.y);
+        }
       }
       if (VERIFY & V_CHECK) {
-        // Re-read every A element this thread used, once now (exchange content) and once after the MMAs below.
-        int bad = 0;
-        for (int c = 0; c < CR + CS; ++c) {
-          int k = warp * KW + c * 16 + 2 * ft;
-          bad += check_pair(__ldcg(r0 + c * 8), a.dg, a.B, a.T, a.H, head, bt * BM + fg, t1, k);
-          bad += check_pair(__ldcg(r8 + c * 8), a.dg, a.B, a.T, a.H, head, bt * BM + fg + 8, t1, k);
-          bad += check_pair(__ldcg(r0 + c * 8 + 4), a.dg, a.B, a.T, a.H, head, bt * BM + fg, t1, k + 8);
-          bad += check_pair(__ldcg(r8 + c * 8 + 4), a.dg, a.B, a.T, a.H, head, bt * BM + fg + 8, t1, k + 8);
-        }
+        int bad = check(xa, t1);
         if (bad) atomicAdd(a.err + 2, bad);
       }
-      float* rw = red + warp * 256;
+      float* rw = red + warp * BM * 16;
 #pragma unroll
-      for (int nt = 0; nt < 2; ++nt) {
-        int col = nt * 8 + 2 * ft;
-        rw[fg * 16 + col] = acc[nt][0];
-        rw[fg * 16 + col + 1] = acc[nt][1];
-        rw[(fg + 8) * 16 + col] = acc[nt][2];
-        rw[(fg + 8) * 16 + col + 1] = acc[nt][3];
+      for (int mt = 0; mt < MT; ++mt)
+#pragma unroll
+        for (int nt = 0; nt < 2; ++nt) {
+          int col = nt * 8 + 2 * ft, r = mt * 16 + fg;
+          rw[r * 16 + col] = acc[mt][nt][0];
+          rw[r * 16 + col + 1] = acc[mt][nt][1];
+          rw[(r + 8) * 16 + col] = acc[mt][nt][2];
+          rw[(r + 8) * 16 + col + 1] = acc[mt][nt][3];
+        }
+      __syncthreads();
+#pragma unroll
+      for (int e = 0; e < PE; ++e) {
+        float sum = 0.f;
+#pragma unroll
+        for (int w = 0; w < WARPS; ++w) sum += red[w * BM * 16 + (pb + 16 * e) * 16 + pj];
+        dh_in[e] = sum;
       }
       __syncthreads();
-      float sum = 0.f;
-#pragma unroll
-      for (int w = 0; w < WARPS; ++w) sum += red[w * 256 + pb * 16 + pj];
-      __syncthreads();
-      return sum;
     };
 
     for (int idx = 0; idx < a.T; ++idx) {
       const int t = a.T - 1 - idx;
       if (idx == 0) {
-        if (valid) {
-          dh_in = a.dfinal[unit];
-          dc = a.dfinal[state_stride + unit];
-          if (SLSTM) dn = a.dfinal[2 * state_stride + unit];
+#pragma unroll
+        for (int e = 0; e < PE; ++e) {
+          const int row = bt * BM + pb + 16 * e;
+          const size_t unit = ((size_t)row * a.H + head) * D + p;
+          if (active && row < a.B) {
+            dh_in[e] = a.dfinal[unit];
+            dc[e] = a.dfinal[state_stride + unit];
+            if (SLSTM) dn[e] = a.dfinal[2 * state_stride + unit];
+          }
         }
       } else if (active) {
         if (VERIFY & V_DELAY) delay(a.err[3], s, g, t);
-        dh_in = reduce((VERIFY & V_SINGLE) ? 0 : (cnt - 1) & 1, t + 1);
-      }
-      float d_i = 0.f, d_f = 0.f, d_z = 0.f, d_o = 0.f;
-      const size_t here = (((size_t)row * a.T + t) * a.H + head) * D + p;
-      const size_t pre = (((size_t)row * a.T + t) * 4 * a.H + head) * D + p;
-      if (valid) {
-        float dh = dh_in + a.dstates[here];
-        dc = dc + a.dstates[history_stride + here];
-        float gi = a.pre[pre], gf = a.pre[pre + hd], gz = a.pre[pre + 2 * hd], go = a.pre[pre + 3 * hd];
-        float c_t = a.states[history_stride + here];
-        float c_prev = t > 0 ? a.states[history_stride + here - hd] : a.initial[state_stride + unit];
-        float z = 2.0f * sigmoid(2.0f * gz) - 1.0f;
-        float o = sigmoid(go);
-        if (SLSTM) {
-          dn = dn + a.dstates[2 * history_stride + here];
-          float n_t = a.states[2 * history_stride + here], m_t = a.states[3 * history_stride + here];
-          float n_prev = t > 0 ? a.states[2 * history_stride + here - hd] : a.initial[2 * state_stride + unit];
-          float m_prev = t > 0 ? a.states[3 * history_stride + here - hd] : a.initial[3 * state_stride + unit];
-          float logf_ = fminf(gf, 0.0f) - logf(1.0f + expf(-fabsf(gf))) + m_prev;
-          float fgate = expf(logf_ - m_t), igate = expf(gi - m_t);
-          dc = dc + dh * o / n_t;
-          dn = dn - dh * o * c_t / (n_t * n_t);
-          d_o = dh * (c_t / n_t) * o * (1.0f - o);
-          d_f = (dc * c_prev + dn * n_prev) * fgate * (1.0f - sigmoid(gf));
-          d_i = (dc * z + dn) * igate;
-          d_z = dc * igate * (1.0f - z * z);
-          dc = dc * fgate;
-          dn = dn * fgate;
-        } else {
-          float igate = sigmoid(gi), fgate = sigmoid(gf);
-          float tc = 2.0f * sigmoid(2.0f * c_t) - 1.0f;
-          dc = dc + dh * o * (1.0f - tc * tc);
-          d_o = dh * tc * o * (1.0f - o);
-          d_f = dc * c_prev * fgate * (1.0f - fgate);
-          d_i = dc * z * igate * (1.0f - igate);
-          d_z = dc * igate * (1.0f - z * z);
-          dc = dc * fgate;
-        }
-        a.dg[pre] = d_i;
-        a.dg[pre + hd] = d_f;
-        a.dg[pre + 2 * hd] = d_z;
-        a.dg[pre + 3 * hd] = d_o;
+        reduce((VERIFY & V_SINGLE) ? 0 : (cnt - 1) & 1, t + 1);
       }
       if (VERIFY & V_DELAY) delay(a.err[3], s + 977, g, t);
-      if (active) {
-        elem_t* w = a.xbuf + ((size_t)(gy * 2 + ((VERIFY & V_SINGLE) ? 0 : (cnt & 1))) * BM + pb) * K + p;
-        w[0] = to_elem(d_i);
-        w[D] = to_elem(d_f);
-        w[2 * D] = to_elem(d_z);
-        w[3 * D] = to_elem(d_o);
+#pragma unroll
+      for (int e = 0; e < PE; ++e) {
+        const int lrow = pb + 16 * e, row = bt * BM + lrow;
+        const bool valid = active && row < a.B;
+        const size_t unit = ((size_t)row * a.H + head) * D + p;
+        float d_i = 0.f, d_f = 0.f, d_z = 0.f, d_o = 0.f;
+        const size_t here = (((size_t)row * a.T + t) * a.H + head) * D + p;
+        const size_t pre = (((size_t)row * a.T + t) * 4 * a.H + head) * D + p;
+        if (valid) {
+          float dh = dh_in[e] + a.dstates[here];
+          dc[e] = dc[e] + a.dstates[history_stride + here];
+          float gi = a.pre[pre], gf = a.pre[pre + hd], gz = a.pre[pre + 2 * hd], go = a.pre[pre + 3 * hd];
+          float c_t = a.states[history_stride + here];
+          float c_prev = t > 0 ? a.states[history_stride + here - hd] : a.initial[state_stride + unit];
+          float z = 2.0f * sigmoid(2.0f * gz) - 1.0f;
+          float o = sigmoid(go);
+          if (SLSTM) {
+            dn[e] = dn[e] + a.dstates[2 * history_stride + here];
+            float n_t = a.states[2 * history_stride + here], m_t = a.states[3 * history_stride + here];
+            float n_prev = t > 0 ? a.states[2 * history_stride + here - hd] : a.initial[2 * state_stride + unit];
+            float m_prev = t > 0 ? a.states[3 * history_stride + here - hd] : a.initial[3 * state_stride + unit];
+            float logf_ = fminf(gf, 0.0f) - logf(1.0f + expf(-fabsf(gf))) + m_prev;
+            float fgate = expf(logf_ - m_t), igate = expf(gi - m_t);
+            dc[e] = dc[e] + dh * o / n_t;
+            dn[e] = dn[e] - dh * o * c_t / (n_t * n_t);
+            d_o = dh * (c_t / n_t) * o * (1.0f - o);
+            d_f = (dc[e] * c_prev + dn[e] * n_prev) * fgate * (1.0f - sigmoid(gf));
+            d_i = (dc[e] * z + dn[e]) * igate;
+            d_z = dc[e] * igate * (1.0f - z * z);
+            dc[e] = dc[e] * fgate;
+            dn[e] = dn[e] * fgate;
+          } else {
+            float igate = sigmoid(gi), fgate = sigmoid(gf);
+            float tc = 2.0f * sigmoid(2.0f * c_t) - 1.0f;
+            dc[e] = dc[e] + dh * o * (1.0f - tc * tc);
+            d_o = dh * tc * o * (1.0f - o);
+            d_f = dc[e] * c_prev * fgate * (1.0f - fgate);
+            d_i = dc[e] * z * igate * (1.0f - igate);
+            d_z = dc[e] * igate * (1.0f - z * z);
+            dc[e] = dc[e] * fgate;
+          }
+          a.dg[pre] = d_i;
+          a.dg[pre + hd] = d_f;
+          a.dg[pre + 2 * hd] = d_z;
+          a.dg[pre + 3 * hd] = d_o;
+        }
+        if (active) {
+          elem_t* w = a.xbuf + ((size_t)(gy * 2 + ((VERIFY & V_SINGLE) ? 0 : (cnt & 1))) * BM + lrow) * K + p;
+          w[0] = to_elem(d_i);
+          w[D] = to_elem(d_f);
+          w[2 * D] = to_elem(d_z);
+          w[3 * D] = to_elem(d_o);
+        }
       }
       ++cnt;
       if (!(VERIFY & V_NO_SYNC) || idx == a.T - 1) grid.sync();
     }
     // Tail: gradient of the initial state from dG_0.
     if (active) {
-      dh_in = reduce((VERIFY & V_SINGLE) ? 0 : (cnt - 1) & 1, 0);
-      if (valid) {
-        a.dinit[unit] = dh_in;
-        a.dinit[state_stride + unit] = dc;
-        if (SLSTM) {
-          a.dinit[2 * state_stride + unit] = dn;
-          a.dinit[3 * state_stride + unit] = 0.f;
+      reduce((VERIFY & V_SINGLE) ? 0 : (cnt - 1) & 1, 0);
+#pragma unroll
+      for (int e = 0; e < PE; ++e) {
+        const int row = bt * BM + pb + 16 * e;
+        const size_t unit = ((size_t)row * a.H + head) * D + p;
+        if (row < a.B) {
+          a.dinit[unit] = dh_in[e];
+          a.dinit[state_stride + unit] = dc[e];
+          if (SLSTM) {
+            a.dinit[2 * state_stride + unit] = dn[e];
+            a.dinit[3 * state_stride + unit] = 0.f;
+          }
         }
       }
     }
@@ -284,7 +327,7 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw_kernel(Args a) {
   }
 }
 
-extern "C" int frnn_hybrid_bw_smem() { return WARPS * CS * 2 * 32 * 2 * 4 + WARPS * 256 * 4; }
+extern "C" int frnn_hybrid_bw_smem() { return WARPS * CS * 2 * 32 * 2 * 4 + WARPS * BM * 16 * 4; }
 
 extern "C" int frnn_hybrid_bw(const float* pre, const float* states, const float* initial, const float* dstates,
                               const float* dfinal, const void* R, float* dg, float* dinit, void* xbuf, int* err,

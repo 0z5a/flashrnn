@@ -1,7 +1,7 @@
 """Race verification of the CUDA large-D backward's exchange (flashrnn2/hybrid_bw.cu), same rule as race_verify.py.
 
 Usage: hybrid_bw_race.py --task JSON --out FILE
-task: {"cell", "dtype", "width", "batch", "steps", "runs": 21}
+task: {"cell", "dtype", "width", "batch", "steps", "runs": 21, "batch_rows": 16 | 32 | 64 (default: by batch)}
 Variants: correct (content check; run 0 without delays, runs 1.. with seeded 0-4 us delays), single buffer, no grid
 barrier (the last one, before the tail, stays). Each run's outputs (dG, d_initial) are compared bitwise with the
 uninstrumented kernel on the same inputs.
@@ -42,14 +42,15 @@ def main():
         d_final = torch.zeros(init.shape, device=wx.device, dtype=torch.float32)
         d_final += cot_f.float()
         args = (wx, r, b, init, history, d_history, d_final, task["cell"])
-        ref = hybrid_bw.backward(*args)
+        kw = dict(batch_rows=task.get("batch_rows"))
+        ref = hybrid_bw.backward(*args, **kw)
         torch.cuda.synchronize()
         runs = task.get("runs", 21)
         for variant in (None, "single", "no_sync"):
             rows = []
             for i in range(runs):
                 v = dict(check=True, delay_seed=None if i == 0 else 1000 * i + 7, broken=variant)
-                out = hybrid_bw.backward(*args, _verify=v)
+                out = hybrid_bw.backward(*args, _verify=v, **kw)
                 torch.cuda.synchronize()
                 same = torch.equal(out[0], ref[0]) and torch.equal(out[3], ref[3])
                 rows.append(dict(run=i, after_read=v["after_read"], after_mma=v["after_mma"], outputs_equal=same))
