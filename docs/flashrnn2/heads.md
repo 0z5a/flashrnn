@@ -191,3 +191,8 @@ Runs (batch "heads v3"):
 * **H3-train-v3**: training step at the claim shapes of section 3 (D ∈ {64, 128} × H ∈ {16, 256, 1024} × LSTM/sLSTM ×
   FP16/BF16) against FlashRNN1, and **H6** against the previous H > 1 path (unfused, einsum dR); protocol and rule of
   section 4.
+
+Run "heads v3" stopped at its canary after 31 s: the test hook `per_head_gemms` replaced `weight_gradients` with a
+function that did not take the new `method` argument (a harness defect; nothing ran on the GPU beyond that case). The
+hook is fixed and the login preflight now calls the library's `weight_gradients` through the hook on CPU tensors; the
+batch is rerun unchanged otherwise ("heads v4").
