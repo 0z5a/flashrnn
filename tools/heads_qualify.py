@@ -9,9 +9,13 @@ Modes
                 H = 1 launch on head h's inputs (hidden output and FP32 carry); the H-head output is within the
                 FP64-reference budget of tools/bw_qualify.py (rel_fro <= c, max_abs_scaled <= 5c)
       training  (case "train": true) gradients of <cot_h, h history> through training.recurrence with the same
-                forward config: d_wx and d_init bitwise per head against the H = 1 runs (kernel-produced);
-                d_r and d_bias within the FP64 gradient budget (GEMMs outside the kernel may pick another cuBLAS
-                algorithm for another batch count; bitwise equality is recorded, not required)
+                forward config.
+                library path: every gradient within the FP64 gradient budget of tools/bw_qualify.py.
+                kernel isolation: the two GEMMs outside the kernels (the gate preactivations the backward recomputes,
+                and dR / dbias) take a different code path and summation order for H = 1 (addmm) and H > 1
+                (einsum), so the library's d_wx cannot be bitwise per head (job 47445133). With the test hook
+                per_head_gemms() both GEMMs of the H-head call run head by head through the H = 1 code path;
+                then d_wx, d_init, d_r and d_bias must be bitwise equal per head against the H = 1 runs.
   repro --cell C --width D --heads H --batch B --steps T --arm {fwd_default,fwd_tilelang,train} --out FILE
       one arm of the scale-out phase A heads row in a fresh process, synchronizing after every call (the batch runs
       it with CUDA_LAUNCH_BLOCKING=1 and once under compute-sanitizer memcheck)
@@ -25,7 +29,7 @@ from pathlib import Path
 import torch
 
 import bw_qualify
-from flashrnn.flashrnn2 import dispatch, grad_reference, training
+from flashrnn.flashrnn2 import dispatch, grad_reference, training, triton_rtiled_bw
 from flashrnn.flashrnn2.execution_policy import KernelConfig, default_config
 
 
@@ -59,6 +63,38 @@ def train(leaves, cot_h, cell, config):
     return y.detach(), list(grads)
 
 
+class per_head_gemms:
+    """Test hook: the backward's preactivation and weight-gradient GEMMs of an H-head call, head by head through the
+    H = 1 code path (cuBLAS chooses its algorithm by shape, so only the same call per head is bitwise comparable)."""
+
+    def __enter__(self):
+        self.pre, self.wg = triton_rtiled_bw.preactivations, triton_rtiled_bw.weight_gradients
+        orig_pre, orig_wg = self.pre, self.wg
+
+        def pre(wx, recurrent, bias, initial, history, tf32=False):
+            heads = wx.shape[3]
+            if heads == 1:
+                return orig_pre(wx, recurrent, bias, initial, history, tf32)
+            parts = [orig_pre(wx[:, :, :, h:h + 1].contiguous(), recurrent[:, h:h + 1].contiguous(),
+                              bias[:, h:h + 1].contiguous(), initial[:, :, :, h:h + 1].contiguous(),
+                              history[:, :, :, h:h + 1].contiguous(), tf32) for h in range(heads)]
+            return torch.cat([p[0] for p in parts], dim=3), torch.cat([p[1] for p in parts], dim=2)
+
+        def wg(dg, h_prev, tf32=False):
+            heads = dg.shape[3]
+            if heads == 1:
+                return orig_wg(dg, h_prev, tf32)
+            parts = [orig_wg(dg[:, :, :, h:h + 1].contiguous(), h_prev[:, :, h:h + 1].contiguous(), tf32)
+                     for h in range(heads)]
+            return torch.cat([p[0] for p in parts], dim=1), torch.cat([p[1] for p in parts], dim=1)
+
+        triton_rtiled_bw.preactivations, triton_rtiled_bw.weight_gradients = pre, wg
+        return self
+
+    def __exit__(self, *exc):
+        triton_rtiled_bw.preactivations, triton_rtiled_bw.weight_gradients = self.pre, self.wg
+
+
 def mode_qualify(args):
     case = json.loads(Path(args.case).read_text())
     rec = dict(case=case, started=time.time(), gpu=torch.cuda.get_device_name())
@@ -85,19 +121,23 @@ def mode_qualify(args):
         ok = fwd_ok and rec["forward"]["bitwise_ok"]
         # Training.
         if case.get("train"):
-            y, grads = train(leaves, cot_h, cell, cfg)
+            _, grads = train(leaves, cot_h, cell, cfg)  # library path
+            with per_head_gemms():
+                _, hooked = train(leaves, cot_h, cell, cfg)
             heads_rec = []
             for h in subset:
                 _, g1 = train(head_slice(leaves, h), cot_h[:, :, h:h + 1].contiguous(), cell, cfg)
                 heads_rec.append(dict(
-                    head=h, d_wx_bitwise=torch.equal(grads[0][:, :, :, h:h + 1], g1[0]),
-                    d_init_bitwise=torch.equal(grads[3][:, :, :, h:h + 1], g1[3]),
-                    d_r_bitwise=torch.equal(grads[1][:, h:h + 1], g1[1]),
-                    d_bias_bitwise=torch.equal(grads[2][:, h:h + 1], g1[2])))
+                    head=h, d_wx_bitwise=torch.equal(hooked[0][:, :, :, h:h + 1], g1[0]),
+                    d_init_bitwise=torch.equal(hooked[3][:, :, :, h:h + 1], g1[3]),
+                    d_r_bitwise=torch.equal(hooked[1][:, h:h + 1], g1[1]),
+                    d_bias_bitwise=torch.equal(hooked[2][:, h:h + 1], g1[2]),
+                    library_d_wx_bitwise=torch.equal(grads[0][:, :, :, h:h + 1], g1[0])))
             ref = bw_qualify.run_oracle(leaves, cot_h, cot_f, case, "hist")
             m = bw_qualify.metrics(grads, ref, cell)
             checks = bw_qualify.gate(m, case["dtype"])
-            train_bitwise = all(x["d_wx_bitwise"] and x["d_init_bitwise"] for x in heads_rec)
+            train_bitwise = all(x["d_wx_bitwise"] and x["d_init_bitwise"] and x["d_r_bitwise"] and x["d_bias_bitwise"]
+                                for x in heads_rec)
             rec["training"] = dict(per_head=heads_rec, fp64=m, fp64_checks=checks, fp64_ok=all(checks.values()),
                                    bitwise_ok=train_bitwise)
             ok = ok and train_bitwise and all(checks.values())

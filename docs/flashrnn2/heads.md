@@ -71,3 +71,40 @@ FlashRNN1 `cuda_fused`, `num_heads = H`, `hidden_dim = H·D`; a build or run fai
 
 Negative results and failed cases are kept. All timings use the untuned default for H > 1; a tuned H > 1 table is a
 later step.
+
+## 5. First run (job "heads v1", 2026-10-17) and amendment
+
+**Repro (diagnostic).** All 14 arms of the scale-out phase A many-heads row ran cleanly in their own processes with
+`CUDA_LAUNCH_BLOCKING=1` (LSTM/sLSTM, H = 1 and 4, default forward, TileLang forward, training step), and both
+memcheck runs were clean. The phase A failure did not reproduce; it is attributed to that harness (CUDA events
+recorded on one device and synchronized on another), not to a kernel.
+
+**H1 as pre-registered: FAIL on every path** (single CTA 18/48, R-tiled 0/32, TileLang cluster 0/12, grid 0/8). In
+every case the forward was bitwise equal per head and within the FP64 budget (relative error 2.6e-5 to 2.3e-4), and
+every training case was within the FP64 gradient budget. What failed was the per-head bitwise equality of d_wx (and
+of d_init, dR, dbias). Cause, confirmed on the CPU with the library functions: d_wx is not a kernel-only output. The
+backward recomputes the gate preactivations with a GEMM outside the kernel, which uses `addmm` for H = 1 and
+`einsum` plus a separate bias add for H > 1; the two summation orders round differently, so the kernel receives
+different FP32 inputs. The same holds for the dR / dbias GEMMs. The pre-registered rule was wrong about provenance;
+the kernels were not tested by it. Because H1 failed, H2, H3 and the sweep did not run.
+
+**H4 (BF16 training at H = 1 against FlashRNN1) ran as pre-registered** (3 starts × 20 blocks, all outputs stable):
+v1 / FlashRNN2 per-step ratio, 95% interval.
+
+| cell | D | B = 16 | B = 64 |
+| --- | --- | --- | --- |
+| LSTM | 192 | 1.229 [1.226, 1.231] | 1.938 [1.816, 1.985] |
+| LSTM | 384 | 0.977 [0.768, 1.081] (not shown) | 1.724 [1.685, 1.743] |
+| LSTM | 768 | 1.197 [1.196, 1.198] | 1.629 [1.511, 1.682] |
+| sLSTM | 192 | 1.182 [1.104, 1.213] | 2.023 [1.982, 2.040] |
+| sLSTM | 384 | 1.003 [0.746, 1.140] (not shown) | 1.887 [1.885, 1.889] |
+| sLSTM | 768 | 1.188 [1.187, 1.190] | 1.666 [1.664, 1.667] |
+
+10 of 12 shapes hold (lower bound ≥ 1). D = 384 at B = 16 has wide intervals in both cells (start-to-start spread).
+
+**Amendment for the second run (written before it).** Training qualification has two parts:
+(a) library path: every gradient within the FP64 gradient budget;
+(b) kernel isolation: `heads_qualify.per_head_gemms()` makes the H-head call compute both GEMMs head by head
+through the H = 1 code path (verified on the CPU: per-head preactivations, dR and dbias bitwise equal to the H = 1
+calls; the library path's are not). With it, d_wx, d_init, dR and dbias must be bitwise equal per head.
+Forward rules, timing protocol and checks H2–H5 are unchanged; the repro phase is dropped (done). H4 is not rerun.
