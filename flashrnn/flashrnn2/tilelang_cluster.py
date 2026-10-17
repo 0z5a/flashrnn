@@ -965,7 +965,7 @@ def version():
 
 def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context, slice_width=32,
                output_mode="full", snapshot_dtype=None, sync="cluster", batch_tile=16, threads=128, prefetch=False,
-               reg_k=0, _ablate=frozenset(), _verify=None):
+               reg_k=0, stream_h=False, _ablate=frozenset(), _verify=None):
     """Public per-call API with the triton_rtiled contract; returns (output, FP32 compute carry).
 
     sync="cluster" exchanges h inside a thread-block cluster (k <= 16); sync="grid" exchanges it
@@ -998,7 +998,12 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context, s
         raise ValueError("snapshot dtype must be input dtype or FP32")
     batch, steps, gates, heads, width = wx.shape
     states = len(contract.components)
-    if reg_k:
+    if stream_h:
+        from . import tilelang_stream
+
+        ok = (sync == "grid" and slice_width == tilelang_stream.S and threads == tilelang_stream.THREADS
+              and tilelang_stream.supported_stream(width, reg_k, batch_tile, sm_count()))
+    elif reg_k:
         ok = sync == "grid" and slice_width == HYBRID_SLICE and supported_hybrid(width, reg_k, sm_count(), batch_tile,
                                                                                  threads)
     else:
@@ -1016,9 +1021,13 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context, s
         raise ValueError("weights must match the input dtype")
     names = {torch.float16: "float16", torch.bfloat16: "bfloat16", torch.float32: "float32"}
     snap = wx.dtype if snapshot_dtype is None else snapshot_dtype
-    fn = kernel(batch, steps, heads, width, slice_width, cell=cell, dtype=names[wx.dtype], mode=output_mode,
-                snapshot=names[snap], sync=sync, bm=batch_tile, threads=threads, prefetch=prefetch, reg_k=reg_k,
-                _ablate=_ablate, _verify=_verify)
+    if stream_h:
+        fn = tilelang_stream.kernel(batch, steps, heads, width, reg_k, batch_tile, cell=cell, dtype=names[wx.dtype],
+                                    mode=output_mode, snapshot=names[snap], sms=sm_count())
+    else:
+        fn = kernel(batch, steps, heads, width, slice_width, cell=cell, dtype=names[wx.dtype], mode=output_mode,
+                    snapshot=names[snap], sync=sync, bm=batch_tile, threads=threads, prefetch=prefetch, reg_k=reg_k,
+                    _ablate=_ablate, _verify=_verify)
     out_shape = {"full": (states, batch, steps, heads, width), "hidden": (batch, steps, heads, width),
                  "last": (batch, 1, heads, width)}[output_mode]
     output = torch.empty(out_shape, device=wx.device, dtype=snap)

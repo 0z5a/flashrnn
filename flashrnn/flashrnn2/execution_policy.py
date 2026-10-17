@@ -26,6 +26,9 @@ class KernelConfig:
     # (flashrnn2.tilelang_cluster.build_grid_hybrid / build_grid_hybrid2; S = 16, BM = 16; with eight warps the two
     # warpgroups split K and hold reg_k / 2 rows each).
     reg_k: int = 0
+    # TileLang grid only (large D, wide batch tiles): h^T streamed in 64-row chunks instead of staged whole, so that
+    # BM = 32 / 64 fits next to R (flashrnn2.tilelang_stream; one warpgroup, S = 16, reg_k a multiple of 64).
+    stream_h: bool = False
 
     def __post_init__(self):
         if self.family not in ("mma", "simt", "mma_rtiled", "tilelang"):
@@ -40,12 +43,15 @@ class KernelConfig:
                 raise ValueError("the TileLang R-tiled paths use 16/32/64/128-row batch tiles and weight operand b")
             # warps: 4 (one warpgroup) or, on the grid path only, 8 (two warpgroups per CTA). Two warpgroups on
             # the cluster path gave wrong, nondeterministic results (job 47308040 screen: 0/12 bitwise twins).
+            if self.stream_h and (self.sync != "grid" or self.slice_width != 16 or self.warps != 4
+                                  or self.batch_tile not in (32, 64) or self.prefetch or self.reg_k % 64):
+                raise ValueError("streamed h (stream_h) is the TileLang grid path with S = 16, four warps, BM = 32/64")
             if self.warps == 8 and (self.sync != "grid" or (self.batch_tile < 32 and not self.reg_k)):
                 raise ValueError("two warpgroups per CTA are qualified only on the TileLang grid path with BM >= 32")
             if not ((self.sync == "cluster" and self.slice_width in (16, 32, 64))
                     or (self.sync == "grid" and self.slice_width in (16, 32))):
                 raise ValueError("TileLang needs cluster sync with a slice of 16/32/64 or grid sync with 16/32")
-            if self.reg_k and (self.sync != "grid" or self.slice_width != 16 or self.batch_tile != 16
+            if self.reg_k and not self.stream_h and (self.sync != "grid" or self.slice_width != 16 or self.batch_tile != 16
                                or self.prefetch or self.reg_k % (16 * self.warps)):
                 raise ValueError("register residency (reg_k) is the TileLang grid path with S = 16, BM = 16 and reg_k a "
                                  "multiple of 64 per warpgroup (four warps: one warpgroup; eight: K split over two)")
@@ -54,7 +60,7 @@ class KernelConfig:
                 raise ValueError("R tiling uses MMA16 batch tiles and weight operand b")
             if self.slice_width not in (16, 32, 64, 128) or self.sync != "grid":
                 raise ValueError("R tiling needs a power-of-two slice in [16, 128] and grid sync")
-        if self.reg_k and self.family != "tilelang":
+        if (self.reg_k or self.stream_h) and self.family != "tilelang":
             raise ValueError("register residency (reg_k) exists only on the TileLang grid path")
         if self.family in ("mma", "simt") and (self.slice_width or self.sync != "none" or self.pad_k):
             raise ValueError("slice width, sync and K padding apply only to R tiling")

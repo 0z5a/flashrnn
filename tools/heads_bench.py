@@ -10,6 +10,7 @@ Arms (case JSON "arms")
               a failure to build or run is recorded as the arm's result
   v1cuda      the same pinned FlashRNN1 with backend "cuda" (alternating: one recurrent GEMM and one pointwise kernel
               per step, any D)
+  alt         FlashRNN2 with a second pinned configuration (case "alt_config")
 A case may pin the FlashRNN2 configuration ("config": KernelConfig dict) instead of the library selection.
 Kinds: "forward" (no grad, hidden output) and "train" (forward + backward of <cot_h, h history>).
 
@@ -86,6 +87,20 @@ def make_arm(name, case, leaves, cot_h, cfg):
 
     if name == "one":
         return (lambda: fwd(leaves)) if kind == "forward" else (lambda: trn(leaves, cot_h))
+    if name == "alt":  # a second FlashRNN2 configuration (case "alt_config"), e.g. the previous default
+        alt = KernelConfig(**case["alt_config"])
+
+        def fwd_alt(xs):
+            with torch.no_grad():
+                out, _ = dispatch.recurrence(*xs, cell, output_mode="hidden", config=alt)
+            return out
+
+        def trn_alt(xs, cot):
+            xs = [x.detach().requires_grad_(True) for x in xs]
+            y, _ = training.recurrence(*xs, cell, output_mode="hidden", config=alt,
+                                       backward_options=dict(case.get("backward") or {}))
+            return torch.autograd.grad((y.float() * cot).sum(), xs)[0]
+        return (lambda: fwd_alt(leaves)) if kind == "forward" else (lambda: trn_alt(leaves, cot_h))
     if name in ("loop", "loop_graph"):
         parts = [[head_slice(leaves[0], 3, h), head_slice(leaves[1], 1, h), head_slice(leaves[2], 1, h),
                   head_slice(leaves[3], 3, h)] for h in range(heads)]

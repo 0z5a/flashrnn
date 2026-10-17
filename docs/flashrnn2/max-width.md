@@ -237,3 +237,23 @@ D = 2560 (section 7) but is 2.3-6.7x slower than the hybrid kernel at D = 1536-1
 | slstm | bflo | 64 | 3.46 [3.46, 3.46] | 1.36 [1.36, 1.37] |
 | slstm | floa | 16 | 7.38 [7.35, 7.40] | 5.43 [5.40, 5.46] |
 | slstm | floa | 64 | 5.12 [5.12, 5.13] | 1.44 [1.43, 1.44] |
+
+## 10. Wide batch tiles with streamed h for B = 64 (addendum, 2026-10-17, before any run of it)
+
+At B = 64 and D ≥ 1280 the forward lost to FlashRNN1 `cuda` (sections 7-8) because one batch-tile group fills the
+GPU and the four 16-row tiles run one after another. `flashrnn/flashrnn2/tilelang_stream.py`
+(`KernelConfig(stream_h=True, batch_tile=64, reg_k=...)`) carries 64 batch rows per CTA and step (WGMMA N = 64): the
+first reg_k rows of the CTA's R slice sit in register fragments of 64 rows each, the rest in a shared buffer of 64-row
+chunks, and h^T is no longer staged whole but streamed from the exchange buffer in 64-row chunks (two alternating
+shared tiles for the register chunks, a two-stage pipelined copy for the shared chunks). Exchange, epilogue and
+outputs follow the grid kernel. The kernel source is generated per reg_k (one fragment name per chunk) and imported
+from a cache. Login-node compile (FP16, LSTM/sLSTM): BM = 64 at D = 1024, 1280 (reg_k 0), 1536 (128), 1792 (384) with
+0 spill; ptxas reports serialized WGMMAs (each chunk's GEMM waits before the next copy). D must be a multiple of 64.
+
+Runs (batch "bm64"):
+* **Qualification** (W1-bm64): forward within the FP64 budget at D ∈ {1024, 1280, 1536, 1792}, BM = 64, B ∈ {64, 40}
+  (40: one partial tile), LSTM/sLSTM, FP16/BF16, T = 24.
+* **Paired timing**, forward, B = 64, T = 256, D ∈ {1024, 1280, 1536, 1792}, LSTM/sLSTM, FP16/BF16, protocol of
+  section 3: **W6** the BM = 64 kernel against the previous FlashRNN2 configuration at the same D (TileLang grid BM = 16
+  at D ≤ 1280, register residency BM = 16 above); **W4-bm64** against FlashRNN1 `cuda`; **W3-bm64** against `cuda_fused`.
+  Ratio = other time / BM = 64 time; a check holds for a shape when the lower 95% bound is ≥ 1.

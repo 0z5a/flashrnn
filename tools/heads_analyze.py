@@ -93,7 +93,8 @@ def main():
         for other in [n for n in c["arms"] if n != "one"]:
             res = bootstrap(starts[other], 20261017 + i)
             if c.get("experiment", "").startswith("W"):  # large-D batches: W3 against cuda_fused, W4 against cuda
-                check = ("W3" if other == "v1" else "W4" if other == "v1cuda" else other) + c["experiment"][4:]
+                check = ("W3" if other == "v1" else "W4" if other == "v1cuda" else "W6" if other == "alt" else other) \
+                    + c["experiment"][4:]
             else:
                 check = "H2" if other == "loop_graph" else "H4" if c["experiment"] == "H4" else "H3" if other == "v1" else "loop"
             row = dict(name=c["name"], check=check, kind=c["kind"], cell=c["cell"], dtype=c["dtype"], width=c["width"],
