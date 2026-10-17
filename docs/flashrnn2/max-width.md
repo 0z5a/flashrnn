@@ -271,3 +271,19 @@ ran. The B = 64 batch (section 10) carried the same defect in its comparison arm
 Fix: the constant restored; and every batch now runs `tools/tl_trace_check.py` on the login node, which traces and
 compiles every TileLang kernel of the plan (both FlashRNN2 arms, forward and training modes), and the seal requires it
 to pass. Both batches are rerun unchanged otherwise ("bw 2048 v2", "bm64 v2").
+
+## 12. Race verification of the CUDA backward (pre-registration, 2026-10-17, before any run of it)
+
+`hybrid_bw.cu` gains a verification build (`FRNN_VERIFY`, compiled out when 0; 181 registers either way at D = 2048,
+194 with the checks): a content check of every A-fragment element read from the exchange buffer against the sender's
+stored FP32 dG rounded the same way, once after the read and once after the MMAs; seeded 0-4 us delays before the
+publish and after the grid barrier; and two broken variants as negative controls (single buffer; no grid barrier
+except before the tail). The uninstrumented build differs from the earlier one only by the error-buffer kernel
+argument (the SASS is therefore not byte-identical to the build that ran in section 11).
+
+`tools/hybrid_bw_race.py`, per task (D ∈ {1024, 1536, 2048}; LSTM/sLSTM; FP16; B = 40, i.e. three batch tiles and, at
+D ≥ 1536, three groups serialized in slots; T = 48), 21 runs per variant (no delay, then 20 seeds), outputs (dG and
+the initial-state gradient) compared bitwise with the uninstrumented kernel. Rule: the correct kernel passes when every
+run counts zero violations and its outputs are bitwise equal to the uninstrumented reference; a broken variant is
+detected when violations are counted in at least 80% of its runs and no run changes the outputs without counting a
+violation.

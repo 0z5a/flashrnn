@@ -10,6 +10,11 @@
 // order, conflict-free 8-byte loads); the dG_{t+1} operand is read straight from the exchange buffer into A
 // fragments with L2-only loads (ld.global.cg: the buffer is written by other SMs inside this kernel). The 8 partial
 // [16 x 16] sums meet in shared memory. Compile-time parameters: FRNN_D, FRNN_KRW, FRNN_SLSTM, FRNN_BF16.
+//
+// Race verification (FRNN_VERIFY, compiled out when 0): bit 1 content check (every A-fragment element read from the
+// exchange buffer is compared with the sender's stored FP32 dG, rounded the same way, after the read and again after
+// the MMAs: counters err[1], err[2]); bit 2 seeded delays of 0-4 us before the publish and after the grid barrier;
+// bit 4 broken: single buffer; bit 8 broken: no grid barrier (except before the tail).
 #include <cooperative_groups.h>
 #include <cuda_bf16.h>
 #include <cuda_fp16.h>
@@ -27,6 +32,11 @@ typedef __half elem_t;
 __device__ __forceinline__ elem_t to_elem(float x) { return __float2half_rn(x); }
 #endif
 
+#ifndef FRNN_VERIFY
+#define FRNN_VERIFY 0
+#endif
+constexpr int VERIFY = FRNN_VERIFY;
+constexpr int V_CHECK = 1, V_DELAY = 2, V_SINGLE = 4, V_NO_SYNC = 8;
 constexpr int D = FRNN_D;
 constexpr int KRW = FRNN_KRW;
 constexpr bool SLSTM = FRNN_SLSTM != 0;
@@ -53,6 +63,22 @@ __device__ __forceinline__ void mma(float (&c)[4], uint32_t a0, uint32_t a1, uin
 
 __device__ __forceinline__ float sigmoid(float x) { return 1.0f / (1.0f + expf(-x)); }
 
+__device__ __forceinline__ void delay(int seed, int a, int b, int c) {
+  uint32_t h = (uint32_t)seed * 2654435761u ^ (uint32_t)a * 40503u ^ (uint32_t)b * 2246822519u ^ (uint32_t)c * 3266489917u;
+  h ^= h >> 15; h *= 2246822519u; h ^= h >> 13;
+  __nanosleep(h % 4000u);
+}
+
+// Content check of one A-fragment register (two elements, row r, reduction index k) against the stored dG of step t+1.
+__device__ __forceinline__ int check_pair(uint32_t v, const float* dg, int B, int T, int H, int head, int row, int t1,
+                                          int k) {
+  if (row >= B) return 0;
+  int g = k / D, o = k % D;
+  size_t at = (((size_t)row * T + t1) * 4 * H + (size_t)g * H + head) * D + o;
+  uint32_t want = pack(to_elem(dg[at]), to_elem(dg[at + 1]));
+  return v != want;
+}
+
 // B fragment register of R for k (even) and k + 1, column n: R[g, head, o, n] with k = g D + o.
 __device__ __forceinline__ uint32_t r_pair(const elem_t* R, int H, int head, int k, int n) {
   int g = k / D, o = k % D;
@@ -70,6 +96,7 @@ struct Args {
   float* dg;             // [B, T, 4, H, D] FP32 out
   float* dinit;          // [S, B, 1, H, D] FP32 out
   elem_t* xbuf;          // [RESIDENT, 2, BM, 4D] exchange
+  int* err;              // verification: [0] unused, [1] after read, [2] after MMA, [3] delay seed
   int B, T, H, groups, resident, slots, tiles;
 };
 
@@ -117,11 +144,22 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw_kernel(Args a) {
     float dc = 0.f, dn = 0.f, dh_in = 0.f;
 
     // dh from the exchanged, rounded dG of every CTA of the group (parity par); all 256 threads take part.
-    auto reduce = [&](int par) -> float {
+    auto reduce = [&](int par, int t1) -> float {
       float acc[2][4] = {{0.f, 0.f, 0.f, 0.f}, {0.f, 0.f, 0.f, 0.f}};
       const elem_t* xa = a.xbuf + ((size_t)(gy * 2 + par) * BM) * K + warp * KW;
       const uint32_t* r0 = reinterpret_cast<const uint32_t*>(xa + (size_t)fg * K + 2 * ft);
       const uint32_t* r8 = reinterpret_cast<const uint32_t*>(xa + (size_t)(fg + 8) * K + 2 * ft);
+      if (VERIFY & V_CHECK) {
+        int bad = 0;
+        for (int c = 0; c < CR + CS; ++c) {
+          int k = warp * KW + c * 16 + 2 * ft;
+          bad += check_pair(__ldcg(r0 + c * 8), a.dg, a.B, a.T, a.H, head, bt * BM + fg, t1, k);
+          bad += check_pair(__ldcg(r8 + c * 8), a.dg, a.B, a.T, a.H, head, bt * BM + fg + 8, t1, k);
+          bad += check_pair(__ldcg(r0 + c * 8 + 4), a.dg, a.B, a.T, a.H, head, bt * BM + fg, t1, k + 8);
+          bad += check_pair(__ldcg(r8 + c * 8 + 4), a.dg, a.B, a.T, a.H, head, bt * BM + fg + 8, t1, k + 8);
+        }
+        if (bad) atomicAdd(a.err + 1, bad);
+      }
 #pragma unroll
       for (int c = 0; c < CR; ++c) {
         uint32_t a0 = __ldcg(r0 + c * 8), a1 = __ldcg(r8 + c * 8), a2 = __ldcg(r0 + c * 8 + 4), a3 = __ldcg(r8 + c * 8 + 4);
@@ -136,6 +174,18 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw_kernel(Args a) {
         uint2 b0 = sb[(c * 2) * 32], b1 = sb[(c * 2 + 1) * 32];
         mma(acc[0], a0, a1, a2, a3, b0.x, b0.y);
         mma(acc[1], a0, a1, a2, a3, b1.x, b1.y);
+      }
+      if (VERIFY & V_CHECK) {
+        // Re-read every A element this thread used, once now (exchange content) and once after the MMAs below.
+        int bad = 0;
+        for (int c = 0; c < CR + CS; ++c) {
+          int k = warp * KW + c * 16 + 2 * ft;
+          bad += check_pair(__ldcg(r0 + c * 8), a.dg, a.B, a.T, a.H, head, bt * BM + fg, t1, k);
+          bad += check_pair(__ldcg(r8 + c * 8), a.dg, a.B, a.T, a.H, head, bt * BM + fg + 8, t1, k);
+          bad += check_pair(__ldcg(r0 + c * 8 + 4), a.dg, a.B, a.T, a.H, head, bt * BM + fg, t1, k + 8);
+          bad += check_pair(__ldcg(r8 + c * 8 + 4), a.dg, a.B, a.T, a.H, head, bt * BM + fg + 8, t1, k + 8);
+        }
+        if (bad) atomicAdd(a.err + 2, bad);
       }
       float* rw = red + warp * 256;
 #pragma unroll
@@ -163,7 +213,8 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw_kernel(Args a) {
           if (SLSTM) dn = a.dfinal[2 * state_stride + unit];
         }
       } else if (active) {
-        dh_in = reduce((cnt - 1) & 1);
+        if (VERIFY & V_DELAY) delay(a.err[3], s, g, t);
+        dh_in = reduce((VERIFY & V_SINGLE) ? 0 : (cnt - 1) & 1, t + 1);
       }
       float d_i = 0.f, d_f = 0.f, d_z = 0.f, d_o = 0.f;
       const size_t here = (((size_t)row * a.T + t) * a.H + head) * D + p;
@@ -206,19 +257,20 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw_kernel(Args a) {
         a.dg[pre + 2 * hd] = d_z;
         a.dg[pre + 3 * hd] = d_o;
       }
+      if (VERIFY & V_DELAY) delay(a.err[3], s + 977, g, t);
       if (active) {
-        elem_t* w = a.xbuf + ((size_t)(gy * 2 + (cnt & 1)) * BM + pb) * K + p;
+        elem_t* w = a.xbuf + ((size_t)(gy * 2 + ((VERIFY & V_SINGLE) ? 0 : (cnt & 1))) * BM + pb) * K + p;
         w[0] = to_elem(d_i);
         w[D] = to_elem(d_f);
         w[2 * D] = to_elem(d_z);
         w[3 * D] = to_elem(d_o);
       }
       ++cnt;
-      grid.sync();
+      if (!(VERIFY & V_NO_SYNC) || idx == a.T - 1) grid.sync();
     }
     // Tail: gradient of the initial state from dG_0.
     if (active) {
-      dh_in = reduce((cnt - 1) & 1);
+      dh_in = reduce((VERIFY & V_SINGLE) ? 0 : (cnt - 1) & 1, 0);
       if (valid) {
         a.dinit[unit] = dh_in;
         a.dinit[state_stride + unit] = dc;
@@ -235,10 +287,10 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw_kernel(Args a) {
 extern "C" int frnn_hybrid_bw_smem() { return WARPS * CS * 2 * 32 * 2 * 4 + WARPS * 256 * 4; }
 
 extern "C" int frnn_hybrid_bw(const float* pre, const float* states, const float* initial, const float* dstates,
-                              const float* dfinal, const void* R, float* dg, float* dinit, void* xbuf, int B, int T,
-                              int H, int groups, int resident, int slots, int tiles, void* stream) {
+                              const float* dfinal, const void* R, float* dg, float* dinit, void* xbuf, int* err,
+                              int B, int T, int H, int groups, int resident, int slots, int tiles, void* stream) {
   Args a{pre, states, initial, dstates, dfinal, reinterpret_cast<const elem_t*>(R), dg, dinit,
-         reinterpret_cast<elem_t*>(xbuf), B, T, H, groups, resident, slots, tiles};
+         reinterpret_cast<elem_t*>(xbuf), err, B, T, H, groups, resident, slots, tiles};
   int smem = frnn_hybrid_bw_smem();
   cudaError_t e = cudaFuncSetAttribute(frnn_hybrid_bw_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem);
   if (e != cudaSuccess) return (int)e;
