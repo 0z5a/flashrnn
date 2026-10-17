@@ -96,7 +96,8 @@ def main():
                 check = ("W3" if other == "v1" else "W4" if other == "v1cuda" else "W6" if other == "alt" else other) \
                     + c["experiment"][4:]
             else:
-                check = "H2" if other == "loop_graph" else "H4" if c["experiment"] == "H4" else "H3" if other == "v1" else "loop"
+                check = "H2" if other == "loop_graph" else "H4" if c["experiment"] == "H4" else "H3" if other == "v1" \
+                    else "H6" if other == "alt" else "loop"
             row = dict(name=c["name"], check=check, kind=c["kind"], cell=c["cell"], dtype=c["dtype"], width=c["width"],
                        heads=c["heads"], batch=c["batch"], steps=c["steps"], other=other, starts=statuses,
                        unstable=unstable)
