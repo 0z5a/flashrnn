@@ -1,0 +1,925 @@
+{
+ "phases": [
+  {
+   "case": {
+    "cell": "lstm",
+    "dtype": "float16",
+    "width": 1024,
+    "batch": 16,
+    "steps": 256
+   },
+   "profile": {
+    "forward_full_ms": 1.1761599779129028,
+    "variant0": {
+     "options": {},
+     "step_ms": 3.5330240726470947,
+     "phases_ms": {
+      "preactivation": 0.1812800019979477,
+      "kernel": 1.679744005203247,
+      "weight_gradients": 0.2529279887676239
+     },
+     "kernel_phases_us_per_step": null
+    },
+    "variant1": {
+     "options": {
+      "prof_phases": true
+     },
+     "step_ms": 3.5097599029541016,
+     "phases_ms": {
+      "preactivation": 0.18051199615001678,
+      "kernel": 1.6641600131988525,
+      "weight_gradients": 0.25231999158859253
+     },
+     "kernel_phases_us_per_step": {
+      "pointwise": 1.424017578125,
+      "barrier_b2": 1.28886328125,
+      "gemm": 1.760755859375,
+      "barrier_b1": 1.368609375,
+      "partial_sum": 0.27963671875,
+      "cta_steps": 32768
+     }
+    },
+    "variant2": {
+     "options": {
+      "prof_phases": true,
+      "flags": true
+     },
+     "step_ms": 3.735136032104492,
+     "phases_ms": {
+      "preactivation": 0.18051199615001678,
+      "kernel": 1.873568058013916,
+      "weight_gradients": 0.25251200795173645
+     },
+     "kernel_phases_us_per_step": {
+      "pointwise": 1.53391796875,
+      "barrier_b2": 1.383814453125,
+      "gemm": 3.0057578125,
+      "barrier_b1": 0.745255859375,
+      "partial_sum": 0.29039453125,
+      "cta_steps": 32768
+     }
+    },
+    "variant3": {
+     "options": {
+      "pre_fused": false,
+      "honly": false,
+      "wgrad": "bmm",
+      "prof_phases": true
+     },
+     "step_ms": 3.7507519721984863,
+     "phases_ms": {
+      "preactivation": 0.44806399941444397,
+      "kernel": 1.6480640172958374,
+      "weight_gradients": 0.25174400210380554
+     },
+     "kernel_phases_us_per_step": {
+      "pointwise": 1.417501953125,
+      "barrier_b2": 1.260283203125,
+      "gemm": 1.754482421875,
+      "barrier_b1": 1.361763671875,
+      "partial_sum": 0.2787578125,
+      "cta_steps": 32768
+     }
+    }
+   }
+  },
+  {
+   "case": {
+    "cell": "lstm",
+    "dtype": "float16",
+    "width": 1024,
+    "batch": 64,
+    "steps": 256
+   },
+   "profile": {
+    "forward_full_ms": 2.341952085494995,
+    "variant0": {
+     "options": {},
+     "step_ms": 7.2409281730651855,
+     "phases_ms": {
+      "preactivation": 0.5596799850463867,
+      "kernel": 2.748255968093872,
+      "weight_gradients": 0.8317760229110718
+     },
+     "kernel_phases_us_per_step": null
+    },
+    "variant1": {
+     "options": {
+      "prof_phases": true
+     },
+     "step_ms": 7.261280059814453,
+     "phases_ms": {
+      "preactivation": 0.5600000023841858,
+      "kernel": 2.761023998260498,
+      "weight_gradients": 0.8269439935684204
+     },
+     "kernel_phases_us_per_step": {
+      "pointwise": 2.97841015625,
+      "barrier_b2": 1.523224609375,
+      "gemm": 3.293265625,
+      "barrier_b1": 1.902802734375,
+      "partial_sum": 0.74298046875,
+      "cta_steps": 32768
+     }
+    },
+    "variant2": {
+     "options": {
+      "prof_phases": true,
+      "flags": true
+     },
+     "step_ms": 7.387104034423828,
+     "phases_ms": {
+      "preactivation": 0.5602560043334961,
+      "kernel": 2.9079999923706055,
+      "weight_gradients": 0.8272640109062195
+     },
+     "kernel_phases_us_per_step": {
+      "pointwise": 3.040595703125,
+      "barrier_b2": 1.542140625,
+      "gemm": 4.85107421875,
+      "barrier_b1": 0.777205078125,
+      "partial_sum": 0.77103125,
+      "cta_steps": 32768
+     }
+    },
+    "variant3": {
+     "options": {
+      "pre_fused": false,
+      "honly": false,
+      "wgrad": "bmm",
+      "prof_phases": true
+     },
+     "step_ms": 8.70304012298584,
+     "phases_ms": {
+      "preactivation": 1.6573760509490967,
+      "kernel": 2.8025920391082764,
+      "weight_gradients": 0.8248000144958496
+     },
+     "kernel_phases_us_per_step": {
+      "pointwise": 3.124501953125,
+      "barrier_b2": 1.556359375,
+      "gemm": 3.24551953125,
+      "barrier_b1": 1.8692109375,
+      "partial_sum": 0.722763671875,
+      "cta_steps": 32768
+     }
+    }
+   }
+  },
+  {
+   "case": {
+    "cell": "lstm",
+    "dtype": "float16",
+    "width": 1536,
+    "batch": 16,
+    "steps": 256
+   },
+   "profile": {
+    "forward_full_ms": 1.3531520366668701,
+    "variant0": {
+     "options": {},
+     "step_ms": 5.147007942199707,
+     "phases_ms": {
+      "preactivation": 0.7225919961929321,
+      "kernel": 2.1675519943237305,
+      "weight_gradients": 0.5314880013465881
+     },
+     "kernel_phases_us_per_step": null
+    },
+    "variant1": {
+     "options": {
+      "prof_phases": true
+     },
+     "step_ms": 5.1821441650390625,
+     "phases_ms": {
+      "preactivation": 0.719103991985321,
+      "kernel": 2.2034881114959717,
+      "weight_gradients": 0.5326399803161621
+     },
+     "kernel_phases_us_per_step": {
+      "pointwise": 1.4905546875,
+      "barrier_b2": 1.34201171875,
+      "gemm": 3.018896484375,
+      "barrier_b1": 1.907634765625,
+      "partial_sum": 0.311314453125,
+      "cta_steps": 32768
+     }
+    },
+    "variant2": {
+     "options": {
+      "prof_phases": true,
+      "flags": true
+     },
+     "step_ms": 5.2867841720581055,
+     "phases_ms": {
+      "preactivation": 0.7167999744415283,
+      "kernel": 2.2939200401306152,
+      "weight_gradients": 0.5343040227890015
+     },
+     "kernel_phases_us_per_step": {
+      "pointwise": 1.584693359375,
+      "barrier_b2": 1.366306640625,
+      "gemm": 4.4876640625,
+      "barrier_b1": 0.854771484375,
+      "partial_sum": 0.341931640625,
+      "cta_steps": 32768
+     }
+    },
+    "variant3": {
+     "options": {
+      "pre_fused": false,
+      "honly": false,
+      "wgrad": "bmm",
+      "prof_phases": true
+     },
+     "step_ms": 5.185408115386963,
+     "phases_ms": {
+      "preactivation": 0.7115839719772339,
+      "kernel": 2.200416088104248,
+      "weight_gradients": 0.5366399884223938
+     },
+     "kernel_phases_us_per_step": {
+      "pointwise": 1.49244921875,
+      "barrier_b2": 1.342625,
+      "gemm": 3.070318359375,
+      "barrier_b1": 1.967876953125,
+      "partial_sum": 0.324658203125,
+      "cta_steps": 32768
+     }
+    }
+   }
+  },
+  {
+   "case": {
+    "cell": "lstm",
+    "dtype": "float16",
+    "width": 1536,
+    "batch": 64,
+    "steps": 256
+   },
+   "profile": {
+    "forward_full_ms": 3.3623039722442627,
+    "variant0": {
+     "options": {},
+     "step_ms": 10.053119659423828,
+     "phases_ms": {
+      "preactivation": 1.0146559476852417,
+      "kernel": 4.048863887786865,
+      "weight_gradients": 0.743232011795044
+     },
+     "kernel_phases_us_per_step": null
+    },
+    "variant1": {
+     "options": {
+      "prof_phases": true
+     },
+     "step_ms": 10.1876802444458,
+     "phases_ms": {
+      "preactivation": 1.0151679515838623,
+      "kernel": 4.048351764678955,
+      "weight_gradients": 0.7186239957809448
+     },
+     "kernel_phases_us_per_step": {
+      "pointwise": 4.348080078125,
+      "barrier_b2": 1.59803515625,
+      "gemm": 5.8931328125,
+      "barrier_b1": 2.409990234375,
+      "partial_sum": 1.111408203125,
+      "cta_steps": 32768
+     }
+    },
+    "variant2": {
+     "options": {
+      "prof_phases": true,
+      "flags": true
+     },
+     "step_ms": 10.21014404296875,
+     "phases_ms": {
+      "preactivation": 1.0139199495315552,
+      "kernel": 4.197504043579102,
+      "weight_gradients": 0.7135040163993835
+     },
+     "kernel_phases_us_per_step": {
+      "pointwise": 4.47156640625,
+      "barrier_b2": 1.614859375,
+      "gemm": 7.967912109375,
+      "barrier_b1": 0.713650390625,
+      "partial_sum": 1.16262109375,
+      "cta_steps": 32768
+     }
+    },
+    "variant3": {
+     "options": {
+      "pre_fused": false,
+      "honly": false,
+      "wgrad": "bmm",
+      "prof_phases": true
+     },
+     "step_ms": 13.602751731872559,
+     "phases_ms": {
+      "preactivation": 2.682080030441284,
+      "kernel": 4.177504062652588,
+      "weight_gradients": 1.7026879787445068
+     },
+     "kernel_phases_us_per_step": {
+      "pointwise": 4.706865234375,
+      "barrier_b2": 1.679634765625,
+      "gemm": 5.931916015625,
+      "barrier_b1": 2.442984375,
+      "partial_sum": 1.114509765625,
+      "cta_steps": 32768
+     }
+    }
+   }
+  },
+  {
+   "case": {
+    "cell": "lstm",
+    "dtype": "float16",
+    "width": 2048,
+    "batch": 16,
+    "steps": 256
+   },
+   "profile": {
+    "forward_full_ms": 1.5346879959106445,
+    "variant0": {
+     "options": {},
+     "step_ms": 6.003615856170654,
+     "phases_ms": {
+      "preactivation": 0.5324159860610962,
+      "kernel": 2.62390398979187,
+      "weight_gradients": 0.7375360131263733
+     },
+     "kernel_phases_us_per_step": null
+    },
+    "variant1": {
+     "options": {
+      "prof_phases": true
+     },
+     "step_ms": 6.013088226318359,
+     "phases_ms": {
+      "preactivation": 0.5347200036048889,
+      "kernel": 2.5999999046325684,
+      "weight_gradients": 0.7357119917869568
+     },
+     "kernel_phases_us_per_step": {
+      "pointwise": 1.497736328125,
+      "barrier_b2": 1.44190234375,
+      "gemm": 4.49318359375,
+      "barrier_b1": 1.87319140625,
+      "partial_sum": 0.35601171875,
+      "cta_steps": 32768
+     }
+    },
+    "variant2": {
+     "options": {
+      "prof_phases": true,
+      "flags": true
+     },
+     "step_ms": 6.1112961769104,
+     "phases_ms": {
+      "preactivation": 0.5303360223770142,
+      "kernel": 2.7246720790863037,
+      "weight_gradients": 0.7330560088157654
+     },
+     "kernel_phases_us_per_step": {
+      "pointwise": 1.61492578125,
+      "barrier_b2": 1.400322265625,
+      "gemm": 5.95271484375,
+      "barrier_b1": 0.834599609375,
+      "partial_sum": 0.398771484375,
+      "cta_steps": 32768
+     }
+    },
+    "variant3": {
+     "options": {
+      "pre_fused": false,
+      "honly": false,
+      "wgrad": "bmm",
+      "prof_phases": true
+     },
+     "step_ms": 6.527967929840088,
+     "phases_ms": {
+      "preactivation": 1.0799039602279663,
+      "kernel": 2.5820798873901367,
+      "weight_gradients": 0.7302719950675964
+     },
+     "kernel_phases_us_per_step": {
+      "pointwise": 1.5001875,
+      "barrier_b2": 1.420984375,
+      "gemm": 4.448685546875,
+      "barrier_b1": 1.86712109375,
+      "partial_sum": 0.358908203125,
+      "cta_steps": 32768
+     }
+    }
+   }
+  },
+  {
+   "case": {
+    "cell": "lstm",
+    "dtype": "float16",
+    "width": 2048,
+    "batch": 64,
+    "steps": 256
+   },
+   "profile": {
+    "forward_full_ms": 7.223423957824707,
+    "variant0": {
+     "options": {},
+     "step_ms": 16.35523223876953,
+     "phases_ms": {
+      "preactivation": 1.6128640174865723,
+      "kernel": 5.337600231170654,
+      "weight_gradients": 1.0414719581604004
+     },
+     "kernel_phases_us_per_step": null
+    },
+    "variant1": {
+     "options": {
+      "prof_phases": true
+     },
+     "step_ms": 16.342464447021484,
+     "phases_ms": {
+      "preactivation": 1.6132800579071045,
+      "kernel": 5.311232089996338,
+      "weight_gradients": 1.04367995262146
+     },
+     "kernel_phases_us_per_step": {
+      "pointwise": 5.82087890625,
+      "barrier_b2": 1.773169921875,
+      "gemm": 9.25683984375,
+      "barrier_b1": 1.933283203125,
+      "partial_sum": 1.41615234375,
+      "cta_steps": 32768
+     }
+    },
+    "variant2": {
+     "options": {
+      "prof_phases": true,
+      "flags": true
+     },
+     "step_ms": 16.608991622924805,
+     "phases_ms": {
+      "preactivation": 1.6140480041503906,
+      "kernel": 5.5371198654174805,
+      "weight_gradients": 1.0456000566482544
+     },
+     "kernel_phases_us_per_step": {
+      "pointwise": 5.860658203125,
+      "barrier_b2": 1.913138671875,
+      "gemm": 10.854638671875,
+      "barrier_b1": 0.699330078125,
+      "partial_sum": 1.476109375,
+      "cta_steps": 32768
+     }
+    },
+    "variant3": {
+     "options": {
+      "pre_fused": false,
+      "honly": false,
+      "wgrad": "bmm",
+      "prof_phases": true
+     },
+     "step_ms": 21.46214485168457,
+     "phases_ms": {
+      "preactivation": 3.9484479427337646,
+      "kernel": 5.452832221984863,
+      "weight_gradients": 2.679680109024048
+     },
+     "kernel_phases_us_per_step": {
+      "pointwise": 6.136884765625,
+      "barrier_b2": 1.84928515625,
+      "gemm": 9.304056640625,
+      "barrier_b1": 1.9223984375,
+      "partial_sum": 1.453611328125,
+      "cta_steps": 32768
+     }
+    }
+   }
+  },
+  {
+   "case": {
+    "cell": "slstm",
+    "dtype": "bfloat16",
+    "width": 1536,
+    "batch": 64,
+    "steps": 256
+   },
+   "profile": {
+    "forward_full_ms": 3.596287965774536,
+    "variant0": {
+     "options": {},
+     "step_ms": 10.429632186889648,
+     "phases_ms": {
+      "preactivation": 1.0127999782562256,
+      "kernel": 4.238976001739502,
+      "weight_gradients": 0.7231040000915527
+     },
+     "kernel_phases_us_per_step": null
+    },
+    "variant1": {
+     "options": {
+      "prof_phases": true
+     },
+     "step_ms": 10.392127990722656,
+     "phases_ms": {
+      "preactivation": 1.0088640451431274,
+      "kernel": 4.215904235839844,
+      "weight_gradients": 0.7242559790611267
+     },
+     "kernel_phases_us_per_step": {
+      "pointwise": 4.9376015625,
+      "barrier_b2": 1.760384765625,
+      "gemm": 5.90340625,
+      "barrier_b1": 2.444158203125,
+      "partial_sum": 1.148265625,
+      "cta_steps": 32768
+     }
+    },
+    "variant2": {
+     "options": {
+      "prof_phases": true,
+      "flags": true
+     },
+     "step_ms": 10.628992080688477,
+     "phases_ms": {
+      "preactivation": 1.0124160051345825,
+      "kernel": 4.298272132873535,
+      "weight_gradients": 0.733568012714386
+     },
+     "kernel_phases_us_per_step": {
+      "pointwise": 4.794033203125,
+      "barrier_b2": 1.6850859375,
+      "gemm": 8.077994140625,
+      "barrier_b1": 0.83258203125,
+      "partial_sum": 1.19565625,
+      "cta_steps": 32768
+     }
+    },
+    "variant3": {
+     "options": {
+      "pre_fused": false,
+      "honly": false,
+      "wgrad": "bmm",
+      "prof_phases": true
+     },
+     "step_ms": 14.16966438293457,
+     "phases_ms": {
+      "preactivation": 2.6776320934295654,
+      "kernel": 4.377056121826172,
+      "weight_gradients": 1.6881599426269531
+     },
+     "kernel_phases_us_per_step": {
+      "pointwise": 5.462232421875,
+      "barrier_b2": 1.710916015625,
+      "gemm": 5.9239375,
+      "barrier_b1": 2.304587890625,
+      "partial_sum": 1.127720703125,
+      "cta_steps": 32768
+     }
+    }
+   }
+  }
+ ],
+ "opprof": {
+  "opprof-0": {
+   "started": 1792298039.9331734,
+   "rows": [
+    {
+     "cell": "lstm",
+     "dtype": "float16",
+     "width": 1536,
+     "heads": 1,
+     "batch": 64,
+     "steps": 256,
+     "backward": {},
+     "ops": [
+      {
+       "name": "_RecurrenceBackward",
+       "shapes": "[[64, 256, 1, 1536], []]",
+       "calls": 1,
+       "self_cuda_ms": 4.8504
+      },
+      {
+       "name": "frnn_hybrid_bw2d_kernel(Args)",
+       "shapes": "[]",
+       "calls": 1,
+       "self_cuda_ms": 4.0528
+      },
+      {
+       "name": "_Recurrence",
+       "shapes": "[[64, 256, 4, 1, 1536], [4, 1, 1536, 1536], [4, 1, 1536], [2, 64, 1, 1, 1536], []]",
+       "calls": 1,
+       "self_cuda_ms": 3.0993
+      },
+      {
+       "name": "main_kernel",
+       "shapes": "[]",
+       "calls": 1,
+       "self_cuda_ms": 3.0993
+      },
+      {
+       "name": "_preact_kernel",
+       "shapes": "[]",
+       "calls": 1,
+       "self_cuda_ms": 0.7976
+      },
+      {
+       "name": "aten::mm",
+       "shapes": "[[6144, 16384], [16384, 1536]]",
+       "calls": 1,
+       "self_cuda_ms": 0.5226
+      },
+      {
+       "name": "sm90_xmma_gemm_f16f16_f16f32_f32_nt_n_tilesize256x128x64_warpgroupsize2x1x1_execute_segment_k_on_kernel__51_cublas",
+       "shapes": "[]",
+       "calls": 1,
+       "self_cuda_ms": 0.519
+      },
+      {
+       "name": "aten::copy_",
+       "shapes": "[[64, 256, 1, 1536], [64, 256, 1, 1536], []]",
+       "calls": 3,
+       "self_cuda_ms": 0.3366
+      },
+      {
+       "name": "aten::mul",
+       "shapes": "[[64, 256, 1, 1536], [64, 256, 1, 1536]]",
+       "calls": 2,
+       "self_cuda_ms": 0.3344
+      },
+      {
+       "name": "void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1}, at::detail::Array<char*, 2>, TrivialOffsetCalculator<1, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<1>, at::native::memory::StoreWithCast<1> >(int, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1}, at::detail::Array<char*, 2>, TrivialOffsetCalculator<1, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<1>, at::native::memory::StoreWithCast<1>)",
+       "shapes": "[]",
+       "calls": 5,
+       "self_cuda_ms": 0.2773
+      },
+      {
+       "name": "void at::native::vectorized_elementwise_kernel<4, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, at::detail::Array<char*, 3> >(int, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, at::detail::Array<char*, 3>)",
+       "shapes": "[]",
+       "calls": 1,
+       "self_cuda_ms": 0.2031
+      },
+      {
+       "name": "aten::sum",
+       "shapes": "[[64, 256, 4, 1, 1536], [], [], []]",
+       "calls": 1,
+       "self_cuda_ms": 0.1568
+      },
+      {
+       "name": "void at::native::reduce_kernel<128, 4, at::native::ReduceOp<c10::Half, at::native::func_wrapper_t<float, at::native::sum_functor<c10::Half, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4> >(at::native::ReduceOp<c10::Half, at::native::func_wrapper_t<float, at::native::sum_functor<c10::Half, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4>)",
+       "shapes": "[]",
+       "calls": 1,
+       "self_cuda_ms": 0.1551
+      },
+      {
+       "name": "void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}, at::detail::Array<char*, 2>, TrivialOffsetCalculator<1, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<1>, at::native::memory::StoreWithCast<1> >(int, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}, at::detail::Array<char*, 2>, TrivialOffsetCalculator<1, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<1>, at::native::memory::StoreWithCast<1>)",
+       "shapes": "[]",
+       "calls": 4,
+       "self_cuda_ms": 0.1516
+      },
+      {
+       "name": "void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > >(at::TensorIteratorBase&, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > >(at::TensorIteratorBase&, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > const&)::{lambda(int)#1})",
+       "shapes": "[]",
+       "calls": 1,
+       "self_cuda_ms": 0.1312
+      },
+      {
+       "name": "aten::copy_",
+       "shapes": "[[64, 255, 1, 1536], [64, 255, 1, 1536], []]",
+       "calls": 1,
+       "self_cuda_ms": 0.1164
+      },
+      {
+       "name": "void at::native::elementwise_kernel<128, 4, at::native::gpu_kernel_impl<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1} const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1} const&)::{lambda(int)#1})",
+       "shapes": "[]",
+       "calls": 1,
+       "self_cuda_ms": 0.1164
+      },
+      {
+       "name": "void at::native::elementwise_kernel<128, 4, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1} const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1} const&)::{lambda(int)#1})",
+       "shapes": "[]",
+       "calls": 2,
+       "self_cuda_ms": 0.0953
+      },
+      {
+       "name": "aten::copy_",
+       "shapes": "[[1536, 6144], [1536, 6144], []]",
+       "calls": 1,
+       "self_cuda_ms": 0.0916
+      },
+      {
+       "name": "aten::sum",
+       "shapes": "[[64, 256, 1, 1536], []]",
+       "calls": 1,
+       "self_cuda_ms": 0.086
+      },
+      {
+       "name": "void at::native::reduce_kernel<512, 1, at::native::ReduceOp<float, at::native::func_wrapper_t<float, at::native::sum_functor<float, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4> >(at::native::ReduceOp<float, at::native::func_wrapper_t<float, at::native::sum_functor<float, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4>)",
+       "shapes": "[]",
+       "calls": 1,
+       "self_cuda_ms": 0.084
+      },
+      {
+       "name": "aten::copy_",
+       "shapes": "[[4, 1, 1536, 1536], [4, 1, 1536, 1536], []]",
+       "calls": 1,
+       "self_cuda_ms": 0.0373
+      },
+      {
+       "name": "aten::copy_",
+       "shapes": "[[6144, 1536], [6144, 1536], []]",
+       "calls": 1,
+       "self_cuda_ms": 0.0352
+      },
+      {
+       "name": "aten::copy_",
+       "shapes": "[[2, 64, 1, 1, 1536], [2, 64, 1, 1, 1536], []]",
+       "calls": 3,
+       "self_cuda_ms": 0.0155
+      },
+      {
+       "name": "Memset (Device)",
+       "shapes": "[]",
+       "calls": 4,
+       "self_cuda_ms": 0.0072
+      }
+     ],
+     "total_self_cuda_ms": 19.417
+    }
+   ],
+   "finished": 1792298044.0340827,
+   "status": "DONE"
+  },
+  "opprof-1": {
+   "started": 1792298039.930463,
+   "rows": [
+    {
+     "cell": "slstm",
+     "dtype": "bfloat16",
+     "width": 1536,
+     "heads": 1,
+     "batch": 64,
+     "steps": 256,
+     "backward": {},
+     "ops": [
+      {
+       "name": "_RecurrenceBackward",
+       "shapes": "[[64, 256, 1, 1536], []]",
+       "calls": 1,
+       "self_cuda_ms": 5.0195
+      },
+      {
+       "name": "frnn_hybrid_bw2d_kernel(Args)",
+       "shapes": "[]",
+       "calls": 1,
+       "self_cuda_ms": 4.2217
+      },
+      {
+       "name": "_Recurrence",
+       "shapes": "[[64, 256, 4, 1, 1536], [4, 1, 1536, 1536], [4, 1, 1536], [4, 64, 1, 1, 1536], []]",
+       "calls": 1,
+       "self_cuda_ms": 3.2993
+      },
+      {
+       "name": "main_kernel",
+       "shapes": "[]",
+       "calls": 1,
+       "self_cuda_ms": 3.2993
+      },
+      {
+       "name": "_preact_kernel",
+       "shapes": "[]",
+       "calls": 1,
+       "self_cuda_ms": 0.7978
+      },
+      {
+       "name": "aten::mm",
+       "shapes": "[[6144, 16384], [16384, 1536]]",
+       "calls": 1,
+       "self_cuda_ms": 0.4939
+      },
+      {
+       "name": "sm90_xmma_gemm_bf16bf16_bf16f32_f32_nt_n_tilesize128x256x64_warpgroupsize2x1x1_execute_segment_k_on_kernel__51_cublas",
+       "shapes": "[]",
+       "calls": 1,
+       "self_cuda_ms": 0.4904
+      },
+      {
+       "name": "aten::copy_",
+       "shapes": "[[64, 256, 1, 1536], [64, 256, 1, 1536], []]",
+       "calls": 3,
+       "self_cuda_ms": 0.3386
+      },
+      {
+       "name": "aten::mul",
+       "shapes": "[[64, 256, 1, 1536], [64, 256, 1, 1536]]",
+       "calls": 2,
+       "self_cuda_ms": 0.3348
+      },
+      {
+       "name": "void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#12}::operator()() const::{lambda(c10::BFloat16)#1}, at::detail::Array<char*, 2>, TrivialOffsetCalculator<1, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<1>, at::native::memory::StoreWithCast<1> >(int, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#12}::operator()() const::{lambda(c10::BFloat16)#1}, at::detail::Array<char*, 2>, TrivialOffsetCalculator<1, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<1>, at::native::memory::StoreWithCast<1>)",
+       "shapes": "[]",
+       "calls": 5,
+       "self_cuda_ms": 0.2794
+      },
+      {
+       "name": "void at::native::vectorized_elementwise_kernel<4, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, at::detail::Array<char*, 3> >(int, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, at::detail::Array<char*, 3>)",
+       "shapes": "[]",
+       "calls": 1,
+       "self_cuda_ms": 0.2039
+      },
+      {
+       "name": "aten::sum",
+       "shapes": "[[64, 256, 4, 1, 1536], [], [], []]",
+       "calls": 1,
+       "self_cuda_ms": 0.1564
+      },
+      {
+       "name": "void at::native::reduce_kernel<128, 4, at::native::ReduceOp<c10::BFloat16, at::native::func_wrapper_t<float, at::native::sum_functor<c10::BFloat16, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4> >(at::native::ReduceOp<c10::BFloat16, at::native::func_wrapper_t<float, at::native::sum_functor<c10::BFloat16, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4>)",
+       "shapes": "[]",
+       "calls": 1,
+       "self_cuda_ms": 0.1549
+      },
+      {
+       "name": "void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}, at::detail::Array<char*, 2>, TrivialOffsetCalculator<1, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<1>, at::native::memory::StoreWithCast<1> >(int, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}, at::detail::Array<char*, 2>, TrivialOffsetCalculator<1, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<1>, at::native::memory::StoreWithCast<1>)",
+       "shapes": "[]",
+       "calls": 4,
+       "self_cuda_ms": 0.152
+      },
+      {
+       "name": "void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > >(at::TensorIteratorBase&, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > >(at::TensorIteratorBase&, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > const&)::{lambda(int)#1})",
+       "shapes": "[]",
+       "calls": 1,
+       "self_cuda_ms": 0.1309
+      },
+      {
+       "name": "aten::copy_",
+       "shapes": "[[64, 255, 1, 1536], [64, 255, 1, 1536], []]",
+       "calls": 1,
+       "self_cuda_ms": 0.1196
+      },
+      {
+       "name": "void at::native::elementwise_kernel<128, 4, at::native::gpu_kernel_impl<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#12}::operator()() const::{lambda(c10::BFloat16)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#12}::operator()() const::{lambda(c10::BFloat16)#1} const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#12}::operator()() const::{lambda(c10::BFloat16)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#12}::operator()() const::{lambda(c10::BFloat16)#1} const&)::{lambda(int)#1})",
+       "shapes": "[]",
+       "calls": 1,
+       "self_cuda_ms": 0.1196
+      },
+      {
+       "name": "void at::native::elementwise_kernel<128, 4, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#12}::operator()() const::{lambda(c10::BFloat16)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#12}::operator()() const::{lambda(c10::BFloat16)#1} const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#12}::operator()() const::{lambda(c10::BFloat16)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#12}::operator()() const::{lambda(c10::BFloat16)#1} const&)::{lambda(int)#1})",
+       "shapes": "[]",
+       "calls": 2,
+       "self_cuda_ms": 0.095
+      },
+      {
+       "name": "aten::copy_",
+       "shapes": "[[1536, 6144], [1536, 6144], []]",
+       "calls": 1,
+       "self_cuda_ms": 0.091
+      },
+      {
+       "name": "aten::sum",
+       "shapes": "[[64, 256, 1, 1536], []]",
+       "calls": 1,
+       "self_cuda_ms": 0.085
+      },
+      {
+       "name": "void at::native::reduce_kernel<512, 1, at::native::ReduceOp<float, at::native::func_wrapper_t<float, at::native::sum_functor<float, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4> >(at::native::ReduceOp<float, at::native::func_wrapper_t<float, at::native::sum_functor<float, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4>)",
+       "shapes": "[]",
+       "calls": 1,
+       "self_cuda_ms": 0.0831
+      },
+      {
+       "name": "aten::copy_",
+       "shapes": "[[4, 1, 1536, 1536], [4, 1, 1536, 1536], []]",
+       "calls": 1,
+       "self_cuda_ms": 0.0374
+      },
+      {
+       "name": "aten::copy_",
+       "shapes": "[[6144, 1536], [6144, 1536], []]",
+       "calls": 1,
+       "self_cuda_ms": 0.0348
+      },
+      {
+       "name": "aten::copy_",
+       "shapes": "[[4, 64, 1, 1, 1536], [4, 64, 1, 1, 1536], []]",
+       "calls": 3,
+       "self_cuda_ms": 0.0163
+      },
+      {
+       "name": "aten::all",
+       "shapes": "[[64, 1, 1, 1536]]",
+       "calls": 1,
+       "self_cuda_ms": 0.0142
+      }
+     ],
+     "total_self_cuda_ms": 20.137
+    }
+   ],
+   "finished": 1792298044.0151806,
+   "status": "DONE"
+  }
+ }
+}

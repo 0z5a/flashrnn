@@ -1328,3 +1328,50 @@ No checks and no rules.
   * today's later options off (`pre_fused=False, honly=False, wgrad="bmm"`) with the timers.
 * **Operator profile** (`heads_opprof.py`, torch.profiler, library default): D = 1536, B = 64, LSTM FP16 and sLSTM
   BF16. It is the counterpart of section 33's table after today's defaults.
+
+## 46. Results of "prof2" (section 45, report only, 2026-10-18)
+
+Evidence: `max-width-evidence/prof2.json`. Every archived file was checked against its SHA-256 manifest (65 files).
+Medians of five calls. Step times are one training step: forward + backward, `heads_bench` loss included.
+
+**Where the step goes with the library defaults** (H = 1, T = 256), in ms:
+
+| shape | step | step, later options off | training forward (full history) | preactivation | 2-D kernel | weight gradients |
+| --- | --- | --- | --- | --- | --- | --- |
+| LSTM FP16, D = 1024, B = 16 | 3.53 | 3.75 | 1.18 | 0.18 | 1.68 | 0.25 |
+| LSTM FP16, D = 1024, B = 64 | 7.24 | 8.70 | 2.34 | 0.56 | 2.75 | 0.83 |
+| LSTM FP16, D = 1536, B = 16 | 5.15 | 5.19 | 1.35 | 0.72 | 2.17 | 0.53 |
+| LSTM FP16, D = 1536, B = 64 | 10.05 | 13.60 | 3.36 | 1.01 | 4.05 | 0.74 |
+| sLSTM BF16, D = 1536, B = 64 | 10.43 | 14.17 | 3.60 | 1.01 | 4.24 | 0.72 |
+| LSTM FP16, D = 2048, B = 16 | 6.00 | 6.53 | 1.53 | 0.53 | 2.62 | 0.74 |
+| LSTM FP16, D = 2048, B = 64 | 16.36 | 21.46 | 7.22 | 1.61 | 5.34 | 1.04 |
+
+"Later options off" means `pre_fused=False, honly=False, wgrad="bmm"`. At B = 64 these options together make the step
+1.20x (D = 1024), 1.35-1.36x (D = 1536) and 1.31x (D = 2048) faster. At D = 1536, B = 16 none of them is a default,
+and the two columns agree.
+
+The operator profile at D = 1536, B = 64 (LSTM FP16) adds up as follows. The two recurrent kernels take 71% of the
+step: backward 4.05 ms, forward 3.10 ms. The rest:
+* the fused preactivation GEMM, 0.80 ms;
+* the input-dtype dR GEMM, 0.52 ms (it was 1.32 ms in TF32, section 33);
+* copies, 0.34 ms;
+* the benchmark's loss multiply, 0.33 ms;
+* small elementwise kernels and the dbias sum, about 0.6 ms.
+
+**2-D kernel phases** (µs per step, default, LSTM FP16):
+
+| D, B | pointwise | B2 | GEMM | B1 | partial sum |
+| --- | --- | --- | --- | --- | --- |
+| 1024, 16 | 1.42 | 1.29 | 1.76 | 1.37 | 0.28 |
+| 1024, 64 | 2.98 | 1.52 | 3.29 | 1.90 | 0.74 |
+| 1536, 16 | 1.49 | 1.34 | 3.02 | 1.91 | 0.31 |
+| 1536, 64 | 4.35 | 1.60 | 5.89 | 2.41 | 1.11 |
+| 2048, 16 | 1.50 | 1.44 | 4.49 | 1.87 | 0.36 |
+| 2048, 64 | 5.82 | 1.77 | 9.26 | 1.93 | 1.42 |
+
+The two barriers take 3-4.3 µs per step: 40% of the kernel at B = 16, 21-26% at B = 64.
+
+**Why flags lost (section 44).** With `flags=True` the B1 wait falls to 0.70-0.85 µs per step, as intended. The GEMM
+phase grows by 1.2-2.1 µs, because the phase now ends with the partials' publication (`__syncthreads`,
+`__threadfence`, release store). The time moved from the barrier to making the partials visible at GPU scope; it did
+not disappear. Any B1 replacement that keeps the partials in global memory pays this.
