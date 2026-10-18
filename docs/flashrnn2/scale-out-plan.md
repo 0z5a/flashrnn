@@ -768,3 +768,36 @@ bound is ≤ 0.98.
 **Prediction.** At B = 16, D = 2048 the multi-GPU forward is faster, since one GPU cannot hold R in fast memory and
 streams it every step. At D = 1024 one GPU is faster, since R fits one GPU's shared memory and the cross-GPU wait costs
 more than it saves. At B = 64 the one-GPU wide-tile kernels (max-width section 16) narrow any multi-GPU gain.
+
+## 24. Results of batch "vs1" (2026-10-18)
+
+Evidence: `scale-out-evidence/vs1/`, archive verified by SHA-256. Every arm's output was stable, and every multi-GPU
+output was within 4e-4 relative of the single-GPU forward.
+
+| cell | D | B | one GPU (library) | P = 2 direct | P = 4 direct | one GPU / P = 2 | one GPU / P = 4 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| lstm | 1024 | 16 | 4.76 ms | 3.17 | 3.30 | 1.51 | 1.45 |
+| lstm | 1024 | 64 | 11.99 | 3.65 | 3.45 | 3.29 | 3.48 |
+| lstm | 2048 | 16 | 1.37 | 4.64 | 4.12 | 0.30 | 0.33 |
+| lstm | 2048 | 64 | 6.85 | 18.18 | 8.81 | 0.38 | 0.78 |
+| slstm | 1024 | 16 | 4.62 | 3.37 | 3.31 | 1.37 | 1.40 |
+| slstm | 1024 | 64 | 12.12 | 3.61 | 3.42 | 3.35 | 3.54 |
+| slstm | 2048 | 16 | 1.34 | 4.50 | 4.03 | 0.30 | 0.33 |
+| slstm | 2048 | 64 | 6.83 | 18.11 | 8.76 | 0.38 | 0.78 |
+
+(T = 256 per call; every interval is within ±0.01 of its point.)
+
+**The prediction was wrong in both directions.**
+* *D = 2048: one GPU wins by 3x.* FlashRNN2's TileLang two-warpgroup forward with R in registers and shared memory
+  takes 5.4 µs per step at B = 16. The multi-GPU forward (the Triton kernel of phase A, K in chunks of 1024) takes
+  15-16 µs per step on four GPUs.
+* *D = 1024: the multi-GPU forward wins, but against a weak baseline.* For D = 1024 the library has no measured
+  table entry and falls back to its conservative default, the Triton R-tiled kernel with 16-column slices. That
+  default takes 18.6 µs per step at B = 16 and 47 µs at B = 64: slower than the D = 2048 TileLang forward.
+
+**Consequences.**
+1. *No scale-out claim from this comparison.* Within one node, splitting a single head's forward over GPUs does not
+   beat FlashRNN2's best single-GPU kernel, and the multi-GPU kernel would need the TileLang kernel's per-GPU
+   efficiency first.
+2. *A library defect.* The forward default for 768 < D ≤ 1280 is untuned and should be measured against the TileLang
+   grid kernel (max-width.md section 28).
