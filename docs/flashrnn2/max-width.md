@@ -831,3 +831,27 @@ FlashRNN1, never against this default.
 **Rule.** The TileLang grid kernel becomes the default at a (D, B range) where W6-fwd holds in every measured row there.
 
 **Prediction.** It holds everywhere, at 2-4x.
+
+## 29. Results of the "tune3" batch (2026-10-18)
+
+Evidence: `max-width-evidence/tune3-analysis.json`, archive verified by SHA-256.
+
+**W1-low: 24/24** (D = 1280 at B ∈ {16, 32, 40, 64}, D = 1024 at B ∈ {16, 32}; LSTM/sLSTM, FP16/BF16).
+
+**W6-low** (Triton default / 2-D) holds 8/8. **W4-low** (`cuda` / 2-D) holds 5/8:
+
+| cell | dtype | D | B | vs Triton default | vs `cuda` |
+| --- | --- | --- | --- | --- | --- |
+| lstm | floa | 1024 | 16 | 1.44 [1.30, 1.52] | 2.12 [2.07, 2.15] |
+| lstm | floa | 1024 | 64 | 1.47 [1.41, 1.49] | 1.16 [1.09, 1.21] |
+| lstm | floa | 1280 | 16 | 1.31 [1.10, 1.42] | 1.81 [1.79, 1.82] |
+| lstm | floa | 1280 | 64 | 2.03 [2.03, 2.04] | 0.99 [0.97, 1.04] (no) |
+| slstm | bflo | 1024 | 16 | 1.39 [1.16, 1.52] | 2.11 [2.07, 2.14] |
+| slstm | bflo | 1024 | 64 | 1.50 [1.39, 1.60] | 1.05 [0.91, 1.15] (no) |
+| slstm | bflo | 1280 | 16 | 1.41 [1.40, 1.41] | 1.90 [1.90, 1.91] |
+| slstm | bflo | 1280 | 64 | 2.00 [2.00, 2.01] | 1.00 [0.96, 1.02] (no) |
+
+**Default (by the section 27 rule).** At H = 1 the training backward now uses the 2-D kernel at D ∈ {1024, 1280, 1536,
+1792, 2048} for every batch size. H > 1 keeps its earlier paths, since the 2-D kernel is not qualified there. D = 1280
+at B = 64 sits at parity with `cuda`. The step there also contains the forward and the FP32 preactivation and weight
+gradient passes.
