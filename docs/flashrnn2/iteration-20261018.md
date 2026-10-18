@@ -13,6 +13,8 @@ H100 GPUs, with paired timing (3 process starts × 20 blocks) and a 95% hierarch
 | Forward, 1024 ≤ D ≤ 1280 (B ≤ 32 at D = 1280) | Triton R-tiled (unmeasured) | TileLang grid kernel | max-width §31: 2.8-5.5x |
 | Training, H > 1, D ≤ 256 | FP32 dG, FP32 dR GEMMs | dG stored in the input dtype, input-dtype dR GEMMs with FP32 accumulation | heads §8.6: 1.19-1.29x |
 | Training backward, hidden output, Triton path | zero-filled full history gradient | h component only | heads §8.8: bitwise identical |
+| Training backward, H = 1, D ∈ {1024, 1536, 1792, 2048}, B ≥ 64 | TF32 cuBLAS preactivation GEMM + separate Wx add | fused input-dtype Triton GEMM with the Wx / bias add in its epilogue (`pre_fused`) | max-width §38: 1.12-1.15x step; more accurate against FP64 |
+| Training backward, H > 1, D ∈ {1024, 2048}, B ≤ 16 | Triton (D = 1024) / 1-D CUDA kernel (D = 2048) | 2-D split CUDA kernel | max-width §37: 1.05-1.06x (D = 1024), 1.45-1.49x (D = 2048) |
 
 ## The 2-D split backward
 
@@ -57,11 +59,23 @@ Against FlashRNN1 the H > 1 training step went from 0.47-0.94x (heads §6) to 0.
 * input-dtype dG and dR operands;
 * the h-only history gradient.
 
-LSTM at D = 64 is now at parity, about 1.0x.
+The batch "defaults" re-timed all 24 claim shapes with the shipped defaults: every shape now holds against
+FlashRNN1, 1.05-1.48x, including LSTM at D = 64 (heads §8.10). The h-only history gradient alone gives 1.02-1.12x
+there.
+
+The 2-D backward also helps at H > 1 with large D (max-width §37):
+* 1.05-1.06x over Triton at D = 1024;
+* 1.45-1.49x over the 1-D kernel at D = 2048;
+* 1.19-3.26x over FlashRNN1.
 
 ## Open
 
 * Phase A check 2 still fails by its all-within rule (34/37).
 * The multi-GPU forward kernel lacks the TileLang kernel's per-GPU efficiency.
-* The preactivation recompute and dR passes (about 30% of a large-D step) are outside the kernel.
-* The 2-D backward at D = 512 / 768 and at H > 1 is being measured (max-width §30, §32).
+* The preactivation recompute and dR passes are still separate passes outside the kernel.
+  * The fused preactivation GEMM (§38) removed most of the first pass's cost.
+  * Two opt-in options measured 11-14% faster at D ≥ 1536 (§40.1): the input-dtype dG store with input-dtype dR.
+    Their bitwise and race checks at D ≥ 1536 are being completed (§40.2).
+  * The h-only history gradient for the 2-D kernel is also being measured (§40.2).
+* Gaps of the new defaults are being measured (§39): `pre_fused` at B = 16 and D = 1280; the 2-D backward at H > 1 with
+  B = 64 or D = 1536.
