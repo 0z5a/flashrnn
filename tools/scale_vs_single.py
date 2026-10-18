@@ -32,6 +32,7 @@ def main():
     multi_gpu.enable_peer_access(devices)
     torch.cuda.set_device(devices[0])
     rec = dict(start=a.start, rows=[], started=time.time())
+    out_path = Path(a.out) / "vs1.json" if Path(a.out).is_dir() else Path(a.out)
     for case in json.loads(a.cases):
         row = dict(case, blocks=[], outputs_stable={})
         try:
@@ -82,10 +83,10 @@ def main():
         print(json.dumps(dict(width=case["width"], batch=case["batch"], cell=case["cell"],
                               medians={n: round(sorted(x[n] for x in b)[len(b) // 2], 4) for n in (b[0]["order"] if b else [])},
                               error=(row.get("error") or "")[-200:])), flush=True)
-        Path(a.out).parent.mkdir(parents=True, exist_ok=True)
-        Path(a.out).write_text(json.dumps(rec, indent=1))
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(rec, indent=1))
     rec.update(finished=time.time(), status="DONE")
-    Path(a.out).write_text(json.dumps(rec, indent=1))
+    out_path.write_text(json.dumps(rec, indent=1))
     return 0
 
 
