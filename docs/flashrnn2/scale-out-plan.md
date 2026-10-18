@@ -594,3 +594,63 @@ exchange. It is not a claim.
     0.98 bands of section 11.
   * *Expectation.* At B = 64 the multi-GPU 2-D kernel beats one GPU with the 2-D kernel and beats the multi-GPU 1-D
     kernel. At B = 16 the gain is small or none.
+
+## 18. Results of batch "mg2d" (2026-10-18)
+
+Evidence: `scale-out-evidence/mg2d/`, archive verified by SHA-256.
+
+**Part 1, phase A checks on the repaired forward.**
+* **Check 2 (model): FAIL as pre-registered.** 7/37 configurations are within ±20%; 16/24 orderings hold.
+* **Check 3 (crossover): accepted at D = 2048.** Resident slices on two GPUs take 19.7 µs per step against 33.7 µs
+  for one GPU streaming R: 1.7x measured, ≥ 1.0 predicted.
+
+The micro run came first in its process, with warm-up. Even so, pair 0-1 measured 36 µs at 16 B against 2.2-2.4 µs
+for the other five pairs. So the warm-up of section 10 does not remove the effect every time. The first pair of a
+process may also pay a one-time cost beyond compilation (a first-use peer-mapping cost is a guess, not verified).
+`predict()` takes the slowest pair's α and β for every configuration, so every prediction is 2-5x too high.
+
+*Post hoc, not a check.* With the median of the other five pairs as the link (α 2.3 µs, about 23 GB/s), 28/37
+configurations fall within ±20%. The misses form three groups:
+* Direct at P = 4 runs 1.36-1.45x slower than the model. Its publish phase is 8 µs against 4.5 at P = 2, so the three
+  same-node stores of a CTA do not overlap as the "non-blocking crossbar" term assumes.
+* D = 1536 at P = 3 is at 1.15-1.2x.
+* The one-GPU stream at D = 2048 runs at 0.63x. Its R (33.5 MB) stays in L2 (section 6).
+
+Every other configuration measures 1.1-1.2x the model. That systematic excess is the barrier/publish overhead the
+model does not charge.
+
+**Part 2, the multi-GPU 2-D backward.**
+* **H1: 36/36.** dG and d_initial are bitwise equal to the single-GPU 2-D kernel with the same batch tile, on uva and
+  symmetric buffers.
+* **H2: 0/3 by the rule.** It fails because one broken variant was never flagged. The correct kernel counts zero
+  violations and its outputs are stable in every run. No B1 and no cross-GPU wait are each flagged 21/21 and change the
+  outputs, never silently. The "no B2" variant, however, was flagged in 0/21 runs and changed the outputs in 0/21. In
+  the multi-GPU build that variant drops only the grid barrier and keeps the cross-GPU wait. That wait still holds
+  every CTA until each GPU's CTA 0 has published, which in these runs was enough to order the exchange. The variant
+  does not remove B2, so it tests nothing, and the race check of B2 in the multi-GPU build is open. The fix is to drop
+  both parts of B2 in that variant.
+* **H3 (backward kernel, paired, three starts):**
+
+| case (B = 64 unless stated) | one GPU 2-D / multi-GPU 2-D | multi-GPU 1-D / multi-GPU 2-D | ms (one GPU 2-D / MG 2-D / MG 1-D) |
+| --- | --- | --- | --- |
+| LSTM D = 2048, P = 4 | 1.17 [1.17, 1.18] | 1.43 | 6.08 / 5.20 / 7.38 |
+| sLSTM D = 2048, P = 4 | 1.10 [0.90, 1.23] | 1.23 | 6.65 / 5.45 / 7.47 |
+| LSTM D = 1536, P = 4 | 0.88 [0.88, 0.89] | 1.17 | 4.92 / 5.58 / 6.48 |
+| sLSTM D = 1536, P = 4 | 0.92 [0.92, 0.93] | 1.12 | 5.37 / 5.79 / 6.50 |
+| LSTM D = 2048, P = 2 | 0.65 | 1.50 | 6.07 / 9.42 / 14.11 |
+| sLSTM D = 2048, P = 2 | 0.69 | 1.50 | 6.67 / 9.65 / 14.44 |
+| LSTM D = 1536, P = 2 | 0.51 | 1.25 | 4.90 / 9.67 / 12.09 |
+| sLSTM D = 1536, P = 2 | 0.54 | 1.24 | 5.34 / 9.88 / 12.18 |
+| LSTM D = 2048, P = 4, B = 16 | 0.71 | 1.56 | 2.80 / 3.93 / 6.14 |
+
+Symmetric against uva buffers: not resolved in every row.
+
+Against the expectation:
+* The multi-GPU 2-D kernel beats the multi-GPU 1-D kernel everywhere (1.12-1.56x).
+* It beats one GPU with the 2-D kernel only at D = 2048, P = 4: 1.17x for LSTM; for sLSTM the interval includes 1.
+* At P = 2 and at D = 1536 it is slower. The batch tile of 16 rows that the split needs gives each CTA a 16-row GEMM
+  (a quarter of the BM = 64 tile's work per R fragment read). At P = 2 the four tiles also run as two serial slots.
+
+Splitting the backward over GPUs pays only where one GPU's grid is the limit, D = 2048 at P = 4. A better multi-GPU
+layout would keep BM = 64 and split the K blocks rather than the column blocks; that needs cross-GPU partial sums. It
+is not built.
