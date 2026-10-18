@@ -701,6 +701,6 @@ Two next steps follow from this:
 1. *Overlapping the dG staging.* The staging load of the next chunk stalls each warp until the data arrives (load,
    then store to shared memory), so it does not overlap the MMAs. An asynchronous copy (`cp.async`) would overlap it.
 2. *TF32 for the preactivation GEMM.* Its two operands are input-dtype values (FP16: 10-bit mantissa, BF16: 7-bit),
-   so TF32 represents them exactly and their products are exact in TF32 tensor cores, as section 6's
+   so TF32 represents them exactly and their products are exact in TF32 tensor cores, as the
    `preactivations` docstring notes. Only the summation order changes. The current FP32 path runs as a three-pass
    TF32 emulation kernel (`f32f32_tf32f32`).
