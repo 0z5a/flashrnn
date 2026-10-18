@@ -1596,3 +1596,11 @@ Every check of `pre_fused`, dG_LP and `honly` ran at B ≤ 64, and B = 40 is sti
 **Batch "final4"** (qualification only): library defaults, H = 1, D ∈ {1024, 1536, 2048} × (LSTM FP16, sLSTM BF16) ×
 B ∈ {100, 128}, T = 24 (12 cases), within the FP64 budgets.
 **Rule.** A failure caps that D's entries in `PRE_FUSED_MIN_BATCH`, `DGLP_MIN_BATCH` and `HONLY_MIN_BATCH` to B ≤ 64.
+
+## 55. Results of the "final4" batch (section 54, 2026-10-18)
+
+Evidence: `max-width-evidence/final4-d5.json`. Every archived file was checked against its SHA-256 manifest (76 files).
+
+**D5: 12/12 within the FP64 budgets.** Library defaults at H = 1, D ∈ {1024, 1536, 2048} × (LSTM FP16, sLSTM BF16) ×
+B ∈ {100, 128}. These run the multi-tile, multi-slot path with `pre_fused`, dG_LP and `honly` all on. The tables stay
+as in section 51.
