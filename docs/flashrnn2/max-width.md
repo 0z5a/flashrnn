@@ -1469,3 +1469,49 @@ pinned to the one used in sections 35-43 at each shape, so the FlashRNN1 prebuil
 
 **Prediction.** D3 16/16, D3-H2 8/8 (FP64 and per-head bitwise).
 **Rule.** A D3 failure removes the section 47 additions at that shape. W6-final2 and W4-final2 change nothing.
+
+## 49. Results of the "final2" batch (section 48, 2026-10-18)
+
+Evidence: `max-width-evidence/final2-analysis.json`. Every archived file was checked against its SHA-256 manifest (304
+files). All 48 claim starts ran.
+
+**D3: 16/16.** The section 47 additions are within the FP64 budgets with library defaults:
+* all three later options together at D ∈ {1024, 1792}, B = 64;
+* `pre_fused` at D ∈ {1280, 1536}, B = 16.
+
+The defaults stand.
+
+**D3-H2: 8/8, FP64 and per-head bitwise.** With matched options (`pre_fused=False, honly=False, wgrad="bmm"`) the H > 1
+2-D path is bitwise equal per head to H = 1 calls. Section 47's failures were therefore only the difference in options
+between H = 1 and H > 1.
+
+**W6-final2 holds 16/16 and W4-final2 16/16 (report only).** Training step, T = 256, library default against:
+* "later options off" (`pre_fused=False, honly=False, wgrad="bmm"`, same 2-D kernel and forward);
+* FlashRNN1 `cuda`.
+
+| D | B | cell / dtype | options off / default | `cuda` / default |
+| --- | --- | --- | --- | --- |
+| 1024 | 64 | LSTM FP16 | 1.363 | 1.607 |
+| 1024 | 64 | sLSTM BF16 | 1.555 (1.367-1.915) | 1.601 |
+| 1280 | 16 | LSTM FP16 | 1.070 | 1.909 |
+| 1280 | 16 | sLSTM BF16 | 1.069 | 2.041 |
+| 1280 | 64 | LSTM FP16 | 1.142 | 1.150 |
+| 1280 | 64 | sLSTM BF16 | 1.129 | 1.106 |
+| 1536 | 64 | LSTM FP16 | 1.374 | 1.410 |
+| 1536 | 64 | sLSTM BF16 | 1.373 | 1.353 |
+| 1792 | 16 | LSTM FP16 | 1.137 | 1.869 |
+| 1792 | 16 | sLSTM BF16 | 1.083 | 2.386 |
+| 1792 | 64 | LSTM FP16 | 1.460 (1.379-1.699) | 1.355 |
+| 1792 | 64 | sLSTM BF16 | 1.377 | 1.367 |
+| 2048 | 16 | LSTM FP16 | 1.099 | 2.879 |
+| 2048 | 16 | sLSTM BF16 | 1.130 | 3.069 |
+| 2048 | 64 | LSTM FP16 | 1.357 | 1.571 |
+| 2048 | 64 | sLSTM BF16 | 1.345 | 1.576 |
+
+Together with section 47's measured rows, the library default is now faster than FlashRNN1 `cuda` at every measured
+H = 1 shape from D = 1024 to 2048:
+* 1.11-1.61x at B = 64;
+* 1.64-3.07x at B = 16.
+
+D = 1280, B = 64 was 0.95-0.98x in section 47, before `pre_fused` applied there; it is now 1.11-1.15x. The later
+options alone make the step 1.13-1.56x faster at B = 64.
