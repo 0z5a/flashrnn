@@ -812,3 +812,22 @@ with the 1-D CUDA kernel, not with that default.
 
 **Rule for the default.** The 2-D kernel becomes the default at a (D, B range) only where W6-low holds in every
 measured row at that D and batch size.
+
+## 28. The forward default at 768 < D ≤ 1280 (pre-registration, 2026-10-18, before any run of it)
+
+`execution_policy.default_config` gives D ∈ (768, 1280] the conservative, unmeasured Triton R-tiled kernel (16-column
+slices), except at B > 32 for D = 1280, where it gives the wide-tile TileLang kernel. scale-out-plan.md section 24
+measured that default at 18.6 µs per step at D = 1024, B = 16, and 47 µs per step at B = 64. The TileLang grid kernel
+(16-column slices, 16-row tiles) is qualified at these widths (section 7: W1 20/20) and was timed only against
+FlashRNN1, never against this default.
+
+**Runs (batch "fwd1024"):**
+* **Q**: forward qualification of the TileLang grid kernel at D ∈ {1024, 1280}, B ∈ {16, 64}, LSTM/sLSTM, FP16
+  (8 cases).
+* **Paired forward timing**, T = 256: D = 1024 at B ∈ {16, 64} and D = 1280 at B = 16, LSTM/sLSTM, FP16/BF16
+  (12 shapes). **W6-fwd** compares the Triton default against the TileLang grid kernel, **W4-fwd** FlashRNN1 `cuda`
+  against it. Protocol of section 3.
+
+**Rule.** The TileLang grid kernel becomes the default at a (D, B range) where W6-fwd holds in every measured row there.
+
+**Prediction.** It holds everywhere, at 2-4x.
