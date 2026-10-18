@@ -21,7 +21,7 @@ H100 GPUs, with paired timing (3 process starts × 20 blocks) and a 95% hierarch
 Combined, the three later H = 1 options make the step 1.13-1.56x faster at B = 64 and 1.07-1.14x at B = 16
 (max-width §49). With every default together, the library's training step is faster than FlashRNN1 `cuda` at every
 measured H = 1 shape from D = 1024 to 2048: 1.11-1.61x at B = 64 and 1.64-3.07x at B = 16 (max-width §47, §49).
-The combined defaults are qualified against FP64 at H = 1 and H = 2 (§47 D2, §49 D3).
+The combined defaults are qualified against FP64 at H = 1 and H = 2 (§47 D2, §49 D3, §53 D4).
 
 With library defaults, an H-head training call is no longer bitwise equal per head to H = 1 calls wherever an H = 1-only
 option applies. Both stay within the FP64 budgets (max-width §47).

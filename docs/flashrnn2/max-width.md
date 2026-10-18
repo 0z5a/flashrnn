@@ -1575,3 +1575,15 @@ Batch "final3", qualification only. No options; the library's selection, forward
 * H = 2: D ∈ {1024, 2048} × (LSTM FP16, sLSTM BF16) × B ∈ {16, 64} (8 cases), FP64 only (section 47).
 
 **Rule.** A failure removes the section 51 additions (dG_LP and honly at B < 64, and both at D = 1280) at that shape.
+
+## 53. Results of the "final3" batch (section 52, 2026-10-18)
+
+Evidence: `max-width-evidence/final3-d4.json`. Every archived file was checked against its SHA-256 manifest (184
+files).
+
+**D4: 48/48 within the FP64 budgets.** That is the 40 H = 1 cases (D = 1024-2048, both cells and dtypes, B ∈ {16, 40})
+and the 8 H = 2 cases. The section 51 defaults stand.
+
+As expected from section 47, the tool's per-head bitwise flag fails all 8 H = 2 cases. The H = 1 options now apply at
+every B, so no H = 2 shape is left where H = 1 and H > 1 use the same options. The forward is bitwise per head in every
+case.
