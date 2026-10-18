@@ -13,10 +13,16 @@ H100 GPUs, with paired timing (3 process starts × 20 blocks) and a 95% hierarch
 | Forward, 1024 ≤ D ≤ 1280 (B ≤ 32 at D = 1280) | Triton R-tiled (unmeasured) | TileLang grid kernel | max-width §31: 2.8-5.5x |
 | Training, H > 1, D ≤ 256 | FP32 dG, FP32 dR GEMMs | dG stored in the input dtype, input-dtype dR GEMMs with FP32 accumulation | heads §8.6: 1.19-1.29x |
 | Training backward, hidden output, Triton path | zero-filled full history gradient | h component only | heads §8.8: bitwise identical |
-| Training backward, H = 1: D ∈ {1024, 1792, 2048} any B; D = 1536, B ≥ 64 | TF32 cuBLAS preactivation GEMM + separate Wx add | fused input-dtype Triton GEMM with the Wx / bias add in its epilogue (`pre_fused`) | max-width §38, §42: 1.12-1.15x at B = 64, 1.08-1.10x at B = 16; more accurate against FP64 |
-| Training backward, H = 1, D ∈ {1536, 1792, 2048}, B ≥ 64 | FP32 dG store + TF32 dR GEMM | dG stored in the input dtype by the kernel, input-dtype dR GEMM | max-width §40.1, §42: 1.11-1.14x (measured without `pre_fused`) |
-| Training backward, H = 1, hidden output, D ∈ {1024, 1536, 2048}, B ≥ 64 | zero-filled FP32 history gradient | kernel reads the h gradient itself (`honly`) | max-width §42: 1.03-1.07x, bitwise identical |
+| Training backward, H = 1, D = 1024-2048, any B | TF32 cuBLAS preactivation GEMM + separate Wx add | fused input-dtype Triton GEMM with the Wx / bias add in its epilogue (`pre_fused`) | max-width §38, §42, §47: 1.12-1.15x at B = 64, 1.07-1.13x at B = 16; more accurate against FP64 |
+| Training backward, H = 1, D ∈ {1024, 1536, 1792, 2048}, B ≥ 64 | FP32 dG store + TF32 dR GEMM | dG stored in the input dtype by the kernel, input-dtype dR GEMM | max-width §40.1, §42, §47: 1.10-1.19x (measured without `pre_fused`) |
+| Training backward, H = 1, hidden output, D ∈ {1024, 1536, 1792, 2048}, B ≥ 64 | zero-filled FP32 history gradient | kernel reads the h gradient itself (`honly`) | max-width §42, §47: 1.03-1.08x, bitwise identical |
 | Training backward, H > 1, D ∈ {1024, 1536, 2048}, B ≤ 64 | Triton (D ≤ 1280) / 1-D CUDA kernel (D > 1280) | 2-D split CUDA kernel | max-width §37, §42: 1.05-1.06x (D = 1024, B = 16), 1.45-1.73x elsewhere |
+
+Combined, the three later H = 1 options make the step 1.20x faster at D = 1024, 1.35x at D = 1536 and 1.31x at
+D = 2048 (B = 64, LSTM FP16; max-width §46).
+
+With library defaults, an H-head training call is no longer bitwise equal per head to H = 1 calls wherever an H = 1-only
+option applies. Both stay within the FP64 budgets (max-width §47).
 
 ## The 2-D split backward
 
@@ -74,7 +80,10 @@ The 2-D backward also helps at H > 1 with large D (max-width §37):
 
 * Phase A check 2 still fails by its all-within rule (34/37).
 * The multi-GPU forward kernel lacks the TileLang kernel's per-GPU efficiency.
-* The step-level defaults above were each measured alone. Their combination is being checked (§43), together with
-  reruns of five rows lost to a timing-harness defect (§42.3, now fixed).
 * At H > 1 with B = 64, FlashRNN1 `cuda` is still faster than the 2-D path at D = 1024 and 2048 (0.78-0.98x, §42).
-* A column-group flag wait in place of the 2-D kernel's second grid barrier is being measured (§41).
+  The heads run one after another, because the resident R of one head fills every SM.
+* Replacing grid barrier B1 by a column-group flag wait is correct but 1-9% slower (§44). The time moves into making
+  the partials visible at GPU scope (§46). The two barriers still take 3-4.3 µs per step.
+* The forward is now the largest single kernel at D = 2048, B = 64: 7.2 ms against 5.3 ms for the 2-D backward (§46).
+  A 2-D split forward is the next candidate.
+* The H = 1 options are not applied at H > 1, so H > 1 still uses the TF32 preactivation and FP32 dG.
