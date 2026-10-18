@@ -932,3 +932,27 @@ grids stay opt-in. **W4-mid** (`cuda` / 2-D) holds 8/8, at 1.14-2.26x.
 | slstm | bflo | 512 | 64 | 0.95 [0.84, 0.99] | 1.52 |
 | slstm | bflo | 768 | 16 | 1.02 [1.02, 1.03] | 2.26 |
 | slstm | bflo | 768 | 64 | 0.98 | 1.19 |
+
+## 35. Fused input-dtype preactivation GEMM (pre-registration, 2026-10-18, before any run of it)
+
+**What section 33's profile showed** (D = 1536, LSTM FP16, B = 64, one step):
+* The training backward's options include `tf32=True` (`training.BW_DEFAULTS`), so the preactivation and dR GEMMs
+  already ran on TF32 tensor cores. That is why `pre_tf32` changed nothing (section 25).
+* The preactivation costs addmm 1.73 ms + `pre += Wx` 0.66 ms + copies.
+* dR costs an mm of 1.32 ms.
+
+**Change.** `pre_fused=True`, opt-in. `preact.preactivations_fused` is one Triton GEMM (128 × 128 × 64 tiles) on
+input-dtype tensor cores with FP32 accumulation and FP32 output, with the Wx and bias additions in its epilogue. Both
+operands are input-dtype values, so the products are exact; the summation order differs from cuBLAS TF32. CPU
+interpreter check at FP16: 1.0e-7 relative to FP64. (The interpreter cannot run BF16.)
+
+**Runs (batch "pref"):**
+* **P1, accuracy.** At D ∈ {1024, 1536, 1792, 2048} × B ∈ {16, 64} × FP16/BF16, T = 64: the fused preactivation's
+  largest error relative to FP64 must be at most the TF32 path's (+1e-7), and its h_{t-1} must equal the library's.
+* **W1-pref.** The training step with `pre_fused=True` within the FP64 budgets at D ∈ {1024, 1536, 2048} × B ∈ {16, 64}
+  × LSTM/sLSTM × FP16/BF16 (24 cases).
+* **Paired training step.** B = 64, T = 256, D ∈ {1024, 1536, 1792, 2048} × (LSTM FP16, sLSTM BF16). **W6-pref**
+  compares the default against `pre_fused`, **W4-pref** `cuda` against `pre_fused`.
+
+**Prediction.** P1 and W1-pref pass. The step gains 1.5-2.5 ms at D = 1536 (10-18%), and W4-pref holds at every D.
+**Rule.** `pre_fused` becomes the default at H = 1 where W6-pref holds in every row.
