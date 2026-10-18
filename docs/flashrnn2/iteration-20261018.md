@@ -19,6 +19,7 @@ H100 GPUs, with paired timing (3 process starts × 20 blocks) and a 95% hierarch
 | Forward, D = 2048, H = 1, B ≥ 64 | TileLang grid (16-row tiles) | CUDA 2-D split forward (`cuda2d`) | max-width §57, §59: forward 1.42-1.46x, training step 1.14-1.17x |
 | Forward, D = 1024, B ≥ 64, ≥ 4 groups (batch tiles × heads) | TileLang grid | CUDA 2-D split forward, head-concurrent grid | max-width §57, §59: forward 1.25-1.41x, training step 1.05-1.11x |
 | Training backward, D = 1024, ≥ 4 groups | 2-D grid of 128 CTAs per group, groups one after another | head-concurrent grid, 32 CTAs per group, four groups at once (`conc`) | max-width §59: 1.11-1.35x |
+| Training backward, H > 1, (D, H) ∈ {(1024, 4), (1024, 16), (1536, 4), (2048, 4)}, B ≤ 64 | TF32 preactivation, FP32 dG + TF32 dR, zero-filled history gradient | `pre_fused` + dG_LP + `honly` (the H = 1 options) | max-width §61: 1.31-1.57x; 1.27-3.46x vs FlashRNN1 `cuda` |
 | Training backward, H > 1, D ∈ {1024, 1536, 2048}, B ≤ 64 | Triton (D ≤ 1280) / 1-D CUDA kernel (D > 1280) | 2-D split CUDA kernel | max-width §37, §42: 1.05-1.06x (D = 1024, B = 16), 1.45-1.73x elsewhere |
 
 Combined, the three later H = 1 options make the step 1.13-1.56x faster at B = 64 and 1.07-1.14x at B = 16
@@ -28,8 +29,8 @@ Combined, the three later H = 1 options make the step 1.13-1.56x faster at B = 6
 held against `cuda` too (1.11-3.35x), but the full current default was not re-timed end to end at those shapes.
 The combined defaults are qualified against FP64 at H = 1 (B = 16-128) and H = 2 (§47 D2, §49 D3, §53 D4, §55 D5).
 
-With library defaults, an H-head training call is no longer bitwise equal per head to H = 1 calls wherever an H = 1-only
-option applies. Both stay within the FP64 budgets (max-width §47).
+With library defaults, an H-head training call is bitwise equal per head to H = 1 calls only where both select the same
+kernels (max-width §47, §63). Everything stays within the FP64 budgets.
 
 ## The 2-D split backward
 
@@ -87,8 +88,12 @@ The 2-D backward also helps at H > 1 with large D (max-width §37):
 
 * Phase A check 2 still fails by its all-within rule (34/37).
 * The multi-GPU forward kernel lacks the TileLang kernel's per-GPU efficiency.
-* At H > 1 with B = 64, FlashRNN1 `cuda` is still 4-18% faster at D = 1024, even with both head-concurrent grids
-  (§59). The H = 1 options at H > 1 are being measured (§60).
+* H > 1 is closed at the timed shapes: with the H = 1 options at H > 1 the training step is 1.27-1.56x faster than
+  FlashRNN1 `cuda` at B = 64 and 2.46-3.46x at B = 16 (§61). Other H (2, 3, 5-15, > 16) keep the earlier H > 1
+  options until timed.
+* Under library defaults, an H-head call is bitwise per head to H = 1 calls only where both select the same kernels
+  (§63). Where the selection differs by group count (conc grids, the 2-D forward) the per-head results agree to the
+  FP64 budget, not bitwise.
 * Replacing grid barrier B1 by a column-group flag wait is correct but 1-9% slower (§44). The time moves into making
   the partials visible at GPU scope (§46). The two barriers still take 3-4.3 µs per step.
 * The 2-D split forward wins only where the library forward ran small tiles (D = 2048, B = 64) or groups ran one after

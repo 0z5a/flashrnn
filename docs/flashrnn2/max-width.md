@@ -1874,3 +1874,16 @@ Batch "final6", qualification only. No options and no configuration, within the 
 (1024, 16), (1536, 4), (2048, 4)} × B ∈ {16, 64} × (LSTM FP16, sLSTM BF16), 16 cases. At D = 1024, B = 64 this
 combines the conc 2-D forward, the conc backward and the bundle.
 **Rule.** A failure removes the bundle default at that (D, H).
+
+## 63. Results of the "final6" batch (section 62, 2026-10-18)
+
+Evidence: `max-width-evidence/final6-d7.json`. Every archived file was checked against its SHA-256 manifest (88 files).
+
+**D7: 16/16 within the FP64 budgets.** The section 61 defaults stand.
+
+The tool's per-head bitwise flag passes 6/16. It passes exactly where the H-head call and the H = 1 calls on its heads
+select the same kernels: D = 1536, and D = 2048 at B = 16. With the bundle, the backward options now agree at every
+shape. The remaining per-head differences come only from selection by group count:
+* at D = 1024 the H-head call has ≥ 4 groups and takes the conc grids, while one head alone does not;
+* at D = 2048, B = 64 one head alone takes the 2-D forward, which is the H = 1 default, while the H-head call keeps
+  the TileLang forward.
