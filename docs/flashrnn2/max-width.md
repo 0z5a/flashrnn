@@ -1375,3 +1375,76 @@ The two barriers take 3-4.3 µs per step: 40% of the kernel at B = 16, 21-26% at
 phase grows by 1.2-2.1 µs, because the phase now ends with the partials' publication (`__syncthreads`,
 `__threadfence`, release store). The time moved from the barrier to making the partials visible at GPU scope; it did
 not disappear. Any B1 replacement that keeps the partials in global memory pays this.
+
+## 47. Results of the "final" batch (section 43, 2026-10-18)
+
+Evidence: `max-width-evidence/final-analysis.json` and `final-d2.json`. Every archived file was checked against its
+SHA-256 manifest (556 files).
+
+### D2: 52/52 by its pre-registered criterion
+
+Section 43 defines D2 as "within the FP64 budgets". Every case meets it:
+* the 40 H = 1 cases;
+* the 12 H = 2 cases, forward and training.
+
+The qualification tool also applies its own per-head bitwise check: the H-head training call against H = 1 calls on
+each head. Its overall flag therefore fails 10 of the 12 H = 2 cases. D2 is scored here by the section 43 wording, not
+by that flag. The flag still exposes a real change in behaviour:
+* *Why it fails.* The H = 1 calls now take the H = 1-only defaults (`pre_fused`, dG_LP, `honly`); the H-head path
+  never uses them. The only two H = 2 cases that pass are D = 1536, B = 16, the one H = 2 shape where none of those
+  defaults applies at H = 1 (under that batch's tables).
+* *What changed.* With library defaults, an H-head training call is no longer bitwise equal, head by head, to H = 1
+  calls wherever an H = 1-only default applies. Both stay within the FP64 budgets.
+* *Where it was checked before.* This document qualified the per-head bitwise property with matched options in both
+  calls: heads §8.1 through the test hook, and here §37 (H1-2d) and §42 (H1-h2d2). The library defaults never
+  promised it across different H.
+* The forward is unaffected: it is bitwise per head in all 12 cases.
+
+### Reruns with the warm-up block: 10/10 rows hold
+
+| rerun | shape | ratios (point, 95% interval) |
+| --- | --- | --- |
+| W6-dglp3 | D = 1024, B = 64 | LSTM 1.192 (1.101-1.454), sLSTM 1.098 (1.097-1.100) |
+| W6-honly3 | D = 1792, B = 64 | LSTM 1.042, sLSTM 1.083 (1.047-1.188) |
+| W6-pref3 | D = 1536, B = 16 | 1.079 and 1.130 |
+| W6-pref3 | D = 1280, B = 16 | 1.072 and 1.066 |
+| W6-pref3 | D = 1280, B = 64 | 1.128 and 1.122 |
+
+Every W4 rerun row holds as well.
+
+### W6-final and W4-final (report only): 12 of 20 shapes measured
+
+Today's later options together (library default / options off) give:
+
+| D | B = 16 | B = 64 |
+| --- | --- | --- |
+| 1024 | 1.08, 1.15 | 1.23, 1.23 |
+| 1280 | 1.00-1.03 (not held) | 1.00-1.02 (not held) |
+| 1536 | 1.00-1.07 | lost |
+| 1792 | lost | 1.31 |
+
+The D = 1280 rows were measured under that batch's tables, where no later option applied at D = 1280. Those rows
+therefore compare two identical arms.
+
+Against FlashRNN1 `cuda`, the library default is:
+* at B = 16: 1.64-2.30x (D ≤ 1536);
+* at B = 64: 1.42-1.45x (D = 1024) and 1.28-1.32x (D = 1792);
+* at D = 1280, B = 64: 0.95-0.98x (`cuda` ahead).
+
+**Lost: 8 shapes** (D = 1536 B = 64, D = 1792 B = 16, D = 2048 at both B). There are two defects:
+* *Plan defect.* The claims named no forward configuration, so their FlashRNN1 prebuild had to call the library's
+  selection, which needs TileLang. The prebuild tasks ran without TileLang and failed. The claim processes then built
+  FlashRNN1 in the TileLang environment, where nvcc 12.8 does not match PyTorch's CUDA 11.8.
+* *Harness defect.* An arm that fails its first call stayed in the timing loop. The whole start was then marked ERROR,
+  which lost the W6 arm too. Fixed: a failed arm is now dropped (`heads_bench.py`).
+
+### Defaults (by the rules of sections 39, 40.2 and 43)
+
+* `pre_fused`: every B at D = 1280 and D = 1536 (both now held at B = 16 and B = 64). `PRE_FUSED_MIN_BATCH` now covers
+  every B at D = 1024-2048.
+* dG_LP: D = 1024 is added for B ≥ 64. Its B1 and R1 (section 40.1) and W1-dglp passed.
+* `honly`: D = 1792 is added for B ≥ 64.
+* The H > 1 2-D default stays as in section 42.4.
+
+D2 ran before these additions. The new combinations, all three options together at D = 1024 and D = 1792 for B = 64,
+and `pre_fused` at D = 1280 / 1536 for B < 64, are qualified in section 48.

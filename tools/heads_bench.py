@@ -269,6 +269,7 @@ def mode_paired(args):
                     torch.cuda.synchronize()
                 except Exception:
                     errors[name] = traceback.format_exc()[-3000:]
+                    fns.pop(name, None)  # a failed arm leaves the timing loop; the other arms are still timed
             rec["arm_errors"] = errors
             if "one" not in fns:
                 raise RuntimeError("the one-launch arm failed")
