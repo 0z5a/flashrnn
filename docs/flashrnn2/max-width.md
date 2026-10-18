@@ -1515,3 +1515,25 @@ H = 1 shape from D = 1024 to 2048:
 
 D = 1280, B = 64 was 0.95-0.98x in section 47, before `pre_fused` applied there; it is now 1.11-1.15x. The later
 options alone make the step 1.13-1.56x faster at B = 64.
+
+## 50. dG_LP and honly at B = 16 and at D = 1280 (pre-registration, 2026-10-18, before any run of it)
+
+Both options were timed only at B = 64 and only at D ∈ {1024, 1536, 1792, 2048}. Batch "gaps2" uses the paired harness
+with the warm-up block. In each pair the arms differ in that one option only; everything else is the library default.
+* dG_LP: `dg_dtype="input", wgrad="bmm_lp"` against `wgrad="bmm"`.
+* honly: `honly=True` against `False`.
+
+**Runs:**
+* **W6-dglp4 and W6-honly4, with W4 against `cuda`.** T = 256, (LSTM FP16, sLSTM BF16), at:
+  * B = 16, D ∈ {1024, 1280, 1536, 1792, 2048};
+  * B = 64, D = 1280.
+* **D = 1280 checks**, both at B ∈ {16, 64} × (LSTM FP16, sLSTM BF16):
+  * B1 (dG_LP bitwise, section 36) and B2 (honly bitwise, section 40.2);
+  * R1 and R2 races (LSTM FP16 B = 64, sLSTM BF16 B = 16).
+* **W1-gaps.** Library defaults with both options forced on, within the FP64 budgets: B = 16 at D ∈ {1024, 1280, 1536,
+  2048}, and B = 64 at D = 1280. Each case × (LSTM FP16, sLSTM BF16), 10 cases.
+
+**Prediction.** All checks pass. At B = 16 the gains are smaller than at B = 64: dG_LP 3-8%, honly 1-3%.
+**Rule.** For each option, the tables (`DGLP_MIN_BATCH`, `HONLY_MIN_BATCH`) extend to every (D, B) row where its W6
+holds for both cells, provided the D = 1280 checks (for D = 1280) and W1-gaps pass. Where B = 16 and B = 64 both hold,
+the option applies at every B.
