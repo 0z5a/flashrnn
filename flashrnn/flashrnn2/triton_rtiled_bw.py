@@ -613,8 +613,31 @@ def weight_gradients(dg, h_prev, tf32=False, method="bmm"):
     """dR[g,n,o,p] = sum_{b,t} dG[b,t,g,n,o] round(h_{t-1})[b,t,n,p] and dbias, FP32, no atomics.
 
     H > 1: method "bmm" (default) runs one strided batched GEMM per gate on views of dG and h (batch = head, no
-    permuted copy of dG); "einsum" is the earlier path (permutes dG into a contiguous copy first)."""
+    permuted copy of dG); "einsum" is the earlier path (permutes dG into a contiguous copy first).
+    Method "bmm_lp" (opt-in, heads.md section 8.3): the GEMM operands are dG rounded to the input dtype and h as
+    stored (input dtype, no FP32 copy of h), FP32 accumulation, result rounded to the input dtype (the dtype dR is
+    returned in) -- FlashRNN1's arrangement; dbias stays an FP32 sum of the FP32 dG."""
     batch, steps, gates, heads, width = dg.shape
+    if method == "bmm_lp":
+        m = torch.backends.cuda.matmul  # FP32 accumulation: no reduced-precision split-K reductions
+        saved = (m.allow_fp16_reduced_precision_reduction, m.allow_bf16_reduced_precision_reduction)
+        m.allow_fp16_reduced_precision_reduction = m.allow_bf16_reduced_precision_reduction = False
+        try:
+            lp, bt = h_prev.dtype, batch * steps
+            dgl = dg.to(lp)
+            if heads == 1:
+                d_recurrent = (dgl.view(bt, gates * width).t() @ h_prev.reshape(bt, width)).float().view(
+                    gates, 1, width, width)
+            else:
+                hp = h_prev.view(bt, heads, width).transpose(0, 1)  # [H, BT, D], input dtype
+                dgv = dgl.view(bt, gates, heads, width)
+                out = torch.empty((gates, heads, width, width), device=dg.device, dtype=lp)
+                for g in range(gates):
+                    torch.bmm(dgv[:, g].transpose(0, 1).transpose(1, 2), hp, out=out[g])
+                d_recurrent = out.float()
+        finally:
+            m.allow_fp16_reduced_precision_reduction, m.allow_bf16_reduced_precision_reduction = saved
+        return d_recurrent, dg.sum(dim=(0, 1)).view(gates, heads, width)
     previous = torch.backends.cuda.matmul.allow_tf32
     torch.backends.cuda.matmul.allow_tf32 = tf32  # TF32 rounds the FP32 dG operand
     try:
