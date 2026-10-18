@@ -1051,3 +1051,33 @@ The gain is 12-15%, within the 10-18% predicted. With it, D = 1536 / 1792 at B =
 **Default (by the section 35 rule).** `pre_fused` is now the default at H = 1 at the timed widths D ∈ {1024, 1536, 1792,
 2048}, for B ≥ 64 (`hybrid_bw2d.PRE_FUSED_WIDTHS`, `PRE_FUSED_MIN_BATCH`). It was qualified at B = 16 but timed only at
 B = 64, so B < 64 and D = 1280 keep the TF32 preactivation until measured.
+
+## 39. Filling the gaps of sections 37 and 38 (pre-registration, 2026-10-18, before any run of it)
+
+Sections 37 and 38 set defaults only at the timed shapes. This batch ("ext") times the neighbouring shapes. In every
+pair the other arm is named explicitly, so the defaults of section 37 and 38 do not leak into it.
+
+**Runs:**
+* **W1-pref2.** `pre_fused=True` must stay within the FP64 budgets at D = 1280: B ∈ {16, 64} × LSTM/sLSTM × FP16/BF16
+  (8 cases).
+* **H1-h2d2.** The heads qualification with `backend="hybrid2d"` at B = 64: D ∈ {1024, 2048}, H = 2, (LSTM FP16, sLSTM
+  BF16), T = 24 (4 cases).
+* **W6-pref2 and W4-pref2.** H = 1, T = 256, (LSTM FP16, sLSTM BF16). W6-pref2 compares `pre_fused=False` against
+  `True`; W4-pref2 compares `cuda` against `pre_fused=True`. Shapes:
+  * B = 16 at D ∈ {1024, 1536, 1792, 2048};
+  * D = 1280 at B ∈ {16, 64}.
+* **W6-h2d2 and W4-h2d2.** T = 256, (LSTM FP16, sLSTM BF16). W6-h2d2 compares the earlier H > 1 path against the 2-D
+  backward. The earlier path is named explicitly: `backend="triton"` at D ≤ 1280, `"hybrid"` above. W4-h2d2 compares
+  `cuda` against the 2-D backward. Shapes:
+  * H = 4, B = 64 at D ∈ {1024, 1536, 2048};
+  * D = 1536, B = 16 at H ∈ {4, 16}.
+
+**Prediction.** All qualifications pass.
+* W6-pref2 holds at B = 64, D = 1280. At B = 16 the gain is smaller (the GEMM has a quarter of the rows) but holds.
+* W6-h2d2 holds in every row, by about 1.05x at D = 1024 and 1.3-1.5x at D ≥ 1536.
+
+**Rules.**
+* `pre_fused` extends to every (D, B) row where W6-pref2 holds. At a D where both B = 16 and B = 64 hold, it applies at
+  every B.
+* At H > 1 the 2-D default extends, at each D, up to the largest timed B for which every timed row at that D with
+  B' ≤ B holds.
