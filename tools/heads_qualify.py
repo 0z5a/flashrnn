@@ -99,7 +99,7 @@ def mode_qualify(args):
     case = json.loads(Path(args.case).read_text())
     rec = dict(case=case, started=time.time(), gpu=torch.cuda.get_device_name())
     try:
-        cfg = KernelConfig(**case["config"])
+        cfg = KernelConfig(**case["config"]) if case.get("config") else None  # None: the library's selection
         cell, heads = case["cell"], case["heads"]
         leaves, cot_h, cot_f = bw_qualify.inputs(dict(case, init="warm"), 4242 + case["width"] + heads)
         subset = case.get("head_subset") or list(range(heads))
