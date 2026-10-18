@@ -19,8 +19,10 @@ H100 GPUs, with paired timing (3 process starts × 20 blocks) and a 95% hierarch
 | Training backward, H > 1, D ∈ {1024, 1536, 2048}, B ≤ 64 | Triton (D ≤ 1280) / 1-D CUDA kernel (D > 1280) | 2-D split CUDA kernel | max-width §37, §42: 1.05-1.06x (D = 1024, B = 16), 1.45-1.73x elsewhere |
 
 Combined, the three later H = 1 options make the step 1.13-1.56x faster at B = 64 and 1.07-1.14x at B = 16
-(max-width §49). With every default together, the library's training step is faster than FlashRNN1 `cuda` at every
-measured H = 1 shape from D = 1024 to 2048: 1.11-1.61x at B = 64 and 1.64-3.07x at B = 16 (max-width §47, §49).
+(max-width §49). Measured with the defaults as of §47 / §49, the library's training step is faster than FlashRNN1
+`cuda` at every measured H = 1 shape from D = 1024 to 2048: 1.11-1.61x at B = 64 and 1.64-3.07x at B = 16.
+§51 later added dG_LP and `honly` at B < 64 and at D = 1280. Each of those held its own paired comparison, and they
+held against `cuda` too (1.11-3.35x), but the full current default was not re-timed end to end at those shapes.
 The combined defaults are qualified against FP64 at H = 1 and H = 2 (§47 D2, §49 D3, §53 D4).
 
 With library defaults, an H-head training call is no longer bitwise equal per head to H = 1 calls wherever an H = 1-only
@@ -40,7 +42,7 @@ each step has two grid barriers. Measured effect:
   (B = 64). At B ≤ 32 it is 1.09-2.91x faster.
 
 It is race-verified (two broken-barrier variants each flagged 21/21) and qualified against FP64 at D = 1024-2048,
-B = 16-100.
+B = 16-100 (the kernel alone; for the later options at B > 64 see max-width §54).
 
 Two tried alternatives were negative or small:
 * A thread-block-cluster (DSMEM) exchange was correct but 1.3-1.45x slower (§19).
