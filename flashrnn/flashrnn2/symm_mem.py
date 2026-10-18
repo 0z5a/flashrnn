@@ -18,7 +18,7 @@ _SESSION = None
 
 
 def build(cache_dir=None):
-    cuda_home = os.environ.get("FRNN_HYBRID_CUDA_HOME", "/apps/ACC/CUDA/12.8")
+    cuda_home = os.environ.get("FRNN_HYBRID_CUDA_HOME", os.environ.get("CUDA_HOME", "/usr/local/cuda"))
     include = os.environ["FRNN_NCCL232_INCLUDE"]
     flags = ["-std=c++17", "-O2", "-arch=sm_90", "-shared", "-Xcompiler=-fPIC", "-cudart=static", f"-I{include}"]
     header = (Path(include) / "nccl.h").read_bytes()

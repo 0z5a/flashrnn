@@ -4,8 +4,8 @@
 set -euo pipefail
 DEPS=$1; OUT=$2
 HERE=$(cd "$(dirname "$0")" && pwd)
-CUDA=${CUDA_HOME:-/apps/ACC/CUDA/13.2}
-MPI=${MPI_HOME:-/apps/ACC/OPENMPI/4.1.5/GCC}
+CUDA=${CUDA_HOME:-/usr/local/cuda}
+MPI=${MPI_HOME:?set MPI_HOME to the MPI installation}
 NVCC="$CUDA/bin/nvcc"
 MPI_INC="-I$MPI/include"
 MPI_LIB="-L$MPI/lib -lmpi -Xlinker -rpath -Xlinker $MPI/lib"

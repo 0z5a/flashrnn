@@ -54,7 +54,7 @@ def batch_tile(batch):
 def build(width, bm, slstm, bf16, verify=0, cache_dir=None, mg=False, rowown=True, asyncload=True, dglp=False,
           honly=False, flagwait=False, grid=None):
     pc, q, cr = grid or CONFIGS[width]
-    cuda_home = os.environ.get("FRNN_HYBRID_CUDA_HOME", "/apps/ACC/CUDA/12.8")
+    cuda_home = os.environ.get("FRNN_HYBRID_CUDA_HOME", os.environ.get("CUDA_HOME", "/usr/local/cuda"))
     flags = [f"-DFRNN_D={width}", f"-DFRNN_PC={pc}", f"-DFRNN_Q={q}", f"-DFRNN_CR={cr}", f"-DFRNN_BM={int(bm)}",
              f"-DFRNN_SLSTM={int(slstm)}", f"-DFRNN_BF16={int(bf16)}", f"-DFRNN_VERIFY={int(verify)}"]
     if mg:

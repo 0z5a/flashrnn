@@ -59,7 +59,7 @@ def verify_bits(verify):
 
 
 def build(width, krw, slstm, bf16, cache_dir=None, verify=0, bm=16, cluster=0, mg=False):
-    cuda_home = os.environ.get("FRNN_HYBRID_CUDA_HOME", "/apps/ACC/CUDA/12.8")
+    cuda_home = os.environ.get("FRNN_HYBRID_CUDA_HOME", os.environ.get("CUDA_HOME", "/usr/local/cuda"))
     nvcc = os.path.join(cuda_home, "bin", "nvcc")
     flags = [f"-DFRNN_D={width}", f"-DFRNN_KRW={krw}", f"-DFRNN_SLSTM={int(slstm)}", f"-DFRNN_BF16={int(bf16)}",
              f"-DFRNN_VERIFY={int(verify)}", f"-DFRNN_BM={int(bm)}"]

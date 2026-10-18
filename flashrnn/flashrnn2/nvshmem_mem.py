@@ -16,7 +16,7 @@ def build(cache_dir=None):
     home = os.environ["FRNN_NVSHMEM_HOME"]
     # nvshmemx_init_attr (inline in the headers) calls into libnvshmem_device.a: relocatable device code, linked with
     # the toolkit that built that library (CUDA 13.2; 12.8's nvlink rejects its ABI).
-    cuda_home = os.environ.get("FRNN_NVSHMEM_CUDA_HOME", "/apps/ACC/CUDA/13.2")
+    cuda_home = os.environ.get("FRNN_NVSHMEM_CUDA_HOME", os.environ.get("CUDA_HOME", "/usr/local/cuda"))
     flags = ["-std=c++17", "-O2", "-arch=sm_90", "-rdc=true", "-shared", "-Xcompiler=-fPIC", "-cudart=static",
              f"-I{home}/include"]
     link = [f"-L{home}/lib", "-lnvshmem_host", "-lnvshmem_device", "-lcuda", "-Xlinker", "-rpath", "-Xlinker",
