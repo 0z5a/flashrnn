@@ -416,3 +416,48 @@ Evidence: `heads-evidence/hgrad-analysis.json`.
   `full_history_grad=True`, at the 24 claim shapes, together with FlashRNN1 (H3).
 
 Prediction: D1 passes 80/80. H6-hg is not resolved, or it holds at 1.02-1.10x at H ≥ 256.
+
+### 8.10 Results (batch "defaults", 2026-10-18)
+
+Evidence: `heads-evidence/defaults-analysis.json`. Every archived file was checked against its SHA-256 manifest (555
+files).
+
+**D1: 80/80.** The library's own selection is within the FP64 budgets at every covered shape: D ∈ {64, ..., 2048} ×
+LSTM/sLSTM × FP16/BF16 × B ∈ {16, 64}, 8/8 per D. This checks the 2026-10-18 defaults together, as shipped at that
+batch's source:
+* the 2-D backward at D ≥ 1024;
+* the TileLang forward at D = 1024 / 1280;
+* the h-only history gradient.
+
+It does not cover the later `pre_fused` and H > 1 2-D defaults (max-width §37-§38).
+
+**H6-hg holds 24/24, and H3 holds 24/24.** All starts were stable. The h-only history gradient gains 2-5% at H = 16 and
+7-12% at H ≥ 256, matching the prediction. Against FlashRNN1 every claim shape now holds, including LSTM at D = 64,
+which section 8.8 left at parity. B = 16, T = 256, point ratio with the 95% interval:
+
+| cell / dtype | D | H | H6-hg: full history gradient / default | H3: `cuda` / default |
+| --- | --- | --- | --- | --- |
+| LSTM FP16 | 64 | 16 | 1.025 (1.021-1.028) | 1.195 (1.073-1.432) |
+| LSTM FP16 | 64 | 256 | 1.091 (1.090-1.092) | 1.050 (1.017-1.114) |
+| LSTM FP16 | 64 | 1024 | 1.089 (1.082-1.092) | 1.047 (1.030-1.081) |
+| LSTM FP16 | 128 | 16 | 1.037 (1.036-1.038) | 1.128 (1.034-1.308) |
+| LSTM FP16 | 128 | 256 | 1.084 (1.083-1.084) | 1.236 (1.219-1.267) |
+| LSTM FP16 | 128 | 1024 | 1.084 (1.083-1.084) | 1.264 (1.256-1.279) |
+| LSTM BF16 | 64 | 16 | 1.024 (1.024-1.025) | 1.210 (1.093-1.442) |
+| LSTM BF16 | 64 | 256 | 1.069 (1.012-1.091) | 1.112 (1.079-1.177) |
+| LSTM BF16 | 64 | 1024 | 1.093 (1.090-1.101) | 1.103 (1.086-1.135) |
+| LSTM BF16 | 128 | 16 | 1.035 (1.034-1.036) | 1.082 (1.003-1.237) |
+| LSTM BF16 | 128 | 256 | 1.083 (1.082-1.084) | 1.230 (1.213-1.263) |
+| LSTM BF16 | 128 | 1024 | 1.082 (1.082-1.083) | 1.228 (1.220-1.243) |
+| sLSTM FP16 | 64 | 16 | 1.032 (1.028-1.034) | 1.182 (1.078-1.381) |
+| sLSTM FP16 | 64 | 256 | 1.116 (1.115-1.117) | 1.224 (1.195-1.277) |
+| sLSTM FP16 | 64 | 1024 | 1.118 (1.117-1.119) | 1.222 (1.206-1.253) |
+| sLSTM FP16 | 128 | 16 | 1.047 (1.046-1.048) | 1.121 (1.048-1.263) |
+| sLSTM FP16 | 128 | 256 | 1.109 (1.107-1.110) | 1.374 (1.360-1.403) |
+| sLSTM FP16 | 128 | 1024 | 1.109 (1.108-1.109) | 1.405 (1.398-1.417) |
+| sLSTM BF16 | 64 | 16 | 1.033 (1.030-1.038) | 1.234 (1.131-1.423) |
+| sLSTM BF16 | 64 | 256 | 1.115 (1.114-1.115) | 1.210 (1.181-1.255) |
+| sLSTM BF16 | 64 | 1024 | 1.120 (1.119-1.121) | 1.215 (1.198-1.246) |
+| sLSTM BF16 | 128 | 16 | 1.048 (1.047-1.049) | 1.197 (1.110-1.362) |
+| sLSTM BF16 | 128 | 256 | 1.109 (1.107-1.109) | 1.449 (1.435-1.476) |
+| sLSTM BF16 | 128 | 1024 | 1.107 (1.107-1.108) | 1.476 (1.470-1.487) |
