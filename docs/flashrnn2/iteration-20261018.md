@@ -18,8 +18,10 @@ H100 GPUs, with paired timing (3 process starts × 20 blocks) and a 95% hierarch
 | Training backward, H = 1, hidden output, D ∈ {1024, 1536, 1792, 2048}, B ≥ 64 | zero-filled FP32 history gradient | kernel reads the h gradient itself (`honly`) | max-width §42, §47: 1.03-1.08x, bitwise identical |
 | Training backward, H > 1, D ∈ {1024, 1536, 2048}, B ≤ 64 | Triton (D ≤ 1280) / 1-D CUDA kernel (D > 1280) | 2-D split CUDA kernel | max-width §37, §42: 1.05-1.06x (D = 1024, B = 16), 1.45-1.73x elsewhere |
 
-Combined, the three later H = 1 options make the step 1.20x faster at D = 1024, 1.35x at D = 1536 and 1.31x at
-D = 2048 (B = 64, LSTM FP16; max-width §46).
+Combined, the three later H = 1 options make the step 1.13-1.56x faster at B = 64 and 1.07-1.14x at B = 16
+(max-width §49). With every default together, the library's training step is faster than FlashRNN1 `cuda` at every
+measured H = 1 shape from D = 1024 to 2048: 1.11-1.61x at B = 64 and 1.64-3.07x at B = 16 (max-width §47, §49).
+The combined defaults are qualified against FP64 at H = 1 and H = 2 (§47 D2, §49 D3).
 
 With library defaults, an H-head training call is no longer bitwise equal per head to H = 1 calls wherever an H = 1-only
 option applies. Both stay within the FP64 budgets (max-width §47).
