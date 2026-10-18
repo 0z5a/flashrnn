@@ -323,3 +323,40 @@ faster.
 
 Prediction: H1-lp passes. The step gains about 1.5-2.5 ms at D = 64, H = 256 and about 10% at D = 128, H = 1024, and
 the H3 rows move toward 1.
+
+### 8.6 Results (job "heads lp v3", 2026-10-18) and the new H > 1 default
+
+Evidence: `heads-evidence/headslp3-analysis.json`, `headslp3-opprof.json`; archive verified by SHA-256.
+
+**H1-lp: 32/32** (H ∈ {2, 3, 16} and H = 1, D ∈ {64, 128}, LSTM/sLSTM, FP16/BF16). Every gradient is within the FP64
+budgets, and every per-head comparison with the H = 1 run is bitwise equal.
+
+**H6-lp** (the section 8 default / the new options) holds 23/24, at 1.19-1.29x. The miss, D = 64, H = 16, FP16, has
+an interval that includes 1. **H3-lp** (FlashRNN1 / FlashRNN2) holds 17/24:
+
+| cell | dtype | D | H = 16 | H = 256 | H = 1024 |
+| --- | --- | --- | --- | --- | --- |
+| lstm | bflo | 64 | 1.09 | 1.00 (no) | 1.00 (no) |
+| lstm | bflo | 128 | 0.97 (no) | 1.12 | 1.14 |
+| lstm | floa | 64 | 1.03 | 0.94 (no) | 0.94 (no) |
+| lstm | floa | 128 | 0.99 (no) | 1.12 | 1.16 |
+| slstm | bflo | 64 | 1.11 | 1.06 | 1.07 |
+| slstm | bflo | 128 | 1.06 | 1.29 | 1.33 |
+| slstm | floa | 64 | 1.03 | 1.07 | 1.08 |
+| slstm | floa | 128 | 1.00 (no) | 1.22 | 1.26 |
+
+(Intervals are within ±0.01 of the point values except where the row is marked; full intervals in the evidence file.)
+
+Against FlashRNN1, the H > 1 training step went from 0.47-0.94x (section 6) to 0.74-1.07x (section 8.1), and is now
+0.94-1.33x. LSTM at D = 64, H ≥ 256 is the remaining gap (0.94x FP16, 1.00x BF16).
+
+The operator profile per step at D = 64, H = 256 dropped from 26.4 to 21.1 ms of CUDA time, and at D = 128, H = 1024
+from 112.5 to 90.2 ms. These are profiled steps, so the absolute numbers include profiler overhead.
+
+**Default (after the run).** For H > 1 at D ≤ 256, the training path now also sets `wgrad="bmm_lp"` and
+`dg_dtype="input"`; `training.py` applies it only when the caller does not choose `wgrad`. Two values change:
+* dR is computed from input-dtype operands with FP32 accumulation and rounded to the input dtype, which is the dtype
+  it is returned in;
+* dbias is the FP32 sum of the input-dtype dG, as in FlashRNN1.
+
+Both stayed within the FP64 budgets in all 32 qualification cases. Above D = 256 and at H = 1 nothing changes.

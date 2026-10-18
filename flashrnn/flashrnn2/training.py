@@ -165,6 +165,10 @@ class _Recurrence(torch.autograd.Function):
             # fused variant does not fit shared memory (heads v4: D = 768 needs 320-416 KB), so the default stays.
             options.setdefault("fast", True)
             options.setdefault("fuse_pre", 2 if options["fast"] else 0)
+            # dG stored in the input dtype and the dR GEMMs on input-dtype operands (FP32 accumulation): heads.md 8.6
+            options.setdefault("wgrad", "bmm_lp")
+            if options["wgrad"] == "bmm_lp":
+                options.setdefault("dg_dtype", "input")
         dg, d_recurrent, d_bias, d_initial = triton_rtiled_bw.backward(
             wx, recurrent, bias, initial, history, d_history, d_final, ctx.cell, **options)
         return (dg.to(wx.dtype), d_recurrent.to(recurrent.dtype), d_bias.to(bias.dtype), d_initial.to(initial.dtype),

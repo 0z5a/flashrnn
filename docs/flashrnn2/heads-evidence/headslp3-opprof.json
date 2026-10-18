@@ -1,0 +1,673 @@
+{
+ "started": 1792289300.9128506,
+ "rows": [
+  {
+   "cell": "lstm",
+   "dtype": "float16",
+   "width": 64,
+   "heads": 256,
+   "batch": 16,
+   "steps": 256,
+   "backward": {
+    "fast": true,
+    "fuse_pre": 2,
+    "wgrad": "bmm"
+   },
+   "ops": [
+    {
+     "name": "_RecurrenceBackward",
+     "shapes": "[[16, 256, 256, 64], []]",
+     "calls": 1,
+     "self_cuda_ms": 5.0046
+    },
+    {
+     "name": "_rtiled_bw",
+     "shapes": "[]",
+     "calls": 1,
+     "self_cuda_ms": 5.0046
+    },
+    {
+     "name": "void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1}, at::detail::Array<char*, 2>, TrivialOffsetCalculator<1, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<1>, at::native::memory::StoreWithCast<1> >(int, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1}, at::detail::Array<char*, 2>, TrivialOffsetCalculator<1, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<1>, at::native::memory::StoreWithCast<1>)",
+     "shapes": "[]",
+     "calls": 6,
+     "self_cuda_ms": 1.81
+    },
+    {
+     "name": "aten::copy_",
+     "shapes": "[[16, 256, 256, 64], [16, 256, 256, 64], []]",
+     "calls": 6,
+     "self_cuda_ms": 1.4825
+    },
+    {
+     "name": "aten::bmm",
+     "shapes": "[[256, 64, 4096], [256, 4096, 64], [256, 64, 64]]",
+     "calls": 4,
+     "self_cuda_ms": 1.4094
+    },
+    {
+     "name": "void cutlass::Kernel<cutlass_80_tensorop_s1688gemm_64x64_32x4_nt_align4>(cutlass_80_tensorop_s1688gemm_64x64_32x4_nt_align4::Params)",
+     "shapes": "[]",
+     "calls": 4,
+     "self_cuda_ms": 1.4094
+    },
+    {
+     "name": "aten::copy_",
+     "shapes": "[[16, 256, 4, 256, 64], [16, 256, 4, 256, 64], []]",
+     "calls": 1,
+     "self_cuda_ms": 1.1762
+    },
+    {
+     "name": "_Recurrence",
+     "shapes": "[[16, 256, 4, 256, 64], [4, 256, 64, 64], [4, 256, 64], [2, 16, 1, 256, 64], []]",
+     "calls": 1,
+     "self_cuda_ms": 1.1166
+    },
+    {
+     "name": "_sequence",
+     "shapes": "[]",
+     "calls": 1,
+     "self_cuda_ms": 1.1166
+    },
+    {
+     "name": "aten::mul",
+     "shapes": "[[16, 256, 256, 64], [16, 256, 256, 64]]",
+     "calls": 2,
+     "self_cuda_ms": 0.8951
+    },
+    {
+     "name": "void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}, at::detail::Array<char*, 2>, TrivialOffsetCalculator<1, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<1>, at::native::memory::StoreWithCast<1> >(int, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}, at::detail::Array<char*, 2>, TrivialOffsetCalculator<1, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<1>, at::native::memory::StoreWithCast<1>)",
+     "shapes": "[]",
+     "calls": 3,
+     "self_cuda_ms": 0.8805
+    },
+    {
+     "name": "aten::sum",
+     "shapes": "[[16, 256, 4, 256, 64], [], [], []]",
+     "calls": 1,
+     "self_cuda_ms": 0.6942
+    },
+    {
+     "name": "void at::native::reduce_kernel<128, 4, at::native::ReduceOp<float, at::native::func_wrapper_t<float, at::native::sum_functor<float, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4> >(at::native::ReduceOp<float, at::native::func_wrapper_t<float, at::native::sum_functor<float, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4>)",
+     "shapes": "[]",
+     "calls": 1,
+     "self_cuda_ms": 0.6923
+    },
+    {
+     "name": "void at::native::vectorized_elementwise_kernel<4, at::native::CUDAFunctor_add<float>, at::detail::Array<char*, 3> >(int, at::native::CUDAFunctor_add<float>, at::detail::Array<char*, 3>)",
+     "shapes": "[]",
+     "calls": 2,
+     "self_cuda_ms": 0.538
+    },
+    {
+     "name": "void at::native::vectorized_elementwise_kernel<4, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, at::detail::Array<char*, 3> >(int, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, at::detail::Array<char*, 3>)",
+     "shapes": "[]",
+     "calls": 1,
+     "self_cuda_ms": 0.5348
+    },
+    {
+     "name": "aten::add_",
+     "shapes": "[[16, 256, 256, 64], [16, 256, 256, 64], []]",
+     "calls": 1,
+     "self_cuda_ms": 0.5329
+    },
+    {
+     "name": "void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > >(at::TensorIteratorBase&, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > >(at::TensorIteratorBase&, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > const&)::{lambda(int)#1})",
+     "shapes": "[]",
+     "calls": 1,
+     "self_cuda_ms": 0.3604
+    },
+    {
+     "name": "void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<float>, at::detail::Array<char*, 1> >(int, at::native::FillFunctor<float>, at::detail::Array<char*, 1>)",
+     "shapes": "[]",
+     "calls": 5,
+     "self_cuda_ms": 0.3355
+    },
+    {
+     "name": "aten::fill_",
+     "shapes": "[[2, 16, 256, 256, 64], []]",
+     "calls": 1,
+     "self_cuda_ms": 0.3262
+    },
+    {
+     "name": "aten::copy_",
+     "shapes": "[[16, 255, 256, 64], [16, 255, 256, 64], []]",
+     "calls": 1,
+     "self_cuda_ms": 0.3098
+    },
+    {
+     "name": "void at::native::elementwise_kernel<128, 4, at::native::gpu_kernel_impl<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1} const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1} const&)::{lambda(int)#1})",
+     "shapes": "[]",
+     "calls": 1,
+     "self_cuda_ms": 0.3098
+    },
+    {
+     "name": "aten::sum",
+     "shapes": "[[16, 256, 256, 64], []]",
+     "calls": 1,
+     "self_cuda_ms": 0.1935
+    },
+    {
+     "name": "void at::native::reduce_kernel<512, 1, at::native::ReduceOp<float, at::native::func_wrapper_t<float, at::native::sum_functor<float, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4> >(at::native::ReduceOp<float, at::native::func_wrapper_t<float, at::native::sum_functor<float, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4>)",
+     "shapes": "[]",
+     "calls": 1,
+     "self_cuda_ms": 0.1916
+    },
+    {
+     "name": "aten::copy_",
+     "shapes": "[[4, 256, 64, 64], [4, 256, 64, 64], []]",
+     "calls": 1,
+     "self_cuda_ms": 0.0217
+    },
+    {
+     "name": "aten::copy_",
+     "shapes": "[[2, 16, 1, 256, 64], [2, 16, 1, 256, 64], []]",
+     "calls": 1,
+     "self_cuda_ms": 0.0055
+    }
+   ],
+   "total_self_cuda_ms": 26.402
+  },
+  {
+   "cell": "lstm",
+   "dtype": "float16",
+   "width": 64,
+   "heads": 256,
+   "batch": 16,
+   "steps": 256,
+   "backward": {
+    "fast": true,
+    "fuse_pre": 2,
+    "wgrad": "bmm_lp",
+    "dg_dtype": "input"
+   },
+   "ops": [
+    {
+     "name": "_RecurrenceBackward",
+     "shapes": "[[16, 256, 256, 64], []]",
+     "calls": 1,
+     "self_cuda_ms": 4.8187
+    },
+    {
+     "name": "_rtiled_bw",
+     "shapes": "[]",
+     "calls": 1,
+     "self_cuda_ms": 4.8187
+    },
+    {
+     "name": "aten::copy_",
+     "shapes": "[[16, 256, 256, 64], [16, 256, 256, 64], []]",
+     "calls": 5,
+     "self_cuda_ms": 1.1925
+    },
+    {
+     "name": "_Recurrence",
+     "shapes": "[[16, 256, 4, 256, 64], [4, 256, 64, 64], [4, 256, 64], [2, 16, 1, 256, 64], []]",
+     "calls": 1,
+     "self_cuda_ms": 1.113
+    },
+    {
+     "name": "_sequence",
+     "shapes": "[]",
+     "calls": 1,
+     "self_cuda_ms": 1.113
+    },
+    {
+     "name": "aten::mul",
+     "shapes": "[[16, 256, 256, 64], [16, 256, 256, 64]]",
+     "calls": 2,
+     "self_cuda_ms": 0.8959
+    },
+    {
+     "name": "aten::bmm",
+     "shapes": "[[256, 64, 4096], [256, 4096, 64], [256, 64, 64]]",
+     "calls": 4,
+     "self_cuda_ms": 0.7543
+    },
+    {
+     "name": "sm90_xmma_gemm_f16f16_f16f32_f32_nt_n_tilesize64x64x64_warpgroupsize1x1x1_execute_segment_k_off_kernel__51_cublas",
+     "shapes": "[]",
+     "calls": 4,
+     "self_cuda_ms": 0.7485
+    },
+    {
+     "name": "void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1}, at::detail::Array<char*, 2>, TrivialOffsetCalculator<1, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<1>, at::native::memory::StoreWithCast<1> >(int, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1}, at::detail::Array<char*, 2>, TrivialOffsetCalculator<1, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<1>, at::native::memory::StoreWithCast<1>)",
+     "shapes": "[]",
+     "calls": 5,
+     "self_cuda_ms": 0.6264
+    },
+    {
+     "name": "void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}, at::detail::Array<char*, 2>, TrivialOffsetCalculator<1, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<1>, at::native::memory::StoreWithCast<1> >(int, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}, at::detail::Array<char*, 2>, TrivialOffsetCalculator<1, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<1>, at::native::memory::StoreWithCast<1>)",
+     "shapes": "[]",
+     "calls": 3,
+     "self_cuda_ms": 0.6054
+    },
+    {
+     "name": "void at::native::vectorized_elementwise_kernel<4, at::native::CUDAFunctor_add<float>, at::detail::Array<char*, 3> >(int, at::native::CUDAFunctor_add<float>, at::detail::Array<char*, 3>)",
+     "shapes": "[]",
+     "calls": 2,
+     "self_cuda_ms": 0.5372
+    },
+    {
+     "name": "void at::native::vectorized_elementwise_kernel<4, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, at::detail::Array<char*, 3> >(int, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, at::detail::Array<char*, 3>)",
+     "shapes": "[]",
+     "calls": 1,
+     "self_cuda_ms": 0.5348
+    },
+    {
+     "name": "aten::add_",
+     "shapes": "[[16, 256, 256, 64], [16, 256, 256, 64], []]",
+     "calls": 1,
+     "self_cuda_ms": 0.532
+    },
+    {
+     "name": "aten::sum",
+     "shapes": "[[16, 256, 4, 256, 64], [], [], []]",
+     "calls": 1,
+     "self_cuda_ms": 0.3624
+    },
+    {
+     "name": "void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > >(at::TensorIteratorBase&, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > >(at::TensorIteratorBase&, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > const&)::{lambda(int)#1})",
+     "shapes": "[]",
+     "calls": 1,
+     "self_cuda_ms": 0.3611
+    },
+    {
+     "name": "void at::native::reduce_kernel<128, 4, at::native::ReduceOp<c10::Half, at::native::func_wrapper_t<float, at::native::sum_functor<c10::Half, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4> >(at::native::ReduceOp<c10::Half, at::native::func_wrapper_t<float, at::native::sum_functor<c10::Half, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4>)",
+     "shapes": "[]",
+     "calls": 1,
+     "self_cuda_ms": 0.3605
+    },
+    {
+     "name": "void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<float>, at::detail::Array<char*, 1> >(int, at::native::FillFunctor<float>, at::detail::Array<char*, 1>)",
+     "shapes": "[]",
+     "calls": 5,
+     "self_cuda_ms": 0.3368
+    },
+    {
+     "name": "aten::fill_",
+     "shapes": "[[2, 16, 256, 256, 64], []]",
+     "calls": 1,
+     "self_cuda_ms": 0.3286
+    },
+    {
+     "name": "aten::copy_",
+     "shapes": "[[16, 255, 256, 64], [16, 255, 256, 64], []]",
+     "calls": 1,
+     "self_cuda_ms": 0.3076
+    },
+    {
+     "name": "void at::native::elementwise_kernel<128, 4, at::native::gpu_kernel_impl<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1} const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1} const&)::{lambda(int)#1})",
+     "shapes": "[]",
+     "calls": 1,
+     "self_cuda_ms": 0.3076
+    },
+    {
+     "name": "aten::sum",
+     "shapes": "[[16, 256, 256, 64], []]",
+     "calls": 1,
+     "self_cuda_ms": 0.1938
+    },
+    {
+     "name": "void at::native::reduce_kernel<512, 1, at::native::ReduceOp<float, at::native::func_wrapper_t<float, at::native::sum_functor<float, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4> >(at::native::ReduceOp<float, at::native::func_wrapper_t<float, at::native::sum_functor<float, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4>)",
+     "shapes": "[]",
+     "calls": 1,
+     "self_cuda_ms": 0.1922
+    },
+    {
+     "name": "aten::copy_",
+     "shapes": "[[4, 256, 64, 64], [4, 256, 64, 64], []]",
+     "calls": 2,
+     "self_cuda_ms": 0.0296
+    },
+    {
+     "name": "Memset (Device)",
+     "shapes": "[]",
+     "calls": 6,
+     "self_cuda_ms": 0.0092
+    },
+    {
+     "name": "aten::copy_",
+     "shapes": "[[2, 16, 1, 256, 64], [2, 16, 1, 256, 64], []]",
+     "calls": 1,
+     "self_cuda_ms": 0.0055
+    }
+   ],
+   "total_self_cuda_ms": 21.131
+  },
+  {
+   "cell": "lstm",
+   "dtype": "float16",
+   "width": 128,
+   "heads": 1024,
+   "batch": 16,
+   "steps": 128,
+   "backward": {
+    "fast": true,
+    "fuse_pre": 2,
+    "wgrad": "bmm"
+   },
+   "ops": [
+    {
+     "name": "_RecurrenceBackward",
+     "shapes": "[[16, 128, 1024, 128], []]",
+     "calls": 1,
+     "self_cuda_ms": 22.3327
+    },
+    {
+     "name": "_rtiled_bw",
+     "shapes": "[]",
+     "calls": 1,
+     "self_cuda_ms": 22.3327
+    },
+    {
+     "name": "void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1}, at::detail::Array<char*, 2>, TrivialOffsetCalculator<1, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<1>, at::native::memory::StoreWithCast<1> >(int, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1}, at::detail::Array<char*, 2>, TrivialOffsetCalculator<1, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<1>, at::native::memory::StoreWithCast<1>)",
+     "shapes": "[]",
+     "calls": 7,
+     "self_cuda_ms": 7.4066
+    },
+    {
+     "name": "aten::copy_",
+     "shapes": "[[16, 128, 1024, 128], [16, 128, 1024, 128], []]",
+     "calls": 6,
+     "self_cuda_ms": 5.8965
+    },
+    {
+     "name": "aten::bmm",
+     "shapes": "[[1024, 128, 2048], [1024, 2048, 128], [1024, 128, 128]]",
+     "calls": 4,
+     "self_cuda_ms": 5.8669
+    },
+    {
+     "name": "void cutlass::Kernel<cutlass_80_tensorop_s1688gemm_64x128_32x3_nt_align4>(cutlass_80_tensorop_s1688gemm_64x128_32x3_nt_align4::Params)",
+     "shapes": "[]",
+     "calls": 4,
+     "self_cuda_ms": 5.8669
+    },
+    {
+     "name": "_Recurrence",
+     "shapes": "[[16, 128, 4, 1024, 128], [4, 1024, 128, 128], [4, 1024, 128], [2, 16, 1, 1024, 128], []]",
+     "calls": 1,
+     "self_cuda_ms": 5.3798
+    },
+    {
+     "name": "_sequence",
+     "shapes": "[]",
+     "calls": 1,
+     "self_cuda_ms": 5.3798
+    },
+    {
+     "name": "aten::copy_",
+     "shapes": "[[16, 128, 4, 1024, 128], [16, 128, 4, 1024, 128], []]",
+     "calls": 1,
+     "self_cuda_ms": 4.7101
+    },
+    {
+     "name": "aten::mul",
+     "shapes": "[[16, 128, 1024, 128], [16, 128, 1024, 128]]",
+     "calls": 2,
+     "self_cuda_ms": 3.5897
+    },
+    {
+     "name": "void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}, at::detail::Array<char*, 2>, TrivialOffsetCalculator<1, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<1>, at::native::memory::StoreWithCast<1> >(int, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}, at::detail::Array<char*, 2>, TrivialOffsetCalculator<1, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<1>, at::native::memory::StoreWithCast<1>)",
+     "shapes": "[]",
+     "calls": 3,
+     "self_cuda_ms": 3.5276
+    },
+    {
+     "name": "aten::sum",
+     "shapes": "[[16, 128, 4, 1024, 128], [], [], []]",
+     "calls": 1,
+     "self_cuda_ms": 2.7513
+    },
+    {
+     "name": "void at::native::reduce_kernel<128, 4, at::native::ReduceOp<float, at::native::func_wrapper_t<float, at::native::sum_functor<float, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4> >(at::native::ReduceOp<float, at::native::func_wrapper_t<float, at::native::sum_functor<float, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4>)",
+     "shapes": "[]",
+     "calls": 2,
+     "self_cuda_ms": 2.7513
+    },
+    {
+     "name": "void at::native::vectorized_elementwise_kernel<4, at::native::CUDAFunctor_add<float>, at::detail::Array<char*, 3> >(int, at::native::CUDAFunctor_add<float>, at::detail::Array<char*, 3>)",
+     "shapes": "[]",
+     "calls": 2,
+     "self_cuda_ms": 2.1419
+    },
+    {
+     "name": "void at::native::vectorized_elementwise_kernel<4, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, at::detail::Array<char*, 3> >(int, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, at::detail::Array<char*, 3>)",
+     "shapes": "[]",
+     "calls": 1,
+     "self_cuda_ms": 2.1225
+    },
+    {
+     "name": "aten::add_",
+     "shapes": "[[16, 128, 1024, 128], [16, 128, 1024, 128], []]",
+     "calls": 1,
+     "self_cuda_ms": 2.1202
+    },
+    {
+     "name": "void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > >(at::TensorIteratorBase&, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > >(at::TensorIteratorBase&, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > const&)::{lambda(int)#1})",
+     "shapes": "[]",
+     "calls": 1,
+     "self_cuda_ms": 1.4671
+    },
+    {
+     "name": "void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<float>, at::detail::Array<char*, 1> >(int, at::native::FillFunctor<float>, at::detail::Array<char*, 1>)",
+     "shapes": "[]",
+     "calls": 5,
+     "self_cuda_ms": 1.3452
+    },
+    {
+     "name": "aten::fill_",
+     "shapes": "[[2, 16, 128, 1024, 128], []]",
+     "calls": 1,
+     "self_cuda_ms": 1.3212
+    },
+    {
+     "name": "aten::copy_",
+     "shapes": "[[16, 127, 1024, 128], [16, 127, 1024, 128], []]",
+     "calls": 1,
+     "self_cuda_ms": 1.2012
+    },
+    {
+     "name": "void at::native::elementwise_kernel<128, 4, at::native::gpu_kernel_impl<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1} const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1} const&)::{lambda(int)#1})",
+     "shapes": "[]",
+     "calls": 1,
+     "self_cuda_ms": 1.2012
+    },
+    {
+     "name": "aten::sum",
+     "shapes": "[[16, 128, 1024, 128], []]",
+     "calls": 1,
+     "self_cuda_ms": 0.7008
+    },
+    {
+     "name": "void at::native::reduce_kernel<512, 1, at::native::ReduceOp<float, at::native::func_wrapper_t<float, at::native::sum_functor<float, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4> >(at::native::ReduceOp<float, at::native::func_wrapper_t<float, at::native::sum_functor<float, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4>)",
+     "shapes": "[]",
+     "calls": 1,
+     "self_cuda_ms": 0.6993
+    },
+    {
+     "name": "aten::copy_",
+     "shapes": "[[4, 1024, 128, 128], [4, 1024, 128, 128], []]",
+     "calls": 1,
+     "self_cuda_ms": 0.2991
+    },
+    {
+     "name": "aten::copy_",
+     "shapes": "[[2, 16, 1, 1024, 128], [2, 16, 1, 1024, 128], []]",
+     "calls": 1,
+     "self_cuda_ms": 0.0236
+    }
+   ],
+   "total_self_cuda_ms": 112.524
+  },
+  {
+   "cell": "lstm",
+   "dtype": "float16",
+   "width": 128,
+   "heads": 1024,
+   "batch": 16,
+   "steps": 128,
+   "backward": {
+    "fast": true,
+    "fuse_pre": 2,
+    "wgrad": "bmm_lp",
+    "dg_dtype": "input"
+   },
+   "ops": [
+    {
+     "name": "_RecurrenceBackward",
+     "shapes": "[[16, 128, 1024, 128], []]",
+     "calls": 1,
+     "self_cuda_ms": 21.0212
+    },
+    {
+     "name": "_rtiled_bw",
+     "shapes": "[]",
+     "calls": 1,
+     "self_cuda_ms": 21.0212
+    },
+    {
+     "name": "_Recurrence",
+     "shapes": "[[16, 128, 4, 1024, 128], [4, 1024, 128, 128], [4, 1024, 128], [2, 16, 1, 1024, 128], []]",
+     "calls": 1,
+     "self_cuda_ms": 5.3776
+    },
+    {
+     "name": "_sequence",
+     "shapes": "[]",
+     "calls": 1,
+     "self_cuda_ms": 5.3776
+    },
+    {
+     "name": "aten::copy_",
+     "shapes": "[[16, 128, 1024, 128], [16, 128, 1024, 128], []]",
+     "calls": 5,
+     "self_cuda_ms": 4.7205
+    },
+    {
+     "name": "aten::mul",
+     "shapes": "[[16, 128, 1024, 128], [16, 128, 1024, 128]]",
+     "calls": 2,
+     "self_cuda_ms": 3.5855
+    },
+    {
+     "name": "aten::bmm",
+     "shapes": "[[1024, 128, 2048], [1024, 2048, 128], [1024, 128, 128]]",
+     "calls": 4,
+     "self_cuda_ms": 2.9808
+    },
+    {
+     "name": "void cutlass::Kernel<cutlass_80_tensorop_f16_s16816gemm_relu_f16_128x64_64x3_nt_align8>(cutlass_80_tensorop_f16_s16816gemm_relu_f16_128x64_64x3_nt_align8::Params)",
+     "shapes": "[]",
+     "calls": 4,
+     "self_cuda_ms": 2.9808
+    },
+    {
+     "name": "void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1}, at::detail::Array<char*, 2>, TrivialOffsetCalculator<1, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<1>, at::native::memory::StoreWithCast<1> >(int, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1}, at::detail::Array<char*, 2>, TrivialOffsetCalculator<1, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<1>, at::native::memory::StoreWithCast<1>)",
+     "shapes": "[]",
+     "calls": 5,
+     "self_cuda_ms": 2.6879
+    },
+    {
+     "name": "void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}, at::detail::Array<char*, 2>, TrivialOffsetCalculator<1, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<1>, at::native::memory::StoreWithCast<1> >(int, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}, at::detail::Array<char*, 2>, TrivialOffsetCalculator<1, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<1>, at::native::memory::StoreWithCast<1>)",
+     "shapes": "[]",
+     "calls": 3,
+     "self_cuda_ms": 2.6422
+    },
+    {
+     "name": "void at::native::vectorized_elementwise_kernel<4, at::native::CUDAFunctor_add<float>, at::detail::Array<char*, 3> >(int, at::native::CUDAFunctor_add<float>, at::detail::Array<char*, 3>)",
+     "shapes": "[]",
+     "calls": 2,
+     "self_cuda_ms": 2.1403
+    },
+    {
+     "name": "aten::add_",
+     "shapes": "[[16, 128, 1024, 128], [16, 128, 1024, 128], []]",
+     "calls": 1,
+     "self_cuda_ms": 2.1213
+    },
+    {
+     "name": "void at::native::vectorized_elementwise_kernel<4, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, at::detail::Array<char*, 3> >(int, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, at::detail::Array<char*, 3>)",
+     "shapes": "[]",
+     "calls": 1,
+     "self_cuda_ms": 2.1206
+    },
+    {
+     "name": "void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > >(at::TensorIteratorBase&, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > >(at::TensorIteratorBase&, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > const&)::{lambda(int)#1})",
+     "shapes": "[]",
+     "calls": 1,
+     "self_cuda_ms": 1.4648
+    },
+    {
+     "name": "aten::sum",
+     "shapes": "[[16, 128, 4, 1024, 128], [], [], []]",
+     "calls": 1,
+     "self_cuda_ms": 1.3961
+    },
+    {
+     "name": "void at::native::reduce_kernel<128, 4, at::native::ReduceOp<c10::Half, at::native::func_wrapper_t<float, at::native::sum_functor<c10::Half, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4> >(at::native::ReduceOp<c10::Half, at::native::func_wrapper_t<float, at::native::sum_functor<c10::Half, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4>)",
+     "shapes": "[]",
+     "calls": 1,
+     "self_cuda_ms": 1.3961
+    },
+    {
+     "name": "void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<float>, at::detail::Array<char*, 1> >(int, at::native::FillFunctor<float>, at::detail::Array<char*, 1>)",
+     "shapes": "[]",
+     "calls": 5,
+     "self_cuda_ms": 1.3515
+    },
+    {
+     "name": "aten::fill_",
+     "shapes": "[[2, 16, 128, 1024, 128], []]",
+     "calls": 1,
+     "self_cuda_ms": 1.3271
+    },
+    {
+     "name": "aten::copy_",
+     "shapes": "[[16, 127, 1024, 128], [16, 127, 1024, 128], []]",
+     "calls": 1,
+     "self_cuda_ms": 1.2019
+    },
+    {
+     "name": "void at::native::elementwise_kernel<128, 4, at::native::gpu_kernel_impl<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1} const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#10}::operator()() const::{lambda(c10::Half)#1} const&)::{lambda(int)#1})",
+     "shapes": "[]",
+     "calls": 1,
+     "self_cuda_ms": 1.2019
+    },
+    {
+     "name": "aten::sum",
+     "shapes": "[[16, 128, 1024, 128], []]",
+     "calls": 1,
+     "self_cuda_ms": 0.7033
+    },
+    {
+     "name": "void at::native::reduce_kernel<512, 1, at::native::ReduceOp<float, at::native::func_wrapper_t<float, at::native::sum_functor<float, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4> >(at::native::ReduceOp<float, at::native::func_wrapper_t<float, at::native::sum_functor<float, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4>)",
+     "shapes": "[]",
+     "calls": 1,
+     "self_cuda_ms": 0.7018
+    },
+    {
+     "name": "aten::copy_",
+     "shapes": "[[4, 1024, 128, 128], [4, 1024, 128, 128], []]",
+     "calls": 2,
+     "self_cuda_ms": 0.583
+    },
+    {
+     "name": "aten::copy_",
+     "shapes": "[[2, 16, 1, 1024, 128], [2, 16, 1, 1024, 128], []]",
+     "calls": 1,
+     "self_cuda_ms": 0.0217
+    },
+    {
+     "name": "aten::add_",
+     "shapes": "[[2, 16, 1, 1024, 128], [2, 16, 1, 1024, 128], []]",
+     "calls": 1,
+     "self_cuda_ms": 0.0189
+    }
+   ],
+   "total_self_cuda_ms": 90.213
+  }
+ ],
+ "finished": 1792289321.2818525,
+ "status": "DONE"
+}
