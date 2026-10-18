@@ -85,6 +85,11 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context=No
             wx, recurrent, bias, initial, cell, sequence_context=sequence_context, slice_width=config.slice_width,
             output_mode=output_mode, snapshot_dtype=snapshot_dtype, sync=config.sync, batch_tile=config.batch_tile,
             threads=32 * config.warps, prefetch=config.prefetch, reg_k=config.reg_k, stream_h=config.stream_h)
+    if config.family == "cuda2d":  # 2-D split CUDA forward (max-width.md section 56)
+        from . import hybrid_fw2d
+        return hybrid_fw2d.recurrence(
+            wx, recurrent, bias, initial, cell, sequence_context=sequence_context, output_mode=output_mode,
+            snapshot_dtype=snapshot_dtype, batch_rows=config.batch_tile, conc=config.conc)
     if config.family == "mma_rtiled":
         from . import triton_rtiled
         return triton_rtiled.recurrence(

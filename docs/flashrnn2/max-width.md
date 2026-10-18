@@ -1604,3 +1604,67 @@ Evidence: `max-width-evidence/final4-d5.json`. Every archived file was checked a
 **D5: 12/12 within the FP64 budgets.** Library defaults at H = 1, D ∈ {1024, 1536, 2048} × (LSTM FP16, sLSTM BF16) ×
 B ∈ {100, 128}. These run the multi-tile, multi-slot path with `pre_fused`, dG_LP and `honly` all on. The tables stay
 as in section 51.
+
+## 56. A 2-D split forward, and head-concurrent grids (pre-registration, 2026-10-18, before any run of it)
+
+**Why.**
+* *The forward is now the largest kernel at large D, B = 64.* With today's defaults the TileLang forward takes 7.2 ms
+  at D = 2048, against 5.3 ms for the 2-D backward kernel (section 46). The forward still runs the 1-D split: every
+  CTA reads the whole round(h) each step, and B = 64 at D = 2048 runs as four 16-row tiles.
+* *H > 1 at B = 64 still loses to FlashRNN1 `cuda`* at D = 1024 and 2048 (0.78-0.98x, section 42). One head's
+  resident R fills every SM, so the heads run one after another.
+
+**Change 1: `hybrid_fw2d`, the transpose of the 2-D backward** (KernelConfig family `cuda2d`, opt-in).
+* *Block.* CTA (i, j) keeps R[g, o, k] resident for unit block i (NU = D / PC units, all four gates: 4 NU output
+  columns) and hidden K block j (D / Q indices).
+* *Per step:*
+  1. B2;
+  2. GEMM of the staged K block of round(h_{t-1}) (`cp.async`) → FP32 partial gates;
+  3. B1;
+  4. the unit's owner sums its Q partials in fixed order, adds Wx and the bias, and updates the cell. The state stays
+     in registers for the slot. The owner then stores the history and publishes round(h_t).
+* *Grids.* (PC, Q, CR) = (32, 4, 0) at D = 1024 and 1536, (20, 4, 0) at 1280, (28, 4, 4) at 1792, (32, 4, 8) at
+  2048. Each CTA has the 2-D backward's block shape at that D, so the exchanged and partial bytes per step equal the
+  backward's.
+* *Output.* Modes full / hidden / last, snapshot in FP32 or the input dtype, FP32 carry. Whole logical calls only.
+* *ptxas.* No spill in any of the 15 variants compiled (125-254 registers).
+
+**Change 2: head-concurrent grids, `conc=True`** (opt-in), D = 1024.
+* *Grids.* Backward (PC, Q, CR) = (4, 8, 8), 32 CTAs per group; forward (16, 2, 8), 32 CTAs per group.
+* Each CTA has the D = 2048 block shape (256 columns × 512 K, eight register k-steps). Four groups (heads or batch
+  tiles) are resident at once: 4 × 8 MB of R at D = 1024 fits on chip.
+
+**Runs (batch "fw2d"):**
+* **F1, races.** Section 12's rule; the forward checks every staged h against the stored h_{t-1}, plus stamps.
+  * Forward: D ∈ {1024, 1792, 2048} LSTM FP16 B = 64; D ∈ {1024, 2048} sLSTM BF16 B = 16; conc at D = 1024, H = 4,
+    LSTM FP16 B = 64.
+  * Backward conc: D = 1024, H = 4, LSTM FP16 B = 64 and sLSTM BF16 B = 16.
+* **F2, modes.** `fw2d_modes_check.py` must hold bitwise: hidden = full's h, last = full's last h, input-dtype
+  snapshot = rounded FP32 snapshot, carry identical in every mode and equal to full's last step. Cases: D ∈ {1024,
+  1792, 2048} × (LSTM FP16, sLSTM BF16) × B ∈ {16, 64}, plus conc at D = 1024, H = 4.
+* **Q-fw2d.** Heads qualification (forward FP64 + per-head bitwise; training FP64 through the library backward) with
+  the `cuda2d` forward. Cases:
+  * D ∈ {1024, 1280, 1536, 1792, 2048} × LSTM/sLSTM × FP16/BF16 × B ∈ {16, 64}, H = 1;
+  * D ∈ {1024, 2048}, H = 2, B = 16;
+  * conc (forward and backward) at D = 1024, H = 4, B ∈ {16, 64}, with backward options matched between the H-head
+    and H = 1 calls.
+* **W6-fw2d and W4-fw2d, forward only.** T = 256, H = 1, D ∈ {1024, 1280, 1536, 1792, 2048} × B ∈ {16, 64} × (LSTM
+  FP16, sLSTM BF16). W6-fw2d compares the library's forward against `cuda2d`; W4-fw2d compares `cuda` against
+  `cuda2d`.
+* **W6-fw2dt and W4-fw2dt, training step.** The forward is `cuda2d` against the library forward; the backward is
+  the library default. D ∈ {1024, 1536, 2048} × B ∈ {16, 64} × (LSTM FP16, sLSTM BF16).
+* **W6-concbw and W4-concbw, training step.** Backward `conc=True` against the default grid, same forward. D = 1024 ×
+  (H ∈ {4, 16}, B ∈ {16, 64} and H = 1, B = 256) × (LSTM FP16, sLSTM BF16).
+* **W6-concfw and W4-concfw, forward only.** `cuda2d` with `conc` against the library forward, same shapes.
+
+**Prediction.**
+* All correctness checks pass.
+* The 2-D forward beats the library forward at B = 64 by 1.3-1.8x (it reads a quarter of the exchanged bytes and
+  runs B = 64 in one tile). At B = 16 it is about even.
+* conc wins at H ≥ 4 (1.5-2x on the backward kernel); with H = 4 at B = 64 the training step passes FlashRNN1 `cuda`.
+
+**Rules.**
+* The 2-D forward becomes the default forward (inference and training) at the (D, B) rows where W6-fw2d holds for
+  both cells, and for training where W6-fw2dt holds too. F1, F2 and Q-fw2d must pass.
+* conc becomes the default for the backward (and the forward) at the shapes where W6-concbw (W6-concfw) holds for both
+  cells.

@@ -4,6 +4,7 @@ Usage: hybrid_bw2d_race.py --task JSON --out FILE
 task: {"cell", "dtype", "width", "batch", "steps", "runs": 21, "batch_rows": 16 | 32 | 64 (default: by batch),
        "dg_dtype": null | "input" (the FRNN_DGLP build, max-width.md section 36),
        "honly": false | true (the FRNN_HONLY build reading the rounded h gradient, max-width.md section 40),
+       "conc": false | true (the head-concurrent grid, max-width.md section 56),
        "flags": false | true (the FRNN_FLAGS build: column-group flag wait as B1, max-width.md section 41; no_b1 drops
        that wait)}
 Variants: correct (content check of every staged dG operand and the per-K-block step stamps read before every partial
@@ -37,7 +38,7 @@ def main():
     rec = dict(task=task, started=time.time(), gpu=torch.cuda.get_device_name(), variants={})
     try:
         case = dict(cell=task["cell"], dtype=task["dtype"], batch=task["batch"], steps=task["steps"],
-                    width=task["width"], heads=1, init="warm")
+                    width=task["width"], heads=task.get("heads", 1), init="warm")
         leaves, cot_h, cot_f = bw_qualify.inputs(case, 9300 + task["width"])
         wx, r, b, init = leaves
         with torch.no_grad():
@@ -56,6 +57,8 @@ def main():
             kw.update(d_hidden=d_hidden)
         if task.get("flags"):
             kw.update(flags=True)
+        if task.get("conc"):  # the head-concurrent grid (max-width.md section 56)
+            kw.update(conc=True)
         if task.get("dg_dtype"):
             kw.update(dg_dtype=task["dg_dtype"], wgrad="bmm_lp")
         ref = hybrid_bw2d.backward(*args, **kw)

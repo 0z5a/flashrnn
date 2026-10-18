@@ -16,6 +16,10 @@ SOURCE = Path(__file__).with_name("hybrid_bw2d.cu")
 # k-steps of 16 rows per warp in registers at D = 1792 / 2048; D = 1792: 7 column blocks of 256, 112 CTAs).
 CONFIGS = {512: (4, 16, 0), 768: (6, 16, 0), 1024: (8, 16, 0), 1280: (5, 16, 0), 1536: (8, 16, 0), 1792: (7, 16, 4),
            2048: (8, 16, 8)}
+# Head-concurrent grids (opt-in conc=True, max-width.md section 56): D -> (PC, Q, CR) with a quarter of the CTAs per
+# group, each CTA the D = 2048 block shape (256 columns x 512 K, eight register k-steps), so that four groups (heads or
+# batch tiles) are resident at once instead of running one after another.
+CONC_CONFIGS = {1024: (4, 8, 8)}
 DEFAULT_WIDTHS = (1024, 1280, 1536, 1792, 2048)  # training default at H = 1, any B (qualified and timed)
 # training default at H > 1: D -> largest B timed with every row at B' <= B holding (max-width.md sections 37 and 42:
 # H in {4, 16} at B = 16, H = 4 at B = 64; qualified at H in {2, 3}, B = 16 and H = 2, B = 64). Other widths and
@@ -42,8 +46,8 @@ def batch_tile(batch):
 
 
 def build(width, bm, slstm, bf16, verify=0, cache_dir=None, mg=False, rowown=True, asyncload=True, dglp=False,
-          honly=False, flagwait=False):
-    pc, q, cr = CONFIGS[width]
+          honly=False, flagwait=False, grid=None):
+    pc, q, cr = grid or CONFIGS[width]
     cuda_home = os.environ.get("FRNN_HYBRID_CUDA_HOME", "/apps/ACC/CUDA/12.8")
     flags = [f"-DFRNN_D={width}", f"-DFRNN_PC={pc}", f"-DFRNN_Q={q}", f"-DFRNN_CR={cr}", f"-DFRNN_BM={int(bm)}",
              f"-DFRNN_SLSTM={int(slstm)}", f"-DFRNN_BF16={int(bf16)}", f"-DFRNN_VERIFY={int(verify)}"]
@@ -74,11 +78,11 @@ def build(width, bm, slstm, bf16, verify=0, cache_dir=None, mg=False, rowown=Tru
 
 
 def _lib(width, bm, slstm, bf16, verify=0, mg=False, rowown=True, asyncload=True, dglp=False, honly=False,
-         flags=False):
-    key = (width, bm, slstm, bf16, verify, mg, rowown, asyncload, dglp, honly, flags)
+         flags=False, grid=None):
+    key = (width, bm, slstm, bf16, verify, mg, rowown, asyncload, dglp, honly, flags, grid)
     if key not in _LIBS:
         lib = ctypes.CDLL(str(build(width, bm, slstm, bf16, verify, mg=mg, rowown=rowown, asyncload=asyncload,
-                                    dglp=dglp, honly=honly, flagwait=flags)))
+                                    dglp=dglp, honly=honly, flagwait=flags, grid=grid)))
         if mg:
             lib.frnn_hybrid_bw2d_mg.restype = ctypes.c_int
             lib.frnn_hybrid_bw2d_mg.argtypes = ([ctypes.c_void_p] * 12 + [ctypes.c_int] * 7 + [ctypes.c_void_p] * 3
@@ -105,9 +109,12 @@ def verify_bits(verify):
 
 def backward(wx, recurrent, bias, initial, history, d_history, d_final, cell, *, batch_rows=None, tf32=False,
              wgrad="bmm", prof=False, diagnostics=None, rowown=True, asyncload=True, pre_tf32=False, pre_fused=False,
-             dg_dtype=None, d_hidden=None, flags=False, _verify=None):
+             dg_dtype=None, d_hidden=None, flags=False, conc=False, _verify=None):
     """Returns (dg [B,T,4,H,D] FP32, or the input dtype with dg_dtype="input", dR, dbias, d_initial FP32), as
     hybrid_bw.backward.
+
+    conc (opt-in, section 56): the head-concurrent grid of CONC_CONFIGS (same arithmetic per column, a different K
+    block split, so not bitwise equal to the default grid).
 
     flags (opt-in, section 41): barrier B1 becomes a wait for the Q step flags of the CTA's own column block; the
     exchange buffer is double buffered. Same arithmetic and order, so the outputs are bitwise equal.
@@ -126,7 +133,10 @@ def backward(wx, recurrent, bias, initial, history, d_history, d_final, cell, *,
     device = wx.device
     sms = torch.cuda.get_device_properties(device).multi_processor_count
     bm = batch_tile(batch) if batch_rows is None else batch_rows
-    pc, q, _ = CONFIGS[width]
+    if conc and width not in CONC_CONFIGS:
+        raise ValueError(f"no head-concurrent grid at D = {width} (D in {sorted(CONC_CONFIGS)})")
+    grid = CONC_CONFIGS[width] if conc else None
+    pc, q, _ = grid or CONFIGS[width]
     ctas = pc * q
     if ctas > sms:
         raise ValueError("the 2-D grid needs more CTAs than SMs")
@@ -162,7 +172,7 @@ def backward(wx, recurrent, bias, initial, history, d_history, d_final, cell, *,
     if prof:
         bits |= VERIFY_BITS["prof"]
     lib = _lib(width, bm, cell == "slstm", wx.dtype == torch.bfloat16, bits, rowown=rowown, asyncload=asyncload,
-               dglp=dglp, honly=honly, flags=flags)
+               dglp=dglp, honly=honly, flags=flags, grid=grid)
     err = torch.zeros(12, device=device, dtype=torch.int32)
     err[3] = seed
     tensors = [pre.contiguous(), history.contiguous(), initial.float().contiguous(),

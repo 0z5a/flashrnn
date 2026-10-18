@@ -29,10 +29,17 @@ class KernelConfig:
     # TileLang grid only (large D, wide batch tiles): h^T streamed in 64-row chunks instead of staged whole, so that
     # BM = 32 / 64 fits next to R (flashrnn2.tilelang_stream; one warpgroup, S = 16, reg_k a multiple of 64).
     stream_h: bool = False
+    # CUDA 2-D split forward only (flashrnn2.hybrid_fw2d, max-width.md section 56): the head-concurrent grid.
+    conc: bool = False
 
     def __post_init__(self):
-        if self.family not in ("mma", "simt", "mma_rtiled", "tilelang"):
+        if self.family not in ("mma", "simt", "mma_rtiled", "tilelang", "cuda2d"):
             raise ValueError("unknown kernel family")
+        if self.conc and self.family != "cuda2d":
+            raise ValueError("the head-concurrent grid (conc) exists only on the CUDA 2-D forward")
+        if self.family == "cuda2d" and (self.batch_tile not in (16, 32, 64) or self.warps != 8 or self.slice_width
+                                        or self.sync != "none" or self.pad_k or self.weight_operand != "b"):
+            raise ValueError("the CUDA 2-D forward uses 16/32/64-row batch tiles, eight warps and no R-tiling options")
         if self.prefetch and self.family != "tilelang":
             raise ValueError("input-projection prefetch exists only on the TileLang paths")
         if self.family == "tilelang":
