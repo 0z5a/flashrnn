@@ -97,7 +97,7 @@ The 2-D backward also helps at H > 1 with large D (max-width §37):
   (§63). Where the selection differs by group count (conc grids, the 2-D forward) the per-head results agree to the
   FP64 budget, not bitwise.
 * Replacing grid barrier B1 by a column-group flag wait is correct but 1-9% slower (§44). The time moves into making
-  the partials visible at GPU scope (§46). The two barriers still take 3-4.3 µs per step.
+  the partials visible at GPU scope (§46). The two barriers still take 2.7-4.0 µs per step.
 * The 2-D split forward wins only where the library forward ran small tiles (D = 2048, B = 64) or groups ran one after
   another (D = 1024, ≥ 4 groups). Elsewhere it is 0.58-0.88x of the TileLang forward: its two grid barriers per step
   cost more than the bytes it saves (§57).

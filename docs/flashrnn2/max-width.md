@@ -1371,6 +1371,8 @@ step: backward 4.05 ms, forward 3.10 ms. The rest:
 
 The two barriers take 3-4.3 µs per step: 40% of the kernel at B = 16, 21-26% at B = 64.
 
+*Correction (2026-10-18, recomputed from the table above):* the two barriers take 2.7-4.0 µs per step, 34-43% of the kernel at B = 16 and 18-33% at B = 64 (B2 + B1 over the sum of the five phases).
+
 **Why flags lost (section 44).** With `flags=True` the B1 wait falls to 0.70-0.85 µs per step, as intended. The GEMM
 phase grows by 1.2-2.1 µs, because the phase now ends with the partials' publication (`__syncthreads`,
 `__threadfence`, release store). The time moved from the barrier to making the partials visible at GPU scope; it did
