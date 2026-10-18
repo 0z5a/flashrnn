@@ -890,3 +890,17 @@ keeps the Triton default), `execution_policy.default_config` now gives the TileL
 kernel (16-column slices) when TileLang is installed. The exception stays: B > 32 at D = 1280 keeps the wide-tile
 kernel of section 16. Without TileLang the Triton default stays. This also changes the single-GPU baseline of
 scale-out-plan.md section 24 at D = 1024: that baseline was the old default.
+
+## 32. The 2-D backward at H > 1 (pre-registration, 2026-10-18, before any run of it)
+
+The 2-D kernel loops over (head, batch tile) groups like the 1-D kernel; per head it runs the H = 1 arithmetic. The
+training default uses it at H = 1 only (section 29).
+
+**Runs (batch "heads2d"):**
+* **H1-2d**: the heads qualification (FP64 budgets plus per-head bitwise against the H = 1 runs through the test
+  hook) with `backend="hybrid2d"` passed to the H-head and the H = 1 calls. D ∈ {1024, 1536, 2048} × H ∈ {2, 3} ×
+  LSTM/sLSTM, FP16, B = 16, T = 24 (12 cases).
+* **Paired training step**, B = 16, T = 256, D ∈ {1024, 2048} × H ∈ {4, 16} × (LSTM FP16, sLSTM BF16) with the library
+  forward. **W6-h2d** compares the current H > 1 backward (Triton at D = 1024, the 1-D CUDA kernel at D = 2048) against
+  2-D, **W4-h2d** FlashRNN1 `cuda` against 2-D.
+* **Rule.** As in section 27.
