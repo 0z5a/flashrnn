@@ -49,7 +49,7 @@ class KernelConfig:
             if self.batch_tile not in (16, 32, 64, 128) or self.weight_operand != "b" or self.pad_k:
                 raise ValueError("the TileLang R-tiled paths use 16/32/64/128-row batch tiles and weight operand b")
             # warps: 4 (one warpgroup) or, on the grid path only, 8 (two warpgroups per CTA). Two warpgroups on
-            # the cluster path gave wrong, nondeterministic results (job 47308040 screen: 0/12 bitwise twins).
+            # the cluster path gave wrong, nondeterministic results (screen: 0/12 bitwise twins).
             if self.stream_h and (self.sync != "grid" or self.slice_width != 16 or self.warps != 4
                                   or self.batch_tile not in (32, 64) or self.prefetch or self.reg_k % 64):
                 raise ValueError("streamed h (stream_h) is the TileLang grid path with S = 16, four warps, BM = 32/64")

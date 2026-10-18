@@ -53,7 +53,7 @@ def supported(width, slice_width, bm=16):
 
     BM <= 64: h^T is the WGMMA B operand, whose swizzled shared layout stores 64-column atoms one after
     another. Only within one atom are a CTA's S rows contiguous, which the single bulk copy per peer needs;
-    TileLang 0.1.15 splits a narrower region into per-row copies at swizzled addresses (job 47306925, BM = 128:
+    TileLang 0.1.15 splits a narrower region into per-row copies at swizzled addresses (BM = 128:
     nondeterministic, wrong values), so BM = 128 is excluded here.
     """
     if slice_width not in SLICE_WIDTHS or width % slice_width or bm not in CLUSTER_BATCH_TILES:

@@ -13,7 +13,7 @@ Modes
                 library path: every gradient within the FP64 gradient budget of tools/bw_qualify.py.
                 kernel isolation: the two GEMMs outside the kernels (the gate preactivations the backward recomputes,
                 and dR / dbias) take a different code path and summation order for H = 1 (addmm) and H > 1
-                (einsum), so the library's d_wx cannot be bitwise per head (job 47445133). With the test hook
+                (einsum), so the library's d_wx cannot be bitwise per head. With the test hook
                 per_head_gemms() both GEMMs of the H-head call run head by head through the H = 1 code path;
                 then d_wx, d_init, d_r and d_bias must be bitwise equal per head against the H = 1 runs.
   repro --cell C --width D --heads H --batch B --steps T --arm {fwd_default,fwd_tilelang,train} --out FILE
