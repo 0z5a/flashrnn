@@ -1922,3 +1922,8 @@ option dicts used as given.
   W6-concfw3 holds for both cells, under the same monotone condition.
 * **D = 1280 / 1792.** The 2-D backward with the bundle becomes the H > 1 default for B ≤ 64 where W6-h2dw holds for
   both cells at both B and Q-hgen passes.
+
+**Status (2026-10-18 13:50): not run.** The account lost the batch QoS when the ACC budget ran out (280.4 of 280
+khours). Only an interactive QoS on a shared login node remains: at most two GPUs and 80 CPUs, a 2-hour limit and one
+job. Its timings would not be comparable with the exclusive-node batches the rules above were defined on. Batch
+"hgen" is prepared and sealed in its control directory. The defaults of sections 57-63 stand as they are.

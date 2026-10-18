@@ -86,6 +86,8 @@ The 2-D backward also helps at H > 1 with large D (max-width §37):
 
 ## Open
 
+* GPU work is paused: the ACC budget is used up and the batch QoS is gone (max-width §64 prepared, not run).
+
 * Phase A check 2 still fails by its all-within rule (34/37).
 * The multi-GPU forward kernel lacks the TileLang kernel's per-GPU efficiency.
 * H > 1 is closed at the timed shapes: with the H = 1 options at H > 1 the training step is 1.27-1.56x faster than
