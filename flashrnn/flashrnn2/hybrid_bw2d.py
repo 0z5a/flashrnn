@@ -24,11 +24,11 @@ HEADS_DEFAULT_MAX_BATCH = {1024: 64, 1536: 64, 2048: 64}
 # pre_fused default at H = 1 (max-width.md sections 38, 42 and 47): D -> smallest B from which it applies; every B
 # where both B = 16 and B = 64 held for both cells.
 PRE_FUSED_MIN_BATCH = {1024: 1, 1280: 1, 1536: 1, 1792: 1, 2048: 1}
-# dG stored in the input dtype with input-dtype dR (dg_dtype="input", wgrad="bmm_lp"; max-width.md sections 42, 47):
-# D -> smallest B (timed at B = 64).
-DGLP_MIN_BATCH = {1024: 64, 1536: 64, 1792: 64, 2048: 64}
-# h-only history gradient read by the kernel (honly; sections 42, 47): D -> smallest B (timed at B = 64).
-HONLY_MIN_BATCH = {1024: 64, 1536: 64, 1792: 64, 2048: 64}
+# dG stored in the input dtype with input-dtype dR (dg_dtype="input", wgrad="bmm_lp"; max-width.md sections 42, 47,
+# 51): D -> smallest B; timed at B = 16 and 64 at every D.
+DGLP_MIN_BATCH = {1024: 1, 1280: 1, 1536: 1, 1792: 1, 2048: 1}
+# h-only history gradient read by the kernel (honly; sections 42, 47, 51): D -> smallest B; timed at B = 16 and 64.
+HONLY_MIN_BATCH = {1024: 1, 1280: 1, 1536: 1, 1792: 1, 2048: 1}
 VERIFY_BITS = dict(check=1, delay=2, no_b1=4, no_b2=8, prof=16, mg_no_wait=32)
 _LIBS = {}
 

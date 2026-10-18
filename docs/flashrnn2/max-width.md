@@ -1537,3 +1537,32 @@ with the warm-up block. In each pair the arms differ in that one option only; ev
 **Rule.** For each option, the tables (`DGLP_MIN_BATCH`, `HONLY_MIN_BATCH`) extend to every (D, B) row where its W6
 holds for both cells, provided the D = 1280 checks (for D = 1280) and W1-gaps pass. Where B = 16 and B = 64 both hold,
 the option applies at every B.
+
+## 51. Results of the "gaps2" batch (section 50, 2026-10-18)
+
+Evidence: `max-width-evidence/gaps2-analysis.json` and `gaps2-bitwise-race.json`. Every archived file was checked
+against its SHA-256 manifest (370 files). All 72 claim starts ran.
+
+**D = 1280 checks pass.**
+* B1: 4/4. The stored dG is the rounded FP32 dG; d_initial and dR are equal.
+* B2: 4/4. dG, d_initial, dR and dbias are equal.
+* R1 2/2 and R2 2/2. The correct kernel has 0 violations; no_b1 and no_b2 are each flagged 21/21, never silently.
+
+**W1-gaps: 10/10.** Both options forced on, with the other library defaults, stay within the FP64 budgets.
+
+**W6-dglp4 holds 12/12; W6-honly4 holds 12/12.** W4 against `cuda` holds 24/24. Point ratios, option off / on:
+
+| D | B | dG_LP (LSTM, sLSTM) | honly (LSTM, sLSTM) |
+| --- | --- | --- | --- |
+| 1024 | 16 | 1.173, 1.129 | 1.125, 1.064 |
+| 1280 | 16 | 1.085, 1.131 | 1.026, 1.034 |
+| 1536 | 16 | 1.102, 1.098 | 1.130, 1.071 |
+| 1792 | 16 | 1.131, 1.092 | 1.032, 1.047 |
+| 2048 | 16 | 1.092, 1.104 | 1.033, 1.055 |
+| 1280 | 64 | 1.161, 1.100 | 1.040, 1.062 |
+
+At B = 16 both options gained more than predicted: dG_LP 9-17% (predicted 3-8%), honly 3-13% (predicted 1-3%).
+
+**Defaults (by the section 50 rule).** B = 16 and B = 64 now hold for both options at every D from 1024 to 2048, so
+dG_LP and honly apply at every B there (`DGLP_MIN_BATCH`, `HONLY_MIN_BATCH`). With `pre_fused`, all three later options
+are now the H = 1 default on the whole 2-D range, D = 1024-2048.
