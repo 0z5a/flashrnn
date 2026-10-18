@@ -956,3 +956,33 @@ interpreter check at FP16: 1.0e-7 relative to FP64. (The interpreter cannot run 
 
 **Prediction.** P1 and W1-pref pass. The step gains 1.5-2.5 ms at D = 1536 (10-18%), and W4-pref holds at every D.
 **Rule.** `pre_fused` becomes the default at H = 1 where W6-pref holds in every row.
+
+## 36. dG stored in the input dtype, input-dtype dR GEMM, H = 1 (pre-registration, 2026-10-18, before any run of it)
+
+**What remains outside the kernel after section 35.** The 2-D kernel stores dG in FP32 (B · T · 4D · 4 bytes, 403 MB
+at D = 1536, B = 64, T = 256). The training wrapper then casts it to the input dtype (another read and a half-size
+write). dR is a TF32 GEMM over the FP32 dG (1.32 ms at D = 1536, section 35).
+
+**Change.** `dg_dtype="input"` with `wgrad="bmm_lp"`, opt-in, single GPU, the arrangement H > 1 already uses (heads
+§8.5-§8.6).
+* Build flag `FRNN_DGLP`: the kernel stores to_elem(dG) — the same rounded value it publishes to the exchange buffer.
+  The recurrence never reads the stored dG, so dG, d_initial and the exchange are unchanged.
+* dR runs as an input-dtype GEMM with FP32 accumulation on the stored tensor, with no conversion pass.
+* dbias becomes an FP32 sum of the rounded dG.
+
+**Runs (batch "dglp"):**
+* **B1, bitwise.** `bw2d_rowown_check.py --option dg_dtype` compares two configurations, both using wgrad `bmm_lp`:
+  the dG_LP store, and the FP32 store. The stored dG must equal the FP32 dG rounded to the input dtype, and d_initial
+  and dR must be bitwise equal. Cases: D ∈ {1024, 1536, 1792, 2048} × B ∈ {16, 64} × (LSTM FP16, sLSTM BF16).
+* **R1, race.** The section 12 rule on the dG_LP build at D = 1024 and D = 2048 (LSTM FP16 B = 64, sLSTM BF16 B = 16),
+  21 runs per variant.
+* **W1-dglp.** The training step with `dg_dtype="input", wgrad="bmm_lp"` must stay within the FP64 budgets: D ∈ {1024,
+  1536, 2048} × B ∈ {16, 64} × LSTM/sLSTM × FP16/BF16 (24 cases).
+* **Paired training step.** B = 64, T = 256, D ∈ {1024, 1536, 1792, 2048} × (LSTM FP16, sLSTM BF16).
+  * **W6-dglp** compares the default against dG_LP.
+  * **W4-dglp** compares `cuda` against dG_LP.
+  * `pre_fused` is off in both arms, so this measures the change apart from section 35.
+
+**Prediction.** B1, R1 and W1-dglp pass. The step gains 0.6-1.0 ms at D = 1536 (4-7%), and W6-dglp holds at every D.
+**Rule.** `dg_dtype="input", wgrad="bmm_lp"` becomes the default at H = 1 on the 2-D path where W6-dglp holds in every
+row and B1, R1 and W1-dglp pass.

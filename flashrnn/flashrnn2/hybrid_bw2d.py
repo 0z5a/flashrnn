@@ -29,7 +29,7 @@ def batch_tile(batch):
     return 16 if batch <= 16 else 32 if batch <= 32 else 64
 
 
-def build(width, bm, slstm, bf16, verify=0, cache_dir=None, mg=False, rowown=True, asyncload=True):
+def build(width, bm, slstm, bf16, verify=0, cache_dir=None, mg=False, rowown=True, asyncload=True, dglp=False):
     pc, q, cr = CONFIGS[width]
     cuda_home = os.environ.get("FRNN_HYBRID_CUDA_HOME", "/apps/ACC/CUDA/12.8")
     flags = [f"-DFRNN_D={width}", f"-DFRNN_PC={pc}", f"-DFRNN_Q={q}", f"-DFRNN_CR={cr}", f"-DFRNN_BM={int(bm)}",
@@ -40,6 +40,8 @@ def build(width, bm, slstm, bf16, verify=0, cache_dir=None, mg=False, rowown=Tru
         flags.append("-DFRNN_ROWOWN=0")
     if not asyncload:  # synchronous dG staging (A/B only)
         flags.append("-DFRNN_ASYNC=0")
+    if dglp:  # dG stored in the input dtype (section 36)
+        flags.append("-DFRNN_DGLP=1")
     digest = hashlib.sha256(SOURCE.read_bytes() + " ".join(flags).encode()).hexdigest()[:16]
     cache = Path(cache_dir or os.environ.get("FRNN_HYBRID_CACHE",
                                              os.environ.get("TMPDIR", str(Path.home() / ".cache")) + "/frnn_hybrid_bw"))
@@ -54,10 +56,11 @@ def build(width, bm, slstm, bf16, verify=0, cache_dir=None, mg=False, rowown=Tru
     return lib
 
 
-def _lib(width, bm, slstm, bf16, verify=0, mg=False, rowown=True, asyncload=True):
-    key = (width, bm, slstm, bf16, verify, mg, rowown, asyncload)
+def _lib(width, bm, slstm, bf16, verify=0, mg=False, rowown=True, asyncload=True, dglp=False):
+    key = (width, bm, slstm, bf16, verify, mg, rowown, asyncload, dglp)
     if key not in _LIBS:
-        lib = ctypes.CDLL(str(build(width, bm, slstm, bf16, verify, mg=mg, rowown=rowown, asyncload=asyncload)))
+        lib = ctypes.CDLL(str(build(width, bm, slstm, bf16, verify, mg=mg, rowown=rowown, asyncload=asyncload,
+                                    dglp=dglp)))
         if mg:
             lib.frnn_hybrid_bw2d_mg.restype = ctypes.c_int
             lib.frnn_hybrid_bw2d_mg.argtypes = ([ctypes.c_void_p] * 12 + [ctypes.c_int] * 7 + [ctypes.c_void_p] * 3
@@ -84,12 +87,15 @@ def verify_bits(verify):
 
 def backward(wx, recurrent, bias, initial, history, d_history, d_final, cell, *, batch_rows=None, tf32=False,
              wgrad="bmm", prof=False, diagnostics=None, rowown=True, asyncload=True, pre_tf32=False, pre_fused=False,
-             _verify=None):
-    """Returns (dg FP32 [B,T,4,H,D], dR, dbias, d_initial FP32), as hybrid_bw.backward."""
+             dg_dtype=None, _verify=None):
+    """Returns (dg [B,T,4,H,D] FP32, or the input dtype with dg_dtype="input", dR, dbias, d_initial FP32), as
+    hybrid_bw.backward."""
     from .triton_rtiled_bw import preactivations, weight_gradients
 
     if cell not in ("lstm", "slstm"):
         raise ValueError("the 2-D backward supports LSTM and sLSTM")
+    if dg_dtype not in (None, "input") or (dg_dtype == "input" and wgrad != "bmm_lp"):
+        raise ValueError('dg_dtype must be None or "input", and "input" needs wgrad="bmm_lp"')
     batch, steps, gates, heads, width = wx.shape
     if wx.dtype not in (torch.float16, torch.bfloat16) or not supported(width):
         raise ValueError(f"unsupported shape or dtype for the 2-D backward (D in {sorted(CONFIGS)})")
@@ -117,7 +123,10 @@ def backward(wx, recurrent, bias, initial, history, d_history, d_final, cell, *,
         pre, h_prev = preactivations(wx, recurrent, bias, initial, history, tf32 or pre_tf32)
     if events:
         events[1].record()
-    dg = torch.empty((batch, steps, 4, heads, width), device=device, dtype=torch.float32)
+    # dg_dtype="input" (opt-in, section 36): the kernel stores dG rounded to the input dtype -- the value it publishes
+    # to the exchange buffer -- which the caller would cast to anyway and bmm_lp uses directly.
+    dglp = dg_dtype == "input"
+    dg = torch.empty((batch, steps, 4, heads, width), device=device, dtype=wx.dtype if dglp else torch.float32)
     d_init = torch.empty(initial.shape, device=device, dtype=torch.float32)
     xbuf = torch.empty((resident, bm, 4 * width), device=device, dtype=wx.dtype)
     part = torch.empty((resident, q, bm, width), device=device, dtype=torch.float32)
@@ -125,7 +134,8 @@ def backward(wx, recurrent, bias, initial, history, d_history, d_final, cell, *,
     bits, seed = verify_bits(_verify)
     if prof:
         bits |= VERIFY_BITS["prof"]
-    lib = _lib(width, bm, cell == "slstm", wx.dtype == torch.bfloat16, bits, rowown=rowown, asyncload=asyncload)
+    lib = _lib(width, bm, cell == "slstm", wx.dtype == torch.bfloat16, bits, rowown=rowown, asyncload=asyncload,
+               dglp=dglp)
     err = torch.zeros(12, device=device, dtype=torch.int32)
     err[3] = seed
     tensors = [pre.contiguous(), history.contiguous(), initial.float().contiguous(), d_history.contiguous(),

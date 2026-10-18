@@ -78,6 +78,24 @@ constexpr bool ROWOWN = FRNN_ROWOWN != 0;
 // trip), so the copy of chunk r + 1 overlaps the MMAs of chunk r; 0: load to registers, then store (the warp waits
 // for the data before its MMAs). Same values staged, same arithmetic.
 constexpr bool ASYNC = FRNN_ASYNC != 0;
+#ifndef FRNN_DGLP
+#define FRNN_DGLP 0
+#endif
+// FRNN_DGLP = 1 (opt-in, max-width.md section 36): the stored dG is the input dtype -- the value already published to
+// the exchange buffer (to_elem of the same FP32 dG), so the recurrence is unchanged; the caller's cast and the dR
+// GEMM's operand conversion disappear. Single GPU only.
+#if FRNN_DGLP
+#if FRNN_MG
+#error "FRNN_DGLP is single-GPU only"
+#endif
+typedef elem_t dg_t;
+__device__ __forceinline__ dg_t to_dg(float x) { return to_elem(x); }
+__device__ __forceinline__ elem_t dg_elem(dg_t x) { return x; }
+#else
+typedef float dg_t;
+__device__ __forceinline__ dg_t to_dg(float x) { return x; }
+__device__ __forceinline__ elem_t dg_elem(dg_t x) { return to_elem(x); }
+#endif
 constexpr int NCQ = NC / Q, RPQ = BM / Q, PE = (BM * NCQ + THREADS - 1) / THREADS;
 static_assert(!ROWOWN || BM % Q == 0, "row ownership needs BM a multiple of Q");
 constexpr int KC = 64, LDS = KC + 8, ROUNDS = KQ / KC, J = KC / 16, CSM = KS - CR;
@@ -114,12 +132,12 @@ __device__ __forceinline__ void delay(int seed, int a, int b, int c) {
 }
 
 // A-operand register (two elements, row r, reduction index k even) against the stored dG of step t.
-__device__ __forceinline__ int check_pair(uint32_t v, const float* dg, int B, int T, int H, int head, int row, int t,
+__device__ __forceinline__ int check_pair(uint32_t v, const dg_t* dg, int B, int T, int H, int head, int row, int t,
                                           int k) {
   if (row >= B) return 0;
   int g = k / D, o = k % D;
   size_t at = (((size_t)row * T + t) * 4 * H + (size_t)g * H + head) * D + o;
-  return v != pack(to_elem(dg[at]), to_elem(dg[at + 1]));
+  return v != pack(dg_elem(dg[at]), dg_elem(dg[at + 1]));
 }
 
 // B fragment register of R for k (even) and k + 1, column n: R[g, head, o, n] with k = g D + o.
@@ -136,7 +154,7 @@ struct Args {
   const float* dstates;  // [S, B, T, H, D] FP32 history gradient
   const float* dfinal;   // [S, B, 1, H, D] FP32 final-carry gradient
   const elem_t* R;       // [4, H, D, D]
-  float* dg;             // [B, T, 4, H, D] FP32 out
+  dg_t* dg;              // [B, T, 4, H, D] FP32 out (input dtype with FRNN_DGLP)
   float* dinit;          // [S, B, 1, H, D] FP32 out
   elem_t* xbuf;          // [RESIDENT, BM, 4D] exchanged dG (single buffer)
   float* part;           // [RESIDENT, Q, BM, D] FP32 partial dh (single buffer)
@@ -205,8 +223,8 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw2d_kernel(Args a) {
     };
 
     // Stored dG of reduction index k: this GPU's, or with FRNN_MG the GPU owning column k % D.
-    auto dgsrc = [&](int k) -> const float* {
-      return FRNN_MG ? reinterpret_cast<const float*>(a.dgpeers[(k % D) / (D / a.np)]) : a.dg;
+    auto dgsrc = [&](int k) -> const dg_t* {
+      return FRNN_MG ? reinterpret_cast<const dg_t*>(a.dgpeers[(k % D) / (D / a.np)]) : a.dg;
     };
     // GEMM of the K block against the staged dG of step t (rows of tile bt) -> partial dh; returns A-check count.
     auto gemm = [&](int t) -> int {
@@ -353,10 +371,10 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw2d_kernel(Args a) {
             d_z = dc[e] * igate * (1.0f - z * z);
             dc[e] = dc[e] * fgate;
           }
-          a.dg[pre] = d_i;
-          a.dg[pre + hd] = d_f;
-          a.dg[pre + 2 * hd] = d_z;
-          a.dg[pre + 3 * hd] = d_o;
+          a.dg[pre] = to_dg(d_i);
+          a.dg[pre + hd] = to_dg(d_f);
+          a.dg[pre + 2 * hd] = to_dg(d_z);
+          a.dg[pre + 3 * hd] = to_dg(d_o);
         }
         if (active && own) {  // rows beyond B publish zeros
 #if FRNN_MG
@@ -478,12 +496,12 @@ extern "C" int frnn_hybrid_bw2d_ctas() { return PC * Q; }
 #if FRNN_MG
 // One GPU's share (the caller's current device): column blocks rank * PC / np ..; tables as in Args.
 extern "C" int frnn_hybrid_bw2d_mg(const float* pre, const float* states, const float* initial, const float* dstates,
-                                   const float* dfinal, const void* R, float* dg, float* dinit, void* xbuf,
+                                   const float* dfinal, const void* R, void* dg, float* dinit, void* xbuf,
                                    float* part, int* stamp, int* err, int B, int T, int H, int groups, int resident,
                                    int slots, int tiles, const long long* xpeers, const long long* speers,
                                    const long long* dgpeers, int rank, int np, void* stream) {
   if (PC % np) return -1;
-  Args a{pre, states, initial, dstates, dfinal, reinterpret_cast<const elem_t*>(R), dg, dinit,
+  Args a{pre, states, initial, dstates, dfinal, reinterpret_cast<const elem_t*>(R), reinterpret_cast<dg_t*>(dg), dinit,
          reinterpret_cast<elem_t*>(xbuf), part, stamp, err, B, T, H, groups, resident, slots, tiles,
          xpeers, speers, dgpeers, rank, np};
   int smem = frnn_hybrid_bw2d_smem();
@@ -497,10 +515,10 @@ extern "C" int frnn_hybrid_bw2d_mg(const float* pre, const float* states, const 
 #endif
 
 extern "C" int frnn_hybrid_bw2d(const float* pre, const float* states, const float* initial, const float* dstates,
-                                const float* dfinal, const void* R, float* dg, float* dinit, void* xbuf, float* part,
+                                const float* dfinal, const void* R, void* dg, float* dinit, void* xbuf, float* part,
                                 int* stamp, int* err, int B, int T, int H, int groups, int resident, int slots,
                                 int tiles, void* stream) {
-  Args a{pre, states, initial, dstates, dfinal, reinterpret_cast<const elem_t*>(R), dg, dinit,
+  Args a{pre, states, initial, dstates, dfinal, reinterpret_cast<const elem_t*>(R), reinterpret_cast<dg_t*>(dg), dinit,
          reinterpret_cast<elem_t*>(xbuf), part, stamp, err, B, T, H, groups, resident, slots, tiles,
          nullptr, nullptr, nullptr, 0, 1};
   int smem = frnn_hybrid_bw2d_smem();
