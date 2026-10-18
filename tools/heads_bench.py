@@ -88,7 +88,9 @@ def make_arm(name, case, leaves, cot_h, cfg):
     if name == "one":
         return (lambda: fwd(leaves)) if kind == "forward" else (lambda: trn(leaves, cot_h))
     if name == "alt":  # a second FlashRNN2 configuration (case "alt_config"), e.g. the previous default
-        alt = KernelConfig(**case["alt_config"])
+        # Without an alt_config the alt arm keeps the case's forward and differs only in its backward options
+        # (heads.md section 8.8: a plan without alt_config lost every alt arm).
+        alt = KernelConfig(**case["alt_config"]) if case.get("alt_config") else cfg
 
         def fwd_alt(xs):
             with torch.no_grad():
