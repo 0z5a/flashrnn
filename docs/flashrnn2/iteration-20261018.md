@@ -16,6 +16,9 @@ H100 GPUs, with paired timing (3 process starts × 20 blocks) and a 95% hierarch
 | Training backward, H = 1, D = 1024-2048, any B | TF32 cuBLAS preactivation GEMM + separate Wx add | fused input-dtype Triton GEMM with the Wx / bias add in its epilogue (`pre_fused`) | max-width §38, §42, §47: 1.12-1.15x at B = 64, 1.07-1.13x at B = 16; more accurate against FP64 |
 | Training backward, H = 1, D = 1024-2048, any B | FP32 dG store + TF32 dR GEMM | dG stored in the input dtype by the kernel, input-dtype dR GEMM | max-width §40.1, §42, §47, §51: 1.09-1.19x |
 | Training backward, H = 1, hidden output, D = 1024-2048, any B | zero-filled FP32 history gradient | kernel reads the h gradient itself (`honly`) | max-width §42, §47, §51: 1.03-1.13x, bitwise identical |
+| Forward, D = 2048, H = 1, B ≥ 64 | TileLang grid (16-row tiles) | CUDA 2-D split forward (`cuda2d`) | max-width §57, §59: forward 1.42-1.46x, training step 1.14-1.17x |
+| Forward, D = 1024, B ≥ 64, ≥ 4 groups (batch tiles × heads) | TileLang grid | CUDA 2-D split forward, head-concurrent grid | max-width §57, §59: forward 1.25-1.41x, training step 1.05-1.11x |
+| Training backward, D = 1024, ≥ 4 groups | 2-D grid of 128 CTAs per group, groups one after another | head-concurrent grid, 32 CTAs per group, four groups at once (`conc`) | max-width §59: 1.11-1.35x |
 | Training backward, H > 1, D ∈ {1024, 1536, 2048}, B ≤ 64 | Triton (D ≤ 1280) / 1-D CUDA kernel (D > 1280) | 2-D split CUDA kernel | max-width §37, §42: 1.05-1.06x (D = 1024, B = 16), 1.45-1.73x elsewhere |
 
 Combined, the three later H = 1 options make the step 1.13-1.56x faster at B = 64 and 1.07-1.14x at B = 16
@@ -84,10 +87,11 @@ The 2-D backward also helps at H > 1 with large D (max-width §37):
 
 * Phase A check 2 still fails by its all-within rule (34/37).
 * The multi-GPU forward kernel lacks the TileLang kernel's per-GPU efficiency.
-* At H > 1 with B = 64, FlashRNN1 `cuda` is still faster than the 2-D path at D = 1024 and 2048 (0.78-0.98x, §42).
-  The heads run one after another, because the resident R of one head fills every SM.
+* At H > 1 with B = 64, FlashRNN1 `cuda` is still 4-18% faster at D = 1024, even with both head-concurrent grids
+  (§59). The H = 1 options at H > 1 are being measured (§60).
 * Replacing grid barrier B1 by a column-group flag wait is correct but 1-9% slower (§44). The time moves into making
   the partials visible at GPU scope (§46). The two barriers still take 3-4.3 µs per step.
-* The forward is now the largest single kernel at D = 2048, B = 64: 7.2 ms against 5.3 ms for the 2-D backward (§46).
-  A 2-D split forward is the next candidate.
+* The 2-D split forward wins only where the library forward ran small tiles (D = 2048, B = 64) or groups ran one after
+  another (D = 1024, ≥ 4 groups). Elsewhere it is 0.58-0.88x of the TileLang forward: its two grid barriers per step
+  cost more than the bytes it saves (§57).
 * The H = 1 options are not applied at H > 1, so H > 1 still uses the TF32 preactivation and FP32 dG.
