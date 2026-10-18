@@ -871,3 +871,21 @@ default is the tuned Triton backward (gate-batched at B ≤ 16, section 26 of th
 * **Paired training step** at D ∈ {512, 768} × B ∈ {16, 64} × (LSTM FP16, sLSTM BF16) with the library's forward.
   **W6-mid** compares the current default backward against 2-D, **W4-mid** `cuda` against 2-D.
 * **Rule.** As in section 27: the default changes at a (D, B) only where W6-mid holds in every row.
+
+## 31. Results of the forward-default batch "fwd1024" (2026-10-18)
+
+Evidence: `max-width-evidence/fwd1024-analysis.json`, archive verified by SHA-256.
+
+**Q: 8/8.** **W6-fwd** (Triton default / TileLang grid) holds 12/12. **W4-fwd** (`cuda` / TileLang grid) holds 12/12.
+Forward, T = 256:
+
+| shape | vs Triton default | vs `cuda` |
+| --- | --- | --- |
+| D = 1024, B = 16 (four cell/dtype rows) | 4.75-4.86x | 3.34-3.50x |
+| D = 1024, B = 64 | 5.40-5.54x | 1.47-1.60x |
+| D = 1280, B = 16 | 2.81-2.89x | 2.83-3.42x |
+
+**Default (by the section 28 rule).** For 768 < D ≤ 1280, `execution_policy.default_config` now gives the TileLang grid
+kernel (16-column slices) when TileLang is installed. The exception stays: B > 32 at D = 1280 keeps the wide-tile
+kernel of section 16. Without TileLang the Triton default stays. This also changes the single-GPU baseline of
+scale-out-plan.md section 24 at D = 1024: that baseline was the old default.

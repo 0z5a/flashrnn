@@ -77,6 +77,11 @@ class KernelConfig:
         return asdict(self)
 
 
+def _tilelang_available():
+    import importlib.util
+    return importlib.util.find_spec("tilelang") is not None
+
+
 def default_config(width, batch=None):
     """Conservative unmeasured default: single CTA up to D=128, else R tiling.
 
@@ -90,6 +95,10 @@ def default_config(width, batch=None):
         return wide_batch_config(width)
     if width > 1280:
         return large_width_config(width)
+    if width > 768 and width % 16 == 0 and _tilelang_available():
+        # TileLang grid kernel, 16-column slices (max-width.md section 31: 4.8-5.5x faster than the Triton default
+        # below at D = 1024, 2.8-2.9x at D = 1280, B = 16).
+        return KernelConfig(family="tilelang", slice_width=16, sync="grid")
     # S = 32 needs about 290 KB of shared memory per CTA at D = 1024; above D = 768 only S = 16 fits (compile
     # records: 164 KB at D = 1024, 205 KB at D = 1280, 246 KB at D = 1536 against the 227 KB opt-in limit).
     slice_width = 64 if width <= 256 else 32 if width <= 768 else 16
