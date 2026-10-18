@@ -797,3 +797,18 @@ Difference to the 1-D kernel: dG ≤ 7.5e-6, d_initial ≤ 4.0e-5. **W1-small: 1
 
 **Default (after the run).** The training backward now uses the 2-D kernel at D ∈ {1536, 1792, 2048} for every batch
 size (`hybrid_bw2d.DEFAULT_WIDTHS`). D = 1280 keeps the Triton backward.
+
+## 27. The 2-D backward at D = 1024 / 1280 against the Triton default (pre-registration, 2026-10-18, before any run of it)
+
+At D ≤ 1280 the training backward is the Triton R-tiled kernel. Section 21's D = 1024 rows compared the 2-D kernel
+with the 1-D CUDA kernel, not with that default.
+
+**Runs (batch "tune3"):**
+* **W1-low**: the 2-D backward within the FP64 budgets at D = 1280 (B ∈ {64, 40, 16, 32}) and at D = 1024
+  (B ∈ {16, 32}), LSTM/sLSTM, FP16/BF16 (24 cases).
+* **Paired training step** at D ∈ {1024, 1280} × B ∈ {16, 64} × (LSTM FP16, sLSTM BF16). **W6-low** compares the
+  Triton default against the 2-D kernel, **W4-low** `cuda` against the 2-D kernel. Library forward, protocol of
+  section 3.
+
+**Rule for the default.** The 2-D kernel becomes the default at a (D, B range) only where W6-low holds in every
+measured row at that D and batch size.
