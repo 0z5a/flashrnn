@@ -671,3 +671,36 @@ that default.
 * **Prediction.** The pointwise phase shrinks and the step gets 1.05-1.3x faster. Against `cuda`, D = 1536 moves toward
   or past 1.
 * **Profile, report only**: in-kernel phases of both layouts at D ∈ {1536, 2048}, LSTM FP16.
+
+## 23. Results of the row-ownership batch (job "rowown", 2026-10-18)
+
+**R1**: 48/48. dG and d_initial are bitwise equal to the first version (D ∈ {1024, 1280, 1536, 2048} × LSTM/sLSTM ×
+FP16/BF16 × B ∈ {40, 64, 100}).
+
+**R2**: 4/4. The correct kernel counts 0 violations; no B1 and no B2 are each flagged 21/21, never silently.
+
+**W6-rowown** (old / new) holds 9/12, at 1.01-1.03x. The three misses are D = 2048 LSTM BF16 and D = 1024 sLSTM, whose
+intervals include 1. **W4-rowown** (`cuda` / new) holds 7/12:
+* D = 1024: 1.10-1.17x.
+* D = 2048: 1.13-1.15x.
+* D = 1536: 0.91-0.99x, still below.
+
+The prediction (1.05-1.3x) was too high. In this run's profile the old layout's pointwise phase is 5.5 µs, not the
+9.6 µs of section 21, so its share was smaller than assumed. The new layout takes it to 4.7 µs at D = 1536 and from
+6.7 to 6.2 µs at D = 2048. The partial-sum phase drops from 1.8 to 1.1 µs at D = 1536.
+
+Where a D = 1536 step goes now (LSTM FP16, B = 64, per call):
+* step 14.1 ms;
+* backward kernel 4.6 ms. Per step that is GEMM 7.6 µs, pointwise 4.7, B1 2.3, B2 1.7, partial sum 1.1;
+* preactivation recompute 2.7 ms;
+* dR + dbias 1.7 ms;
+* training forward about 3.3 ms;
+* the rest is copies.
+
+Two next steps follow from this:
+1. *Overlapping the dG staging.* The staging load of the next chunk stalls each warp until the data arrives (load,
+   then store to shared memory), so it does not overlap the MMAs. An asynchronous copy (`cp.async`) would overlap it.
+2. *TF32 for the preactivation GEMM.* Its two operands are input-dtype values (FP16: 10-bit mantissa, BF16: 7-bit),
+   so TF32 represents them exactly and their products are exact in TF32 tensor cores, as section 6's
+   `preactivations` docstring notes. Only the summation order changes. The current FP32 path runs as a three-pass
+   TF32 emulation kernel (`f32f32_tf32f32`).
