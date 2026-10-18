@@ -1,7 +1,8 @@
 """Operator-level profile of one H > 1 training step (heads.md section 8.3, report only).
 
 Usage: heads_opprof.py --out FILE --cases JSON
-Each case {"cell", "dtype", "width", "heads", "batch", "steps"} with the library's defaults: two warm-up steps, then
+Each case {"cell", "dtype", "width", "heads", "batch", "steps", "backward" (optional backward options)}: two warm-up
+steps, then
 one step under torch.profiler (CUDA activities, input shapes recorded). Writes the 25 most expensive operators by
 self CUDA time with their input shapes and call counts, and the total CUDA time of the step, so that every copy and
 cast outside the recurrent kernels can be attributed to a line of the training path.
@@ -32,7 +33,8 @@ def main():
 
             def step():
                 xs = [x.detach().requires_grad_(True) for x in leaves]
-                y, _ = training.recurrence(*xs, case["cell"], output_mode="hidden")
+                y, _ = training.recurrence(*xs, case["cell"], output_mode="hidden",
+                                           backward_options=dict(case.get("backward") or {}))
                 return torch.autograd.grad((y.float() * cot_h).sum(), xs)
             for _ in range(2):
                 step()
