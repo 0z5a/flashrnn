@@ -1587,3 +1587,12 @@ and the 8 H = 2 cases. The section 51 defaults stand.
 As expected from section 47, the tool's per-head bitwise flag fails all 8 H = 2 cases. The H = 1 options now apply at
 every B, so no H = 2 shape is left where H = 1 and H > 1 use the same options. The forward is bitwise per head in every
 case.
+
+## 54. The new defaults at B > 64 (pre-registration, 2026-10-18, before any run of it)
+
+Every check of `pre_fused`, dG_LP and `honly` ran at B ≤ 64, and B = 40 is still a single 64-row tile. At B > 64 the
+2-D kernel runs several tiles as slots, a path the FRNN_DGLP and FRNN_HONLY stores and loads have not run through.
+
+**Batch "final4"** (qualification only): library defaults, H = 1, D ∈ {1024, 1536, 2048} × (LSTM FP16, sLSTM BF16) ×
+B ∈ {100, 128}, T = 24 (12 cases), within the FP64 budgets.
+**Rule.** A failure caps that D's entries in `PRE_FUSED_MIN_BATCH`, `DGLP_MIN_BATCH` and `HONLY_MIN_BATCH` to B ≤ 64.
