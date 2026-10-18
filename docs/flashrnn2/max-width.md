@@ -1448,3 +1448,24 @@ Against FlashRNN1 `cuda`, the library default is:
 
 D2 ran before these additions. The new combinations, all three options together at D = 1024 and D = 1792 for B = 64,
 and `pre_fused` at D = 1280 / 1536 for B < 64, are qualified in section 48.
+
+## 48. Qualification of the section 47 additions, and the lost integration rows (pre-registration, 2026-10-18)
+
+Batch "final2". It uses the paired harness with the warm-up block and the failed-arm fix. The forward configuration is
+pinned to the one used in sections 35-43 at each shape, so the FlashRNN1 prebuild needs no TileLang.
+
+**Runs:**
+* **D3, qualification of the new combinations.** No options, within the FP64 budgets:
+  * H = 1, D ∈ {1024, 1792}, B = 64: all three later options together;
+  * H = 1, D ∈ {1280, 1536}, B = 16: `pre_fused` newly on;
+  * each × LSTM/sLSTM × FP16/BF16 (16 cases).
+* **D3-H2, per-head bitwise with matched options.** The heads qualification at H = 2 with `pre_fused=False,
+  honly=False, wgrad="bmm"` in both the H-head and the H = 1 calls. D ∈ {1024, 2048} × B ∈ {16, 64} × (LSTM FP16, sLSTM
+  BF16), 8 cases. This confirms that the H > 1 path is still bitwise per head.
+* **W6-final2 and W4-final2 (report only).** The arms of section 43; only the forward configuration is now pinned.
+  T = 256, (LSTM FP16, sLSTM BF16), at:
+  * the eight lost shapes: D = 1536 B = 64; D = 1792 B = 16; D = 2048 B ∈ {16, 64};
+  * D = 1280, B ∈ {16, 64}, and D ∈ {1024, 1792}, B = 64, whose defaults changed in section 47.
+
+**Prediction.** D3 16/16, D3-H2 8/8 (FP64 and per-head bitwise).
+**Rule.** A D3 failure removes the section 47 additions at that shape. W6-final2 and W4-final2 change nothing.
