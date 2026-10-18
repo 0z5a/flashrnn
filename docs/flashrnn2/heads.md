@@ -404,3 +404,15 @@ a paired run.
   more; it is reported, not explained.
 
 Evidence: `heads-evidence/hgrad-analysis.json`.
+
+### 8.9 Batch "defaults" (pre-registration, 2026-10-18, before any run of it)
+
+* **D1, integration check of the shipped defaults.** The training step with the library's own selection (no
+  configuration or backward options passed), within the FP64 budgets. Covered: H = 1, D ∈ {64, 128, 256, 512, 768,
+  1024, 1280, 1536, 1792, 2048} × LSTM/sLSTM × FP16/BF16 × B ∈ {16, 64}, T = 24 (80 cases). This runs every default
+  changed on 2026-10-18 together: the 2-D backward at D ≥ 1024, the TileLang forward at D = 1024 / 1280, and the h-only
+  history gradient.
+* **H6-hg rerun.** Section 8.8's paired comparison that the plan defect lost: the H > 1 default against
+  `full_history_grad=True`, at the 24 claim shapes, together with FlashRNN1 (H3).
+
+Prediction: D1 passes 80/80. H6-hg is not resolved, or it holds at 1.02-1.10x at H ≥ 256.
