@@ -1316,3 +1316,15 @@ added costs exceed it. A cheaper variant would drop the `__threadfence`, which t
 time the B1 phase with the in-kernel phase counters before the step. Neither was done here.
 
 **Default: none.** `flags` stays opt-in, as a verified negative result.
+
+## 45. Where the step goes now, and why flags lost (report only, batch "prof2", 2026-10-18, before any run of it)
+
+No checks and no rules.
+* **Kernel phases** (`heads_bench.py` sweep with profile variants, five calls each, median): LSTM FP16 at D ∈ {1024,
+  1536, 2048} × B ∈ {16, 64}, plus sLSTM BF16 at D = 1536, B = 64. Each case runs four variants:
+  * the library default (CUDA-event phases: preactivation / kernel / weight gradients);
+  * the default with the in-kernel phase timers (pointwise, B2, GEMM, B1, partial sum, in µs per step);
+  * `flags=True` with the timers;
+  * today's later options off (`pre_fused=False, honly=False, wgrad="bmm"`) with the timers.
+* **Operator profile** (`heads_opprof.py`, torch.profiler, library default): D = 1536, B = 64, LSTM FP16 and sLSTM
+  BF16. It is the counterpart of section 33's table after today's defaults.
