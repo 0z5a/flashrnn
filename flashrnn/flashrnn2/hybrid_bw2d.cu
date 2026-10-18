@@ -46,10 +46,12 @@ namespace cg = cooperative_groups;
 typedef __nv_bfloat16 elem_t;
 #define FRNN_MMA "mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32"
 __device__ __forceinline__ elem_t to_elem(float x) { return __float2bfloat16_rn(x); }
+__device__ __forceinline__ float from_elem(elem_t x) { return __bfloat162float(x); }
 #else
 typedef __half elem_t;
 #define FRNN_MMA "mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32"
 __device__ __forceinline__ elem_t to_elem(float x) { return __float2half_rn(x); }
+__device__ __forceinline__ float from_elem(elem_t x) { return __half2float(x); }
 #endif
 
 #ifndef FRNN_VERIFY
@@ -84,6 +86,16 @@ constexpr bool ASYNC = FRNN_ASYNC != 0;
 // FRNN_DGLP = 1 (opt-in, max-width.md section 36): the stored dG is the input dtype -- the value already published to
 // the exchange buffer (to_elem of the same FP32 dG), so the recurrence is unchanged; the caller's cast and the dR
 // GEMM's operand conversion disappear. Single GPU only.
+#ifndef FRNN_HONLY
+#define FRNN_HONLY 0
+#endif
+// FRNN_HONLY = 1 (opt-in, max-width.md section 40): the history gradient has an h component only (hidden output), and
+// dstates is that component as given, [B, T, H, D] in the input dtype. The c (and n) history gradients are zero and not
+// read; the FP32 values are the same as the zero-filled [S, B, T, H, D] FP32 tensor's. Single GPU only.
+constexpr bool HONLY = FRNN_HONLY != 0;
+#if FRNN_HONLY && FRNN_MG
+#error "FRNN_HONLY is single-GPU only"
+#endif
 #if FRNN_DGLP
 #if FRNN_MG
 #error "FRNN_DGLP is single-GPU only"
@@ -151,7 +163,7 @@ struct Args {
   const float* pre;      // [B, T, 4, H, D] FP32 gate preactivations
   const float* states;   // [S, B, T, H, D] FP32 forward state history
   const float* initial;  // [S, B, 1, H, D] FP32
-  const float* dstates;  // [S, B, T, H, D] FP32 history gradient
+  const void* dstates;   // [S, B, T, H, D] FP32 history gradient (FRNN_HONLY: [B, T, H, D] input dtype, h only)
   const float* dfinal;   // [S, B, 1, H, D] FP32 final-carry gradient
   const elem_t* R;       // [4, H, D, D]
   dg_t* dg;              // [B, T, 4, H, D] FP32 out (input dtype with FRNN_DGLP)
@@ -339,15 +351,16 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw2d_kernel(Args a) {
         const size_t here = (((size_t)row * a.T + t) * a.H + head) * D + p;
         const size_t pre = (((size_t)row * a.T + t) * 4 * a.H + head) * D + p;
         if (valid) {
-          float dh = dh_in[e] + a.dstates[here];
-          dc[e] = dc[e] + a.dstates[history_stride + here];
+          const float* dsf = reinterpret_cast<const float*>(a.dstates);
+          float dh = dh_in[e] + (HONLY ? from_elem(reinterpret_cast<const elem_t*>(a.dstates)[here]) : dsf[here]);
+          if (!HONLY) dc[e] = dc[e] + dsf[history_stride + here];
           float gi = a.pre[pre], gf = a.pre[pre + hd], gz = a.pre[pre + 2 * hd], go = a.pre[pre + 3 * hd];
           float c_t = a.states[history_stride + here];
           float c_prev = t > 0 ? a.states[history_stride + here - hd] : a.initial[state_stride + unit];
           float z = 2.0f * sigmoid(2.0f * gz) - 1.0f;
           float o = sigmoid(go);
           if (SLSTM) {
-            dn[e] = dn[e] + a.dstates[2 * history_stride + here];
+            if (!HONLY) dn[e] = dn[e] + dsf[2 * history_stride + here];
             float n_t = a.states[2 * history_stride + here], m_t = a.states[3 * history_stride + here];
             float n_prev = t > 0 ? a.states[2 * history_stride + here - hd] : a.initial[2 * state_stride + unit];
             float m_prev = t > 0 ? a.states[3 * history_stride + here - hd] : a.initial[3 * state_stride + unit];
@@ -495,7 +508,7 @@ extern "C" int frnn_hybrid_bw2d_ctas() { return PC * Q; }
 
 #if FRNN_MG
 // One GPU's share (the caller's current device): column blocks rank * PC / np ..; tables as in Args.
-extern "C" int frnn_hybrid_bw2d_mg(const float* pre, const float* states, const float* initial, const float* dstates,
+extern "C" int frnn_hybrid_bw2d_mg(const float* pre, const float* states, const float* initial, const void* dstates,
                                    const float* dfinal, const void* R, void* dg, float* dinit, void* xbuf,
                                    float* part, int* stamp, int* err, int B, int T, int H, int groups, int resident,
                                    int slots, int tiles, const long long* xpeers, const long long* speers,
@@ -514,7 +527,7 @@ extern "C" int frnn_hybrid_bw2d_mg(const float* pre, const float* states, const 
 }
 #endif
 
-extern "C" int frnn_hybrid_bw2d(const float* pre, const float* states, const float* initial, const float* dstates,
+extern "C" int frnn_hybrid_bw2d(const float* pre, const float* states, const float* initial, const void* dstates,
                                 const float* dfinal, const void* R, void* dg, float* dinit, void* xbuf, float* part,
                                 int* stamp, int* err, int B, int T, int H, int groups, int resident, int slots,
                                 int tiles, void* stream) {

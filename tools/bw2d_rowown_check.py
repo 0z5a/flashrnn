@@ -1,10 +1,11 @@
 """Bitwise check of the 2-D backward's row ownership (FRNN_ROWOWN = 1) against the first version's column-sub-block
 ownership (0): same elements and arithmetic per CTA, so dG and d_initial must be equal bit for bit (max-width.md
-section 22). Usage: bw2d_rowown_check.py --out FILE --cases JSON [--option rowown | asyncload | dg_dtype]
+section 22). Usage: bw2d_rowown_check.py --out FILE --cases JSON [--option rowown | asyncload | dg_dtype | honly]
 --option names the layout switch compared (default rowown; asyncload compares cp.async staging against synchronous
 staging, max-width.md section 24; dg_dtype compares the input-dtype dG store against the FP32 store, both with wgrad
 "bmm_lp": the stored dG must equal the FP32 dG rounded to the input dtype, and d_initial and dR must be bitwise
-equal, max-width.md section 36).
+equal, max-width.md section 36; honly compares the h-only input-dtype history gradient (d_hidden) against the
+zero-filled FP32 one built from the same rounded values: dG, d_initial, dR and dbias bitwise, max-width.md section 40).
 Each case: {"cell", "dtype", "width", "batch", "steps"}; the batch tile is the library's for the batch."""
 import argparse
 import json
@@ -23,7 +24,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--out", required=True)
     p.add_argument("--cases", required=True)
-    p.add_argument("--option", default="rowown", choices=("rowown", "asyncload", "dg_dtype"))
+    p.add_argument("--option", default="rowown", choices=("rowown", "asyncload", "dg_dtype", "honly"))
     a = p.parse_args()
     rec = dict(started=time.time(), rows=[])
     for case in json.loads(a.cases):
@@ -39,7 +40,16 @@ def main():
             d_history[0] += cot_h.float()
             d_final = torch.zeros(init.shape, device=wx.device, dtype=torch.float32) + cot_f.float()
             args = (wx, r, b, init, history, d_history, d_final, case["cell"])
-            if a.option == "dg_dtype":
+            if a.option == "honly":
+                d_hidden = cot_h.to(wx.dtype).contiguous()
+                d_full = torch.zeros_like(history)
+                d_full[0] += d_hidden.float()
+                new = hybrid_bw2d.backward(wx, r, b, init, history, None, d_final, case["cell"], d_hidden=d_hidden)
+                old = hybrid_bw2d.backward(wx, r, b, init, history, d_full, d_final, case["cell"])
+                row.update(dg_bitwise=bool(torch.equal(new[0], old[0])), d_init_bitwise=bool(torch.equal(new[3], old[3])),
+                           d_recurrent_bitwise=bool(torch.equal(new[1], old[1])),
+                           d_bias_bitwise=bool(torch.equal(new[2], old[2])))
+            elif a.option == "dg_dtype":
                 new = hybrid_bw2d.backward(*args, dg_dtype="input", wgrad="bmm_lp")
                 old = hybrid_bw2d.backward(*args, wgrad="bmm_lp")
                 row.update(dg_bitwise=bool(torch.equal(new[0], old[0].to(wx.dtype))),
@@ -51,7 +61,8 @@ def main():
                 old = hybrid_bw2d.backward(*args, **{a.option: False})
                 row.update(dg_bitwise=bool(torch.equal(new[0], old[0])),
                            d_init_bitwise=bool(torch.equal(new[3], old[3])))
-            row["pass_"] = row["dg_bitwise"] and row["d_init_bitwise"] and row.get("d_recurrent_bitwise", True)
+            row["pass_"] = (row["dg_bitwise"] and row["d_init_bitwise"] and row.get("d_recurrent_bitwise", True)
+                            and row.get("d_bias_bitwise", True))
         except Exception:  # noqa: BLE001
             row.update(pass_=False, error=traceback.format_exc()[-1200:])
         rec["rows"].append(row)

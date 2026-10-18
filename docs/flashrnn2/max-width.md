@@ -1081,3 +1081,74 @@ pair the other arm is named explicitly, so the defaults of section 37 and 38 do 
   every B.
 * At H > 1 the 2-D default extends, at each D, up to the largest timed B for which every timed row at that D with
   B' ≤ B holds.
+
+## 40. Results of the "dglp" batch (section 36), and the h-only history gradient (pre-registration, 2026-10-18)
+
+### 40.1 Results of "dglp"
+
+Evidence: `max-width-evidence/dglp-analysis.json` and `dglp-b1-r1.json`. Every archived file was checked against its
+SHA-256 manifest (224 files).
+
+**W1-dglp: 24/24.** All cases are within the FP64 budgets.
+
+**B1 and R1: incomplete (a plan defect).** The tool tasks ran without TileLang. Above D = 1280 the forward that builds
+their history needs TileLang, so every row at D ≥ 1536 stopped with `ModuleNotFoundError: tilelang`. The runs at
+D = 1024 pass:
+* B1 4/4: the stored dG equals the FP32 dG rounded to the input dtype, and d_initial and dR are bitwise equal. The
+  dbias relative difference is 1.1e-4 to 1.1e-3, from summing the rounded dG.
+* R1 2/2: the correct kernel has 0 violations in 21 runs; no_b1 and no_b2 are each flagged 21/21 with none silent.
+
+**W6-dglp holds 6/8; W4-dglp holds 8/8.** Training step, B = 64, T = 256, point ratio with the 95% interval:
+
+| D | cell / dtype | default / dG_LP | `cuda` / dG_LP |
+| --- | --- | --- | --- |
+| 1024 | LSTM FP16 | 1.172 (0.954-1.654), not held | 1.237 |
+| 1024 | sLSTM BF16 | 1.059 (0.962-1.102), not held | 1.294 |
+| 1536 | LSTM FP16 | 1.122 (1.120-1.124) | 1.150 |
+| 1536 | sLSTM BF16 | 1.111 (1.110-1.112) | 1.113 |
+| 1792 | LSTM FP16 | 1.128 (1.118-1.132) | 1.128 |
+| 1792 | sLSTM BF16 | 1.136 (1.132-1.147) | 1.063 |
+| 2048 | LSTM FP16 | 1.123 (1.121-1.124) | 1.325 |
+| 2048 | sLSTM BF16 | 1.122 (1.121-1.123) | 1.319 |
+
+The two D = 1024 rows fail on a few outlier blocks, not on the typical block:
+* the per-start median ratio is 1.10 in all six starts;
+* single blocks reach 9.3 and 0.44, where one arm's mean took a 9x spike.
+
+The pre-registered rule uses the bootstrap of block means, so these rows count as not held. The measured gain (11-14%
+at D ≥ 1536) is larger than predicted (4-7%).
+
+**Default: none yet.** The section 36 rule also needs B1 and R1, which do not cover D ≥ 1536. Section 40.2 reruns them.
+
+### 40.2 Pre-registration: h-only history gradient in the 2-D kernel, plus the dG_LP gaps (before any run of it)
+
+**Change.** Option `honly=True`, opt-in. It applies to the 2-D path when the output is hidden and d_output is in the
+input dtype.
+* The kernel (build flag `FRNN_HONLY`) reads dh from d_output directly ([B, T, H, D], input dtype). It never reads the
+  zero c (and n) history gradients.
+* The training wrapper no longer builds the zero-filled [S, B, T, H, D] FP32 history gradient and its add, which is
+  800 MB for sLSTM at D = 1536, B = 64.
+* The FP32 values the kernel adds are those of the old tensor (exact conversion), so outputs are bitwise equal up to
+  the sign of zero.
+
+**Runs (batch "honly"):**
+* **B1-dglp and R1-dglp, completed.** Section 36's B1 at D ∈ {1536, 1792, 2048} × B ∈ {16, 64} × (LSTM FP16, sLSTM
+  BF16), and R1 at D = 2048 (LSTM FP16 B = 64, sLSTM BF16 B = 16), now with TileLang.
+* **W6-dglp at D = 1024, rerun.** The same two claims, same arms (`pre_fused=False` in both). The rerun replaces the
+  D = 1024 rows of 40.1.
+* **B2, bitwise.** `bw2d_rowown_check.py --option honly` compares d_hidden against the zero-filled FP32 tensor built
+  from the same rounded values: dG, d_initial, dR and dbias must be bitwise equal. D ∈ {1024, 1536, 1792, 2048} × B ∈
+  {16, 64} × (LSTM FP16, sLSTM BF16).
+* **R2, race.** The section 12 rule on the FRNN_HONLY build: D ∈ {1024, 2048} × (LSTM FP16 B = 64, sLSTM BF16 B = 16).
+* **W1-honly.** The training step with `honly=True` within the FP64 budgets: D ∈ {1024, 1536, 2048} × B ∈ {16, 64} ×
+  LSTM/sLSTM × FP16/BF16 (24 cases).
+* **W6-honly and W4-honly.** B = 64, T = 256, D ∈ {1024, 1536, 1792, 2048} × (LSTM FP16, sLSTM BF16). Both arms set
+  `pre_fused=True` explicitly. W6-honly compares `honly=False` against `True`; W4-honly compares `cuda` against
+  `honly=True`.
+
+**Prediction.** Every check passes. The step gains 1-3% for LSTM and 3-6% for sLSTM.
+
+**Rules.**
+* dG_LP: section 36's rule over the union of 40.1 and this batch, with the D = 1024 rows taken from the rerun.
+* honly becomes the default for hidden output at H = 1 on the 2-D path where W6-honly holds in every row and B2, R2
+  and W1-honly pass.

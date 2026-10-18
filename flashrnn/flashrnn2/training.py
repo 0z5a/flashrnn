@@ -142,15 +142,19 @@ class _Recurrence(torch.autograd.Function):
             # R split over column blocks and K blocks (max-width.md section 20); opt-in.
             from . import hybrid_bw2d
 
+            # honly (opt-in, max-width.md section 40): hidden output -> the kernel reads d_output itself, no zero-filled
+            # FP32 history gradient.
+            honly = (options.get("honly", False) and ctx.output_mode == "hidden" and d_output is not None
+                     and d_output.dtype == wx.dtype)
             dg, d_recurrent, d_bias, d_initial = hybrid_bw2d.backward(
-                wx, recurrent, bias, initial, history, full_history_gradient(), d_final, ctx.cell,
+                wx, recurrent, bias, initial, history, None if honly else full_history_gradient(), d_final, ctx.cell,
                 batch_rows=options.get("batch_rows"), wgrad=options.get("wgrad", "bmm"),
                 prof=options.get("prof_phases", False), tf32=options.get("tf32", False),
                 diagnostics=options.get("diagnostics"), rowown=options.get("rowown", True),
                 asyncload=options.get("asyncload", True), pre_tf32=options.get("pre_tf32", False),
                 pre_fused=options.get("pre_fused", wx.shape[3] == 1 and wx.shape[-1] in hybrid_bw2d.PRE_FUSED_WIDTHS
                                       and wx.shape[0] >= hybrid_bw2d.PRE_FUSED_MIN_BATCH),
-                dg_dtype=options.get("dg_dtype"))
+                dg_dtype=options.get("dg_dtype"), d_hidden=d_output.contiguous() if honly else None)
             return (dg.to(wx.dtype), d_recurrent.to(recurrent.dtype), d_bias.to(bias.dtype),
                     d_initial.to(initial.dtype), None, None, None, None, None)
         if backend == "hybrid" or (backend is None and wx.shape[-1] > HYBRID_BACKWARD_ABOVE):
