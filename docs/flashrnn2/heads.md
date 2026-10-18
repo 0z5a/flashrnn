@@ -262,3 +262,29 @@ Nsight Systems at D = 64, H = 1024, per call:
 The recurrent kernels are at parity or faster. The remaining loss is the FP32 dR GEMMs on the FP32 dG and the dtype
 copies around the kernels. The next change is an FP16-operand dR with FP32 accumulation (a precision change, so it
 needs its own qualification) and dropping the copies; it is not done yet.
+
+### 8.3 Low-precision dR operands for H > 1 (pre-registration, 2026-10-18, before any run of it)
+
+**Change.** `weight_gradients(method="bmm_lp")`, opt-in as the training option `wgrad="bmm_lp"`. The dR GEMMs take
+dG rounded to the input dtype and the stored h_{t-1}, which is already in the input dtype, so no FP32 copy of h is made.
+Accumulation is in FP32, with PyTorch's reduced-precision split-K reductions switched off for the call. The result is
+rounded to the input dtype, the dtype dR is returned in. dbias stays the FP32 sum of the FP32 dG. This is FlashRNN1's
+arrangement.
+
+CPU check against FP64 (B = 8, T = 16, D = 64): largest dR error relative to the largest |dR|:
+* FP16: 4.9e-4;
+* BF16: 3.0-3.5e-3;
+* FP32 path: about 5e-7.
+
+**Runs (batch "heads lp"):**
+* **H1-lp**: the training qualification of section 8 (FP64 budgets, per-head bitwise through the test hook, which
+  passes the method on) with `wgrad="bmm_lp"` on the single-CTA path, H ∈ {2, 3, 16}, D ∈ {64, 128}, LSTM/sLSTM,
+  FP16/BF16 (24 cases); H = 1 at the same widths (8 cases).
+* **H3-lp / H6-lp**, paired training step at the claim shapes of section 3 (D ∈ {64, 128} × H ∈ {16, 256, 1024} ×
+  LSTM/sLSTM × FP16/BF16): against FlashRNN1 (H3-lp) and against the current default (H6-lp); protocol of section 4.
+  Taken only if H1-lp passes.
+* **Operator profile** (report only, `tools/heads_opprof.py`): the default and the low-precision step at D = 64,
+  H = 256 and D = 128, H = 1024, LSTM FP16. It attributes the remaining copies of section 8.2 to operators.
+
+**Prediction.** H1-lp passes. The step gains 5-15% at H ≥ 256, and H3 rows move toward 1 but most stay below it while
+the copies remain.
