@@ -904,3 +904,10 @@ training default uses it at H = 1 only (section 29).
   forward. **W6-h2d** compares the current H > 1 backward (Triton at D = 1024, the 1-D CUDA kernel at D = 2048) against
   2-D, **W4-h2d** FlashRNN1 `cuda` against 2-D.
 * **Rule.** As in section 27.
+
+## 33. Operator profile of the large-D training step (report only, batch "opprof", 2026-10-18)
+
+`tools/heads_opprof.py` (torch.profiler, one step after two warm-ups) at H = 1, B = 64, T = 256, D ∈ {1024, 1536, 2048},
+LSTM FP16 / sLSTM BF16, library defaults, plus D = 1536 with `pre_tf32`. Purpose: attribute the preactivation and
+weight-gradient phases (about 30% of the step, section 23) to operators, and find out why TF32 for the preactivation
+GEMM changed nothing (section 25). No checks.
