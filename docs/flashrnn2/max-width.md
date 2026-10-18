@@ -729,3 +729,41 @@ Two changes, each switchable for the A/B:
 
 **Prediction.** The GEMM phase shrinks by 1-3 µs per step. The preactivation drops from 2.7 to about 1 ms at
 D = 1536. W4-tune holds at every D, including 1536.
+
+## 25. Results of the "tune" batch (job "tune", 2026-10-18); the next runs (pre-registration)
+
+**Results.**
+* **A1**: 48/48. cp.async staging is bitwise equal to synchronous staging.
+* **A2**: 4/4. The correct kernel counts 0 violations; no B1 and no B2 are each flagged 21/21, never silently.
+* **W1-tf32**: 24/24 within the FP64 budgets.
+* **W6-tune**, the section 23 kernel against async staging with TF32 preactivations: holds 8/12, at 1.02-1.04x. The
+  four misses have intervals that include 1.
+* **W4-tune**, `cuda` against the new path: holds 9/12.
+  * D = 1024: 1.11-1.20x.
+  * D = 2048: 1.14-1.19x.
+  * D = 1536: 0.98 [0.92, 1.02] (LSTM BF16), 1.01 [1.00, 1.02] (LSTM FP16), 1.01 [0.97, 1.04] (sLSTM BF16),
+    1.03 [1.02, 1.06] (sLSTM FP16, holds).
+
+At D = 1536 the 2-D path now matches `cuda` within about ±3%; section 21 had it at 0.84-0.99x.
+
+Profile, LSTM FP16, B = 64:
+* cp.async cuts the GEMM phase from 7.7 to 6.0 µs per step at D = 1536 and from 11.2 to 9.4 µs at D = 2048.
+* The backward kernel goes from 4.62 to 4.20 ms and from 6.06 to 5.49 ms.
+* TF32 for the preactivation GEMM changed nothing measurable: 2.69 ms with and without, and the same at D = 2048. So
+  the preactivation phase is not bound by that GEMM; the elementwise passes around it are a likely candidate, not
+  measured. `pre_tf32` stays off, and the claimed gain comes from cp.async alone, which stays the default.
+
+**Next (batch "tune2").** The 2-D backward with its defaults: section 22's row ownership plus cp.async; FP32
+preactivations.
+* **W1-1792**: D = 1792 on the new 7 × 16 grid (4 register k-steps; ptxas 226 registers, 215 KB shared memory, no
+  spill), training within the FP64 budgets, B ∈ {64, 40} (8 cases).
+* **R-1792**: race verification at D = 1792, LSTM/sLSTM, BM = 64, B = 100.
+* **W1-small**: the 2-D backward at B ∈ {16, 32}, D ∈ {1536, 2048} (16 cases).
+* **Paired timing**:
+  * D = 1792, B = 64, four (cell, dtype) shapes. **W6-2d1792** compares against the 1-D kernel (the current default
+    there), **W4-2d1792** against `cuda`.
+  * B ∈ {16, 32} × D ∈ {1536, 1792, 2048} × (LSTM FP16, sLSTM BF16). **W6-small** compares against the 1-D kernel,
+    **W4-small** against `cuda`.
+  * Protocol of section 3.
+* **Prediction.** D = 1792 behaves like its neighbours: about 1.4-1.6x against 1-D, and about 1.0-1.15x against
+  `cuda`. At B ≤ 32 the 2-D kernel is at least as fast as 1-D, since its bytes per step scale with B as well.
