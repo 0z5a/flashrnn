@@ -154,7 +154,7 @@ def backward(wx, recurrent, bias, initial, history, d_history, d_final, cell, *,
         events[0].record()
     # pre_tf32: TF32 tensor cores for the preactivation GEMM. Both operands are input-dtype values (exact in TF32),
     # so the products are exact and only the summation order differs from the FP32 GEMM (max-width.md section 24).
-    if pre_fused and heads == 1:  # input-dtype tensor-core GEMM with the Wx / bias adds fused (section 35)
+    if pre_fused:  # input-dtype tensor-core GEMM with the Wx / bias adds fused (sections 35, 60: any H)
         from .preact import h_prev_of, preactivations_fused
         h_prev = h_prev_of(wx, initial, history)
         pre = preactivations_fused(wx, recurrent, bias, h_prev)

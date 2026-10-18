@@ -1800,3 +1800,34 @@ splits.
 **Still open.** At H > 1 with B = 64, FlashRNN1 `cuda` remains 4-18% ahead at D = 1024, even with both conc grids. The
 H > 1 path still runs without the H = 1 options (TF32 preactivation, FP32 dG, zero-filled history gradient). Those
 options are worth 1.13-1.56x at H = 1 (section 49).
+
+## 60. The H = 1 options at H > 1 (pre-registration, 2026-10-18, before any run of it)
+
+**Change.** `pre_fused`, dG_LP (`dg_dtype="input", wgrad="bmm_lp"`) and `honly` on the H > 1 2-D path, as one bundle.
+* *dG_LP and honly.* The kernel paths are per group already, so they work at any H.
+* *`pre_fused`.* The fused preactivation GEMM gets the head as a second grid axis. Each head runs the H = 1 tile
+  arithmetic on its own rows; at H = 1 the addresses reduce to the old layout.
+* *Interpreter check.* In the Triton CPU interpreter (FP16; H ∈ {1, 2, 3}, D ∈ {32, 64}) every head is bitwise equal
+  to the H = 1 call on that head, with error 0.8-1.7e-7 relative to FP64.
+
+**Runs (batch "hopts"):**
+* **Q-hopts.** The heads qualification: forward FP64 + per-head bitwise; training FP64 + per-head bitwise through the
+  GEMM hook. The bundle is on and conc is pinned in the H-head and H = 1 calls alike, and the forward is pinned to the
+  TileLang configuration. Cases, each × (LSTM FP16, sLSTM BF16):
+  * D ∈ {1024, 1536, 2048} × H ∈ {2, 3}, B = 16;
+  * D = 1024, H = 2, B = 64;
+  * D = 1024, H = 4, B = 64 with conc.
+* **R-hopts, races** with dG_LP and honly on:
+  * D = 1024, H = 4, LSTM FP16, B = 64, conc;
+  * D = 2048, H = 2, sLSTM BF16, B = 16.
+* **W6-hopts and W4-hopts, training step.** The bundle on against off; everything else is the library default (forward
+  and conc). Shapes: D ∈ {1024, 1536, 2048} with H = 4, plus D = 1024 with H = 16; each at B ∈ {16, 64} × (LSTM FP16,
+  sLSTM BF16).
+
+**Prediction.**
+* The checks pass.
+* The bundle gains 1.1-1.4x at B = 64. At D = 1024, H = 4, B = 64 the training step reaches parity with FlashRNN1
+  `cuda`, or passes it.
+
+**Rule.** The bundle becomes the H > 1 default on the 2-D path at the (D, H, B) rows where W6-hopts holds for both cells.
+At a (D, H) where both B = 16 and B = 64 hold, it applies at every B ≤ 64.
