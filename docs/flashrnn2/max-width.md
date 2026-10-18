@@ -1668,3 +1668,63 @@ as in section 51.
   both cells, and for training where W6-fw2dt holds too. F1, F2 and Q-fw2d must pass.
 * conc becomes the default for the backward (and the forward) at the shapes where W6-concbw (W6-concfw) holds for both
   cells.
+
+## 57. Results of the "fw2d" batch (section 56, 2026-10-18)
+
+Evidence: `max-width-evidence/fw2d-analysis.json` and `fw2d-checks.json`. Every archived file was checked against its
+SHA-256 manifest (828 files). All 156 claim starts ran.
+
+### Correctness: everything passes
+
+* **F1, races: 8/8.** Six forward tasks, conc among them, and two conc backward tasks. The correct kernels count 0
+  violations. no_b1 and no_b2 are each flagged 21/21, never silently. Against the library's forward the 2-D forward
+  differs, as different summation orders do:
+  * h: relative 1.4-1.7e-5 (LSTM FP16), 1.2-1.3e-4 (sLSTM BF16);
+  * the FP32 carry: 1.2-1.3e-5 and 0.8-0.9e-4.
+* **F2, modes: 13/13 bitwise.**
+* **Q-fw2d: 48/48**, including the tool's per-head bitwise flag:
+  * 40 H = 1 cases, D = 1024-2048;
+  * 4 H = 2 cases;
+  * 4 conc cases at H = 4.
+
+### Timing
+
+**W6-fw2d (forward only): 2/20.** Library forward / 2-D forward:
+
+| D | B = 16 | B = 64 |
+| --- | --- | --- |
+| 1024 | 0.65-0.68 | 0.87-0.88 |
+| 1280 | 0.58-0.61 | 0.63-0.65 |
+| 1536 | 0.61-0.63 | 0.81-0.84 |
+| 1792 | 0.59-0.61 | 0.77 |
+| 2048 | 0.63-0.64 | **1.42-1.46** |
+
+The prediction (1.3-1.8x at B = 64) holds only at D = 2048. That is the one shape where the library forward runs
+B = 64 as four 16-row tiles. Elsewhere it already runs 64-row tiles (D = 1280-1792) or a one-barrier kernel that is
+cheap at B = 16. The 2-D forward pays two grid barriers per step, and per step it is not faster than those. W4-fw2d
+(`cuda` / 2-D) holds 19/20.
+
+**W6-fw2dt (training step): 2/12.** Only D = 2048, B = 64 holds: 1.162 and 1.166. W4-fw2dt holds 12/12.
+
+**W6-concfw (forward, conc against the library forward), D = 1024: 6/10.**
+
+| shape | ratio |
+| --- | --- |
+| H = 4, B = 64 | 1.25-1.28 |
+| H = 16, B = 64 | 1.26-1.29 |
+| H = 1, B = 256 | 1.38-1.41 |
+| B = 16, H ∈ {4, 16} | 0.80-0.83, slower |
+
+**W6-concbw: invalid, a plan defect.** The old arm's `alt_backward` was the empty dict. `heads_bench.py` treated it
+as missing and fell back to the claim's own backward options, `{conc: True}`, so both arms ran conc. Every ratio is
+1.000-1.04. Fixed: an `alt_backward` that is present is now used as given, empty or not. W4-concbw (`cuda` / conc) is
+valid: 0.87-0.91 at H = 4, B = 64 and 0.77-0.79 at H = 16, B = 64; 1.61-1.80 at B = 16.
+
+### Defaults (by the section 56 rules)
+
+`default_config(width, batch, heads)` now gives the CUDA 2-D forward:
+* at D = 2048, H = 1, B ≥ 64 (W6-fw2d and W6-fw2dt held for both cells);
+* at D = 1024, B ≥ 64, with at least four 64-row groups (batch tiles × heads), on the head-concurrent grid (W6-concfw
+  held for both cells at H = 4, H = 16 and H = 1, B = 256).
+
+The backward's conc stays opt-in until it is re-timed (section 58).

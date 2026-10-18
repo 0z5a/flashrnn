@@ -89,7 +89,7 @@ def _tilelang_available():
     return importlib.util.find_spec("tilelang") is not None
 
 
-def default_config(width, batch=None):
+def default_config(width, batch=None, heads=1):
     """Conservative unmeasured default: single CTA up to D=128, else R tiling.
 
     The R-tiled default is spill-light at eight warps in the M0 compile sweep
@@ -97,6 +97,14 @@ def default_config(width, batch=None):
     """
     if width <= 128:
         return KernelConfig()
+    if batch is not None and batch >= 64:
+        # CUDA 2-D split forward where its paired timing held for both cells (max-width.md section 57): D = 2048, H = 1
+        # (forward 1.42-1.46x, training step 1.16-1.17x at B = 64); D = 1024 with at least four 64-row groups
+        # (heads x batch tiles) on the head-concurrent grid (forward 1.25-1.41x).
+        if width == 2048 and heads == 1:
+            return KernelConfig(family="cuda2d", warps=8, batch_tile=64)
+        if width == 1024 and -(-batch // 64) * heads >= 4:
+            return KernelConfig(family="cuda2d", warps=8, batch_tile=64, conc=True)
     if batch is not None and batch > 32 and 1280 <= width <= 1792 and width % 64 == 0:
         # Wide batch tiles with streamed h (job "bm64 v3": 1.6-1.9x over 16-row tiles at B = 64, D = 1280-1792).
         return wide_batch_config(width)
@@ -190,7 +198,7 @@ class ExecutionPolicy:
         if self.table and (not self.identity or identity != self.identity):
             raise ValueError("a measured table requires its matching execution identity")
         key = shape_key(cell, dtype, batch, steps, heads, width)
-        config = self.table.get(key, default_config(width, batch))
+        config = self.table.get(key, default_config(width, batch, heads))
         if config.family == "tilelang" and not (identity or {}).get("tilelang"):
             # A table entry is chosen before the call; it never falls back to another backend.
             raise ValueError("the table selects the TileLang backend but this runtime has no TileLang")
