@@ -1887,3 +1887,38 @@ shape. The remaining per-head differences come only from selection by group coun
 * at D = 1024 the H-head call has ≥ 4 groups and takes the conc grids, while one head alone does not;
 * at D = 2048, B = 64 one head alone takes the 2-D forward, which is the H = 1 default, while the H-head call keeps
   the TileLang forward.
+
+## 64. Generalizing the H > 1 defaults (pre-registration, 2026-10-18, before any run of it)
+
+Sections 59 and 61 set the H > 1 defaults only at the timed shapes:
+* the bundle at (D, H) ∈ {(1024, 4), (1024, 16), (1536, 4), (2048, 4)};
+* conc at D = 1024 with ≥ 4 groups;
+* the 2-D backward at H > 1 only at D ∈ {1024, 1536, 2048}.
+
+Batch "hgen" times the neighbouring shapes. It uses the paired harness of sections 42 and 57: a warm-up block, and
+option dicts used as given.
+
+**Runs** (training step unless marked; T = 256; each shape × (LSTM FP16, sLSTM BF16); the forward is the library's):
+* **W6-hopts2.** The bundle on against off, with conc as the library selects it. D ∈ {1024, 1536, 2048} × H ∈ {2, 8} ×
+  B ∈ {16, 64}.
+* **W6-conc3.** The backward with conc against without, at D = 1024 with 2 or 3 groups: H ∈ {2, 3} at B = 16, H = 2 at
+  B = 64, and H = 1 at B = 128.
+* **W6-concfw3 (forward only).** The conc 2-D forward against the library forward at D = 1024: H ∈ {2, 3} at B = 64,
+  and H = 1 at B = 128.
+* **W6-h2dw.** The 2-D backward with the bundle against the current H > 1 path, named explicitly: `backend="triton"`
+  at D = 1280, `"hybrid"` (1-D CUDA) at D = 1792. D ∈ {1280, 1792}, H = 4, B ∈ {16, 64}.
+* W4 rows against FlashRNN1 `cuda` everywhere (report).
+* **Q-hgen.** The heads qualification (FP64 + per-head bitwise through the hook) with matched options in the H-head
+  and H = 1 calls, the forward pinned to TileLang. Cases, each × (LSTM FP16, sLSTM BF16):
+  * the bundle at H = 8, D ∈ {1024, 2048}, B = 16;
+  * the 2-D backward with the bundle at H = 2, D ∈ {1280, 1792}, B = 16;
+  * conc with the bundle at D = 1024, H = 2, B = 64.
+
+**Rules.**
+* **Bundle.** It extends to each (D, H) where W6-hopts2 holds for both cells at B = 16 and B = 64. Where it holds at
+  H = 2, 4, 8 and 16 alike for a D (H = 16 timed at D = 1024 only), it applies to every 2 ≤ H ≤ 16 at that D.
+* **conc.** `CONC_MIN_GROUPS[1024]` falls to the smallest group count g such that W6-conc3 holds for both cells at
+  every timed shape with g' ≥ g groups. For the forward, the conc rule drops to the smallest group count where
+  W6-concfw3 holds for both cells, under the same monotone condition.
+* **D = 1280 / 1792.** The 2-D backward with the bundle becomes the H > 1 default for B ≤ 64 where W6-h2dw holds for
+  both cells at both B and Q-hgen passes.
