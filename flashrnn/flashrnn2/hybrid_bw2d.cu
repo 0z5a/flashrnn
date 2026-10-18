@@ -4,8 +4,8 @@
 // CTAs of a group form a grid: CTA (i, j) keeps R[k, n] for the K block j (KQ = 4D / Q rows) and the column block i
 // (NC = D / PC columns) resident (register rows + shared memory), so per step it reads only its K block of the
 // exchanged dG (FP16) and writes an FP32 partial dh[:, column block i] for that K block. The partials of the Q K blocks
-// of a column are summed by the CTA that owns the column's pointwise update (column block i, sub-block j of NC / Q
-// columns), in fixed order j = 0 .. Q - 1. Per step:
+// of a column are summed by the CTA that owns the element's pointwise update (column block i, rows j * BM / Q .., see
+// FRNN_ROWOWN), in fixed order j = 0 .. Q - 1. Per step:
 //   pointwise (dh of this step -> dG_t into dg (FP32) and xbuf (rounded)) -> grid barrier B2 ->
 //   GEMM (xbuf K block x resident R -> partial) -> grid barrier B1 -> sum of the Q partials (dh of the next step).
 // Bytes per step: 8 * PC * B * D (dG slices) + 8 * Q * B * D (partials written and read), against 8 * (D / 16) * B * D
@@ -63,7 +63,15 @@ constexpr int D = FRNN_D, PC = FRNN_PC, Q = FRNN_Q, BM = FRNN_BM, CR = FRNN_CR;
 constexpr bool SLSTM = FRNN_SLSTM != 0;
 constexpr int THREADS = 256, WARPS = 8, K = 4 * D;
 constexpr int NC = D / PC, NCW = NC / WARPS, NTW = NCW / 8, KQ = K / Q, KS = KQ / 16, MT = BM / 16;
-constexpr int NCQ = NC / Q, PE = (BM * NCQ + THREADS - 1) / THREADS;
+#ifndef FRNN_ROWOWN
+#define FRNN_ROWOWN 1
+#endif
+// Pointwise ownership: FRNN_ROWOWN = 1 (default) gives CTA (i, j) the BM / Q rows j * BM / Q .. of all NC columns of
+// column block i (each row's loads and stores contiguous over NC columns); 0 gives it all BM rows of the NC / Q columns
+// of sub-block j (the first version: 12-16 contiguous columns per row). Same elements per CTA, same arithmetic.
+constexpr bool ROWOWN = FRNN_ROWOWN != 0;
+constexpr int NCQ = NC / Q, RPQ = BM / Q, PE = (BM * NCQ + THREADS - 1) / THREADS;
+static_assert(!ROWOWN || BM % Q == 0, "row ownership needs BM a multiple of Q");
 constexpr int KC = 64, LDS = KC + 8, ROUNDS = KQ / KC, J = KC / 16, CSM = KS - CR;
 static_assert(D % PC == 0 && NC % 64 == 0, "column block must be a multiple of 64 (8 warps x n8 tiles)");
 static_assert(K % Q == 0 && KQ % KC == 0, "K block must be a multiple of 64");
@@ -171,15 +179,20 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw2d_kernel(Args a) {
     }
     __syncthreads();
 
-    // Pointwise ownership: element e of this thread is (row, column) of the CTA's NCQ-column sub-block; fixed for
+    // Pointwise ownership (FRNN_ROWOWN): element e of this thread is one (row, column) of the CTA's share; fixed for
     // the whole slot, so the carries dc / dn stay in registers.
     float dc[PE], dn[PE], dh_in[PE];
 #pragma unroll
     for (int e = 0; e < PE; ++e) dc[e] = dn[e] = dh_in[e] = 0.f;
     auto elem = [&](int e, int& lrow, int& p) -> bool {
       const int idx = tid + THREADS * e;
-      lrow = idx / NCQ;
-      p = cb * NC + kb * NCQ + idx % NCQ;
+      if (ROWOWN) {
+        lrow = kb * RPQ + idx / NC;
+        p = cb * NC + idx % NC;
+      } else {
+        lrow = idx / NCQ;
+        p = cb * NC + kb * NCQ + idx % NCQ;
+      }
       return idx < BM * NCQ;
     };
 

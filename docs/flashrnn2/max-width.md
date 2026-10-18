@@ -646,3 +646,28 @@ explained.
 backend is named (`training.py`). D = 1792 keeps the 1-D kernel. B ≤ 32 keeps the 1-D kernel, untimed for the 2-D
 one. D ≤ 1280 keeps the Triton backward; the D = 1024 rows above compare against the 1-D CUDA kernel, not against
 that default.
+
+## 22. Row ownership of the 2-D backward's pointwise update (pre-registration, 2026-10-18, before any run of it)
+
+**What changes.**
+* *The phase being targeted.* In section 21's profile the pointwise phase is the largest per step (9.6 µs at
+  D = 1536, 12.5 µs at D = 2048, LSTM FP16).
+* *The old layout.* CTA (i, j) owned all BM rows of NC / Q = 12-16 columns, so every row's FP32 loads (preactivations,
+  history, history gradient, partials) and its dG stores touched only 48-64 contiguous bytes.
+* *The new layout.* `FRNN_ROWOWN = 1`, now the default, gives CTA (i, j) the BM / Q rows j · BM / Q .. of all NC
+  columns of block i: 768-1024 contiguous bytes per row. The elements per CTA, the arithmetic and the partial-sum order
+  are unchanged, so dG and d_initial must be bitwise equal to the first version (`rowown=False`).
+* *ptxas.* No spill at BM = 64 (168 / 232 registers at D = 1536 / 2048).
+
+**Runs (batch "rowown"):**
+* **R1, bitwise against the first version**: D ∈ {1024, 1280, 1536, 2048} × LSTM/sLSTM × FP16/BF16 × B ∈ {40, 64,
+  100}, T = 24 (48 cases).
+* **R2, race verification** (rule of section 12) of the new layout: D ∈ {1536, 2048} × LSTM/sLSTM at BM = 64, B = 100
+  (4 tasks).
+* **Paired timing**, training step, B = 64, T = 256, D ∈ {1024, 1536, 2048} × LSTM/sLSTM × FP16/BF16:
+  * **W6-rowown**: first version / new;
+  * **W4-rowown**: `cuda` / new;
+  * protocol and rule of section 3.
+* **Prediction.** The pointwise phase shrinks and the step gets 1.05-1.3x faster. Against `cuda`, D = 1536 moves toward
+  or past 1.
+* **Profile, report only**: in-kernel phases of both layouts at D ∈ {1536, 2048}, LSTM FP16.
