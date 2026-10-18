@@ -698,3 +698,25 @@ property of the link.
 **H2 rerun: 3/3.** The multi-GPU 2-D backward's correct kernel counts zero violations. All three broken variants are
 flagged in 21/21 runs and change the outputs, never silently: no B1; no B2, which now drops the grid barrier and the
 cross-GPU wait; and no cross-GPU wait alone. The multi-GPU 2-D backward is now race-verified.
+
+## 21. Batch "fence": one system fence in the direct schedule (pre-registration, 2026-10-18, before any run of it)
+
+**Change.**
+* *Before.* In the direct schedule each CTA signalled the P arrival counters with P release atomics (system scope)
+  in a row.
+* *After.* It now issues one `fence.acq_rel.sys` behind its block barrier, then P relaxed atomics. This is the usual
+  grid-barrier pattern; the PTX shows one fence, P relaxed `atom.sys`, and the waits are unchanged (`ld.acquire.sys`).
+* *Hypothesis (section 20).* The P = 4 publish phase doubled (8 µs against 4.5 at P = 2) because every release waited
+  again for the CTA's stores to become visible system-wide.
+
+**Runs:**
+* the micro with the clean calibration (`--passes 3`);
+* **F6**, the section 13 rule on all 17 configurations with uva buffers and no NCCL communicator (correctness after
+  the change);
+* the phase A timing of the 17 configurations, with checks 2 and 3 evaluated as pre-registered.
+
+**Prediction.**
+* The P = 4 direct publish phase falls to about 4.5-5.5 µs, and its per-step time to within 1.2x of the model.
+* Check 2 then has about 30-33 of 37 within ±20%. The misses are the D = 2048 stream (L2) and a few rows at 1.2x.
+* Direct is faster than doubling again at P = 4.
+* F6 passes in full.

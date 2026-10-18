@@ -45,6 +45,20 @@ def _signal(SYNCS, dest, offset):
 
 
 @triton.jit
+def _fence_sys():
+    """System-scope acquire-release fence (one per thread): orders this CTA's earlier stores, behind a block
+    barrier, before the relaxed arrival atomics that follow."""
+    return tl.inline_asm_elementwise("fence.acq_rel.sys;\n mov.u32 $0, 0;", "=r", [], dtype=tl.int32,
+                                     is_pure=False, pack=1)
+
+
+@triton.jit
+def _signal_relaxed(SYNCS, dest, offset):
+    cnt = _peer(SYNCS, dest, tl.int32)
+    tl.atomic_add(cnt + offset, 1, sem="relaxed", scope="sys")
+
+
+@triton.jit
 def _wait(SYNCS, rank, offset, target, ERR, SPIN: tl.constexpr):
     cnt = _peer(SYNCS, rank, tl.int32)
     seen = tl.atomic_add(cnt + offset, 0, sem="acquire", scope="sys")
@@ -213,9 +227,12 @@ def _rtiled_mg(
                         dest = (RANK + r * STRIDE) % NP
                         tl.store(_peer(PEERS, dest, dtype) + wrow + o[None, :], hv, o_valid[None, :])
                     tl.debug_barrier()
+                    # One system-scope fence, then relaxed arrivals: P release atomics in a row each waited for the
+                    # stores to become visible again, which serialized the publish at P = 4 (section 20).
+                    fenced = _fence_sys()  # the offset below depends on it, so the fence cannot be dropped or moved
                     for r in tl.static_range(NP):
                         dest = (RANK + r * STRIDE) % NP
-                        _signal(SYNCS, dest, slot)
+                        _signal_relaxed(SYNCS, dest, slot + fenced)
                     if PROF:
                         t_c = _now()
                     _wait(SYNCS, RANK, slot, bars * TOTAL_SPLITS, ERR, SPIN)
