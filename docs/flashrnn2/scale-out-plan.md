@@ -720,3 +720,31 @@ cross-GPU wait; and no cross-GPU wait alone. The multi-GPU 2-D backward is now r
 * Check 2 then has about 30-33 of 37 within ±20%. The misses are the D = 2048 stream (L2) and a few rows at 1.2x.
 * Direct is faster than doubling again at P = 4.
 * F6 passes in full.
+
+## 22. Results of batch "fence" (2026-10-18)
+
+Evidence: `scale-out-evidence/fence/`, archive verified by SHA-256.
+
+**F6: 510/510 calls clean.** No exchange error, FP64 error ≤ 6e-5, and one output digest per (cell, D, S) across every
+configuration and call.
+
+**Effect of the change.** Calibration was clean: every pair measured 2.08-2.14 µs.
+* *Publish phase.* The direct schedule's publish phase fell from 8.0-8.5 µs to 3.0 µs at P = 4 (section 20's
+  hypothesis holds), and from 4.5 to 2.7 µs at P = 2.
+* *Per step at P = 4 direct:*
+  * D = 2048: 21.1 → 15.5 µs (LSTM), 20.9 → 15.2 µs (sLSTM);
+  * D = 1024: 17.4 → 12.5 µs.
+* *Effective use of the second and later GPUs.* Two- and four-GPU direct now run at 0.98-1.06x the model.
+
+**Check 2: FAIL by its rule.** 34/37 configurations are within ±20%, but the rule needs every one; all 20 orderings
+hold. The three misses:
+* the D = 2048 one-GPU stream at 0.63x (R in L2, section 6);
+* 4:1024 ring at 1.21x, LSTM and sLSTM.
+
+**Check 3: accepted at D = 1024 and D = 2048.** Resident slices on several GPUs beat one GPU streaming R.
+
+**State of the model.** The phase A α-β model, calibrated in the same job, now predicts the repaired multi-GPU forward
+within ±20% in 34 of 37 configurations and orders every schedule pair it separates. The direct schedule (one round,
+one system fence, relaxed arrivals) is the fastest at P ≤ 4 on this node, as the model says for a full mesh. Ring and
+recursive doubling pay a per-GPU barrier and one release per round. That cost is not in the model, which explains the
+1.1-1.2x on those rows.
