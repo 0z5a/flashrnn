@@ -95,7 +95,7 @@ def default_config(width, batch=None):
         return wide_batch_config(width)
     if width > 1280:
         return large_width_config(width)
-    if width > 768 and width % 16 == 0 and _tilelang_available():
+    if width >= 1024 and width % 16 == 0 and _tilelang_available():  # measured at D = 1024 and 1280
         # TileLang grid kernel, 16-column slices (max-width.md section 31: 4.8-5.5x faster than the Triton default
         # below at D = 1024, 2.8-2.9x at D = 1280, B = 16).
         return KernelConfig(family="tilelang", slice_width=16, sync="grid")

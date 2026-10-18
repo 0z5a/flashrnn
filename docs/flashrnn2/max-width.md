@@ -885,7 +885,8 @@ Forward, T = 256:
 | D = 1024, B = 64 | 5.40-5.54x | 1.47-1.60x |
 | D = 1280, B = 16 | 2.81-2.89x | 2.83-3.42x |
 
-**Default (by the section 28 rule).** For 768 < D ≤ 1280, `execution_policy.default_config` now gives the TileLang grid
+**Default (by the section 28 rule).** For 1024 ≤ D ≤ 1280 (the measured range; 768 < D < 1024 is not measured and
+keeps the Triton default), `execution_policy.default_config` now gives the TileLang grid
 kernel (16-column slices) when TileLang is installed. The exception stays: B > 32 at D = 1280 keeps the wide-tile
 kernel of section 16. Without TileLang the Triton default stays. This also changes the single-GPU baseline of
 scale-out-plan.md section 24 at D = 1024: that baseline was the old default.
