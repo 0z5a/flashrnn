@@ -669,3 +669,32 @@ Prediction (stated now, from section 18's post hoc analysis):
 
 **H2 rerun.** Race verification of the multi-GPU 2-D backward, with the "no B2" variant now dropping both the grid
 barrier and the cross-GPU wait. Same three cases and rule as section 17.
+
+## 20. Results of batch "mg2d2" (2026-10-18)
+
+Evidence: `scale-out-evidence/mg2d2/`, archive verified by SHA-256.
+
+**Calibration.** The old procedure (`micro-onepass`, one warm-up launch per size) again measured pair 0-1 slow:
+25 µs at 16 B against 2.1-2.4 µs for the other pairs. After two full untimed sweeps (`--passes 3`), every pair
+measured 2.06-2.14 µs. Pair 0-1's slowness is therefore a one-time cost of the first full sweep in a process, not a
+property of the link.
+
+**Check 2 with the clean calibration: FAIL, as predicted.** 26/37 configurations fall within ±20% (predicted about
+28); 14/20 orderings hold.
+* **Every ordering miss is the same.** Recursive doubling measured faster than direct at P = 4 where the model put
+  direct first.
+* **The 11 timing misses:**
+  * P = 4 direct (stride 1 and 3), at 1.36-1.47x the model;
+  * 4:1024 ring sLSTM at 1.21x;
+  * 3:1536 direct stride 2 at 1.20x;
+  * the D = 2048 one-GPU stream at 0.65x (R stays in L2, section 6).
+* **Reading.** The model's direct-schedule term (one round, the three same-node sends of a CTA overlapping) is the
+  one assumption the data rejects. At P = 4 the three sends serialize, and the publish phase doubles. With that term
+  replaced by three serial sends, the model would order doubling before direct, as measured. That correction is post
+  hoc and is not applied to the verdict.
+
+**Check 3: accepted at D = 2048**, unchanged.
+
+**H2 rerun: 3/3.** The multi-GPU 2-D backward's correct kernel counts zero violations. All three broken variants are
+flagged in 21/21 runs and change the outputs, never silently: no B1; no B2, which now drops the grid barrier and the
+cross-GPU wait; and no cross-GPU wait alone. The multi-GPU 2-D backward is now race-verified.
