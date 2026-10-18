@@ -558,3 +558,39 @@ exchange. It is not a claim.
 * The backward passed race verification.
 * Phase A's ring/doubling timings and its pair-0-1 micro numbers are superseded by these repairs; timing the repaired
   forward against the model (phase A check 2) has not been rerun.
+
+## 17. Batch "mg2d": the repaired forward against the cost model, and the multi-GPU 2-D backward (pre-registration, 2026-10-18, before any run of it)
+
+**Part 1, phase A checks 2 and 3 on the repaired forward.**
+* *What runs.* The phase A timing (`scale_bench.py time`: per-step cost from the slope between T = 64 and T = 256,
+  median of 9 calls; compute phase from a PROF build; prediction `predict()` unchanged from phase A) on the 17
+  resident configurations of section 9 (LSTM, sLSTM).
+* *Stream baselines.* The one-GPU stream baselines at D = 1024 and 2048 and the four-GPU stream configuration at
+  D = 2048, S = 16; LSTM only, since repair 3 (the sLSTM stream bug) is not done.
+* *Calibration.* α and β come from the micro run of the same job, with warm-up (section 10).
+* *Rule.* Checks 2 and 3 are evaluated with `tools/scale_analyze.py` exactly as pre-registered for phase A.
+* *Known gaps.* Section 6's model gaps still stand: α_l2 counted on top of the cross-GPU wait, α_l2 not measured, and
+  streamed R that fits in L2. Section 14 added a per-GPU barrier to ring and doubling, and the model's α_l2 term stands
+  for exactly that barrier. Any corrected model will be labelled post hoc.
+
+**Part 2, the multi-GPU 2-D backward.** `hybrid_bw2d.cu` with `FRNN_MG = 1`:
+* *Split.* The PC column blocks are split over P GPUs (P ∈ {2, 4} for PC = 8, every Q K block of a column block on
+  its GPU). The partial sums therefore never leave a GPU, and barrier B1 stays a per-GPU grid barrier.
+* *Exchange.* B2 adds the cross-GPU exchange of the multi-GPU 1-D kernel: dG is stored into every GPU's buffer, then a
+  system fence, the grid barrier, one arrival per GPU and a wait for P arrivals.
+* *Correctness expected.* The arithmetic is unchanged per GPU, so dG and d_initial must be bitwise equal to the
+  single-GPU 2-D kernel with the same batch tile.
+* *Registers.* ptxas: no spill in any multi-GPU build (D = 2048: 178 registers at BM = 16, 240 at BM = 64).
+* *Runs:*
+  * **H1**, bitwise against the single-GPU 2-D kernel: D ∈ {1024, 1536, 2048} × P ∈ {2, 4} × (B = 16, BM = 16;
+    B = 64, BM = 16; B = 64, BM = 64) × LSTM/sLSTM, uva and symmetric buffers, T = 32.
+  * **H2**, race verification (section 12 rule): P = 4 at D = 2048 (LSTM, BM = 16, B = 40), P = 2 at D = 1536 (sLSTM,
+    BM = 64, B = 100), P = 4 at D = 1024 (sLSTM, BM = 16, B = 40), T = 48, 21 runs. Broken variants: no B1, no B2, and
+    no cross-GPU wait.
+  * **H3**, paired timing of the backward kernel at B = 64, T = 256, D ∈ {1536, 2048} × P ∈ {2, 4} × LSTM/sLSTM, BM = 16
+    (P = 4 holds four batch tiles at once), and at B = 16, D = 2048, P = 4 (LSTM). Arms: one GPU with the 2-D kernel and
+    its default tile, the multi-GPU 2-D kernel (uva), the multi-GPU 1-D kernel (uva), the multi-GPU 2-D kernel
+    (symmetric). Reading: one GPU / multi-GPU 2-D and multi-GPU 1-D / multi-GPU 2-D with the bootstrap and the 1.02 /
+    0.98 bands of section 11.
+  * *Expectation.* At B = 64 the multi-GPU 2-D kernel beats one GPU with the 2-D kernel and beats the multi-GPU 1-D
+    kernel. At B = 16 the gain is small or none.

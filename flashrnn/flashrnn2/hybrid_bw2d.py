@@ -15,7 +15,7 @@ SOURCE = Path(__file__).with_name("hybrid_bw2d.cu")
 # D -> (column blocks PC, K blocks Q, register k-steps CR): PC * Q CTAs per group, R block in shared memory (+ CR
 # k-steps of 16 rows in registers at D = 2048); D = 1792 does not factor into a fitting grid.
 CONFIGS = {1024: (8, 16, 0), 1280: (5, 16, 0), 1536: (8, 16, 0), 2048: (8, 16, 8)}
-VERIFY_BITS = dict(check=1, delay=2, no_b1=4, no_b2=8, prof=16)
+VERIFY_BITS = dict(check=1, delay=2, no_b1=4, no_b2=8, prof=16, mg_no_wait=32)
 _LIBS = {}
 
 
@@ -27,11 +27,13 @@ def batch_tile(batch):
     return 16 if batch <= 16 else 32 if batch <= 32 else 64
 
 
-def build(width, bm, slstm, bf16, verify=0, cache_dir=None):
+def build(width, bm, slstm, bf16, verify=0, cache_dir=None, mg=False):
     pc, q, cr = CONFIGS[width]
     cuda_home = os.environ.get("FRNN_HYBRID_CUDA_HOME", "/apps/ACC/CUDA/12.8")
     flags = [f"-DFRNN_D={width}", f"-DFRNN_PC={pc}", f"-DFRNN_Q={q}", f"-DFRNN_CR={cr}", f"-DFRNN_BM={int(bm)}",
              f"-DFRNN_SLSTM={int(slstm)}", f"-DFRNN_BF16={int(bf16)}", f"-DFRNN_VERIFY={int(verify)}"]
+    if mg:
+        flags.append("-DFRNN_MG=1")
     digest = hashlib.sha256(SOURCE.read_bytes() + " ".join(flags).encode()).hexdigest()[:16]
     cache = Path(cache_dir or os.environ.get("FRNN_HYBRID_CACHE",
                                              os.environ.get("TMPDIR", str(Path.home() / ".cache")) + "/frnn_hybrid_bw"))
@@ -46,10 +48,14 @@ def build(width, bm, slstm, bf16, verify=0, cache_dir=None):
     return lib
 
 
-def _lib(width, bm, slstm, bf16, verify=0):
-    key = (width, bm, slstm, bf16, verify)
+def _lib(width, bm, slstm, bf16, verify=0, mg=False):
+    key = (width, bm, slstm, bf16, verify, mg)
     if key not in _LIBS:
-        lib = ctypes.CDLL(str(build(width, bm, slstm, bf16, verify)))
+        lib = ctypes.CDLL(str(build(width, bm, slstm, bf16, verify, mg=mg)))
+        if mg:
+            lib.frnn_hybrid_bw2d_mg.restype = ctypes.c_int
+            lib.frnn_hybrid_bw2d_mg.argtypes = ([ctypes.c_void_p] * 12 + [ctypes.c_int] * 7 + [ctypes.c_void_p] * 3
+                                                + [ctypes.c_int] * 2 + [ctypes.c_void_p])
         lib.frnn_hybrid_bw2d.restype = ctypes.c_int
         lib.frnn_hybrid_bw2d.argtypes = [ctypes.c_void_p] * 12 + [ctypes.c_int] * 7 + [ctypes.c_void_p]
         lib.frnn_hybrid_bw2d_smem.restype = ctypes.c_int
@@ -135,4 +141,131 @@ def backward(wx, recurrent, bias, initial, history, d_history, d_final, cell, *,
     if diagnostics is not None:
         diagnostics.update(batch_rows=bm, column_blocks=pc, k_blocks=q, ctas=ctas * resident, groups=groups,
                            resident=resident, slots=slots, shared_bytes=lib.frnn_hybrid_bw2d_smem())
+    return dg, d_recurrent, d_bias, d_init
+
+
+def mg_layout(width, batch, heads, peers, bm, sms=132):
+    """Per-GPU grid of the multi-GPU 2-D backward: CTAs per group (PC / P * Q), resident groups, slots."""
+    pc, q, _ = CONFIGS[width]
+    if pc % peers:
+        raise ValueError(f"the {pc} column blocks at D = {width} do not split over {peers} GPUs")
+    ctas = pc // peers * q
+    tiles = (batch + bm - 1) // bm
+    groups = tiles * heads
+    resident = max(1, min(groups, sms // ctas))
+    return dict(ctas=ctas, q=q, tiles=tiles, groups=groups, resident=resident,
+                slots=(groups + resident - 1) // resident)
+
+
+def backward_mg(wx, recurrent, bias, initial, history, d_history, d_final, cell, *, devices, alloc="uva",
+                batch_rows=None, wgrad="bmm", prof=False, diagnostics=None, _verify=None):
+    """Multi-GPU 2-D backward, one process (scale-out-plan.md section 17): column blocks split over ``devices``;
+    exchange buffers and counters from the PyTorch allocator ("uva") or NCCL symmetric windows ("nccl_symm"). Same
+    per-GPU arithmetic as ``backward`` with the same batch tile, so dG and d_initial must be bitwise equal to it.
+    Returns what ``backward`` returns, on the first device."""
+    from .triton_rtiled_bw import preactivations, weight_gradients
+
+    peers = len(devices)
+    batch, steps, gates, heads, width = wx.shape
+    if not supported(width):
+        raise ValueError(f"unsupported width for the 2-D backward (D in {sorted(CONFIGS)})")
+    bm = batch_tile(batch) if batch_rows is None else batch_rows
+    lay = mg_layout(width, batch, heads, peers, bm)
+    first = f"cuda:{devices[0]}"
+    previous = torch.cuda.current_device()
+    pre, h_prev = preactivations(wx, recurrent, bias, initial, history, False)
+    shared = [pre.contiguous(), history.contiguous(), initial.float().contiguous(), d_history.contiguous(),
+              d_final.float().contiguous(), recurrent.contiguous()]
+    bits, seed = verify_bits(_verify)
+    if prof:
+        bits |= VERIFY_BITS["prof"]
+    per = {}
+    for d in devices:
+        dev = f"cuda:{d}"
+        per[d] = dict(inputs=[x.to(dev) for x in shared],
+                      dg=torch.zeros((batch, steps, 4, heads, width), device=dev, dtype=torch.float32),
+                      d_init=torch.zeros(initial.shape, device=dev, dtype=torch.float32),
+                      part=torch.empty((lay["resident"], lay["q"], bm, width), device=dev, dtype=torch.float32),
+                      stamp=torch.zeros(lay["resident"] * lay["q"], device=dev, dtype=torch.int32),
+                      err=torch.zeros(12, device=dev, dtype=torch.int32))
+        per[d]["err"][3] = seed
+    xbytes = lay["resident"] * bm * 4 * width * wx.element_size()
+    if alloc == "uva":
+        for d in devices:
+            per[d]["xbuf"] = torch.zeros(xbytes // wx.element_size(), device=f"cuda:{d}", dtype=wx.dtype)
+            per[d]["sync"] = torch.zeros(8, device=f"cuda:{d}", dtype=torch.int32)
+        xaddr = [per[d]["xbuf"].data_ptr() for d in devices]
+        saddr = [per[d]["sync"].data_ptr() for d in devices]
+    elif alloc == "nccl_symm":
+        from . import symm_mem
+        sess = symm_mem.session(devices)
+        xid, sid = sess.buffer("bw2d_xbuf", xbytes), sess.buffer("bw2d_sync", 32)
+        for r, d in enumerate(devices):
+            torch.cuda.set_device(d)
+            sess.zero(xid, r, xbytes)
+            sess.zero(sid, r, 32)
+    else:
+        raise ValueError("alloc uva or nccl_symm")
+    dgaddr = [per[d]["dg"].data_ptr() for d in devices]
+    for r, d in enumerate(devices):  # every table before the first launch
+        torch.cuda.set_device(d)
+        dev = f"cuda:{d}"
+        if alloc == "uva":
+            xt = torch.tensor(xaddr, device=dev, dtype=torch.int64)
+            st = torch.tensor(saddr, device=dev, dtype=torch.int64)
+            xlocal = per[d]["xbuf"].data_ptr()
+        else:
+            xt, st = sess.table(xid, r)[:peers].clone(), sess.table(sid, r)[:peers].clone()
+            xlocal = sess.local(xid, r)
+        per[d]["tables"] = (xt, st, torch.tensor(dgaddr, device=dev, dtype=torch.int64), xlocal)
+    for d in devices:
+        torch.cuda.synchronize(d)
+    events = {}
+    try:
+        for r, d in enumerate(devices):
+            torch.cuda.set_device(d)
+            xt, st, dt, xlocal = per[d]["tables"]
+            lib = _lib(width, bm, cell == "slstm", wx.dtype == torch.bfloat16, bits, True)
+            ptr = lambda x: ctypes.c_void_p(x if isinstance(x, int) else x.data_ptr())  # noqa: E731
+            e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+            e0.record()
+            rc = lib.frnn_hybrid_bw2d_mg(
+                *[ptr(x) for x in per[d]["inputs"] + [per[d]["dg"], per[d]["d_init"]]], ptr(xlocal),
+                ptr(per[d]["part"]), ptr(per[d]["stamp"]), ptr(per[d]["err"]), batch, steps, heads, lay["groups"],
+                lay["resident"], lay["slots"], lay["tiles"], ptr(xt), ptr(st), ptr(dt), r, peers,
+                ctypes.c_void_p(torch.cuda.current_stream(d).cuda_stream))
+            if rc != 0:
+                raise RuntimeError(f"multi-GPU 2-D backward launch failed on rank {r} (cudaError {rc})")
+            e1.record()
+            events[d] = (e0, e1)
+        for d in devices:
+            torch.cuda.synchronize(d)
+    finally:
+        torch.cuda.set_device(previous)
+    ms = {d: events[d][0].elapsed_time(events[d][1]) for d in devices}
+    errs = {d: per[d]["err"].tolist() for d in devices}
+    if _verify is not None:
+        _verify.update(after_read=sum(e[1] for e in errs.values()), stale_partials=sum(e[2] for e in errs.values()),
+                       wait_timeouts=sum(e[10] for e in errs.values()))
+    elif any(e[10] for e in errs.values()):
+        raise RuntimeError(f"multi-GPU 2-D backward: cross-GPU wait timed out {errs}")
+    dg = per[devices[0]]["dg"].clone()
+    d_init = per[devices[0]]["d_init"].clone()
+    cols = width // peers
+    for r, d in enumerate(devices[1:], start=1):
+        sl = slice(r * cols, (r + 1) * cols)
+        dg[..., sl] = per[d]["dg"][..., sl].to(first)
+        d_init[..., sl] = per[d]["d_init"][..., sl].to(first)
+    d_recurrent, d_bias = weight_gradients(dg, h_prev, False, wgrad)
+    if diagnostics is not None:
+        diagnostics.update(alloc=alloc, ms=ms, kernel_ms=max(ms.values()), batch_rows=bm, **lay)
+        if prof:
+            phases = {}
+            for d in devices:
+                c = errs[d]
+                n = max(c[9], 1)
+                phases[str(d)] = dict(pointwise=c[4] * 64 / 1000 / n, barrier_b2=c[5] * 64 / 1000 / n,
+                                      gemm=c[6] * 64 / 1000 / n, barrier_b1=c[7] * 64 / 1000 / n,
+                                      partial_sum=c[8] * 64 / 1000 / n)
+            diagnostics["phases_us_per_step"] = phases
     return dg, d_recurrent, d_bias, d_init
