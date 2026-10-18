@@ -31,7 +31,7 @@ def mode_qualify(a, devices):
             args = bw_inputs(case["cell"], case["batch"], case["steps"], case["width"], 1900 + case["width"],
                              f"cuda:{devices[0]}")
             bm = case["batch_rows"]
-            ref = hybrid_bw2d.backward(*args, batch_rows=bm)
+            ref = hybrid_bw2d.backward(*args, batch_rows=bm, conc=False)  # the grid the multi-GPU kernel splits
             for alloc in ("uva", "nccl_symm"):
                 try:
                     diag = {}
@@ -110,7 +110,7 @@ def mode_paired(a, devices):
             def run(arm):
                 diag = {"time": True}
                 if arm == "single2d":
-                    out = hybrid_bw2d.backward(*args, diagnostics=diag)
+                    out = hybrid_bw2d.backward(*args, diagnostics=diag, conc=False)
                     return out, diag["ms"]["kernel"]
                 if arm == "mg1d":
                     out = hybrid_bw.backward_mg(*args, alloc="uva", diagnostics=diag, **mg)

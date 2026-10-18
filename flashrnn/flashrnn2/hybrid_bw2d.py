@@ -20,6 +20,9 @@ CONFIGS = {512: (4, 16, 0), 768: (6, 16, 0), 1024: (8, 16, 0), 1280: (5, 16, 0),
 # group, each CTA the D = 2048 block shape (256 columns x 512 K, eight register k-steps), so that four groups (heads or
 # batch tiles) are resident at once instead of running one after another.
 CONC_CONFIGS = {1024: (4, 8, 8)}
+# conc default (section 59): at least this many groups (batch tiles x heads) at D = 1024 (timed at 4 and 16 groups:
+# 1.11-1.35x on the training step).
+CONC_MIN_GROUPS = {1024: 4}
 DEFAULT_WIDTHS = (1024, 1280, 1536, 1792, 2048)  # training default at H = 1, any B (qualified and timed)
 # training default at H > 1: D -> largest B timed with every row at B' <= B holding (max-width.md sections 37 and 42:
 # H in {4, 16} at B = 16, H = 4 at B = 64; qualified at H in {2, 3}, B = 16 and H = 2, B = 64). Other widths and
@@ -109,11 +112,11 @@ def verify_bits(verify):
 
 def backward(wx, recurrent, bias, initial, history, d_history, d_final, cell, *, batch_rows=None, tf32=False,
              wgrad="bmm", prof=False, diagnostics=None, rowown=True, asyncload=True, pre_tf32=False, pre_fused=False,
-             dg_dtype=None, d_hidden=None, flags=False, conc=False, _verify=None):
+             dg_dtype=None, d_hidden=None, flags=False, conc=None, _verify=None):
     """Returns (dg [B,T,4,H,D] FP32, or the input dtype with dg_dtype="input", dR, dbias, d_initial FP32), as
     hybrid_bw.backward.
 
-    conc (opt-in, section 56): the head-concurrent grid of CONC_CONFIGS (same arithmetic per column, a different K
+    conc (sections 56, 59; None: the default by CONC_MIN_GROUPS): the head-concurrent grid of CONC_CONFIGS (same arithmetic per column, a different K
     block split, so not bitwise equal to the default grid).
 
     flags (opt-in, section 41): barrier B1 becomes a wait for the Q step flags of the CTA's own column block; the
@@ -133,6 +136,8 @@ def backward(wx, recurrent, bias, initial, history, d_history, d_final, cell, *,
     device = wx.device
     sms = torch.cuda.get_device_properties(device).multi_processor_count
     bm = batch_tile(batch) if batch_rows is None else batch_rows
+    if conc is None:
+        conc = -(-batch // bm) * heads >= CONC_MIN_GROUPS.get(width, 1 << 30)
     if conc and width not in CONC_CONFIGS:
         raise ValueError(f"no head-concurrent grid at D = {width} (D in {sorted(CONC_CONFIGS)})")
     grid = CONC_CONFIGS[width] if conc else None

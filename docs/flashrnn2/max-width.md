@@ -1757,3 +1757,46 @@ Batch "conc2". It uses the fixed `alt_backward` handling: an empty or explicit o
 * conc becomes the backward default at the shapes where W6-concbw2 holds for both cells.
 * A D6 failure removes the section 57 forward default at that shape.
 * W6-final5 and W4-final5 change nothing.
+
+## 59. Results of the "conc2" batch (section 58, 2026-10-18)
+
+Evidence: `max-width-evidence/conc2-analysis.json` and `conc2-d6.json`. Every archived file was checked against its
+SHA-256 manifest (310 files). All 60 claim starts ran.
+
+**D6: 10/10 within the FP64 budgets.**
+* The tool's per-head flag fails the four H > 1 cases, forward included. Each head's H = 1 reference call takes the
+  TileLang forward (one group), while the H-head call takes the conc 2-D forward: different kernels, as section 47
+  found for the backward options.
+* The H = 1 cases (D = 1024 B = 256, D = 2048 B ∈ {64, 128}) pass the flag too.
+
+**W6-concbw2 holds 10/10.** Training step, backward conc / default grid, with the forward pinned to the library's:
+
+| shape (D = 1024) | ratio |
+| --- | --- |
+| H ∈ {4, 16}, B = 16 | 1.32-1.35 |
+| H ∈ {4, 16}, B = 64 | 1.11-1.12 |
+| H = 1, B = 256 | 1.17-1.20 |
+
+**W4-concbw2 (`cuda` / conc both ways):**
+
+| shape (D = 1024) | ratio |
+| --- | --- |
+| B = 16 | 1.61-1.84 |
+| H = 1, B = 256 | 1.07-1.31 |
+| H = 4, B = 64 | 0.92-0.96 |
+| H = 16, B = 64 | 0.82-0.84 |
+
+**W6-final5 (report only): 10/10.** The section 57 forward defaults alone, against the earlier forward:
+* D = 1024: 1.05 at H ≥ 4, B = 64; 1.10-1.11 at H = 1, B = 256;
+* D = 2048: 1.14-1.17 at H = 1, B ∈ {64, 128}.
+
+**W4-final5** (this batch's defaults, before conc became the backward default): `cuda` stays ahead at D = 1024, H ≥ 4,
+B = 64 (0.73-0.87). At D = 2048 the library is 1.75-1.76x faster at B = 64 and 1.18-1.26x at B = 128.
+
+**Default (by the section 58 rule).** The backward uses the head-concurrent grid at D = 1024 when there are at least
+four groups (`hybrid_bw2d.CONC_MIN_GROUPS`). `mg_bw2d_bench.py` now pins `conc=False`, the grid the multi-GPU kernel
+splits.
+
+**Still open.** At H > 1 with B = 64, FlashRNN1 `cuda` remains 4-18% ahead at D = 1024, even with both conc grids. The
+H > 1 path still runs without the H = 1 options (TF32 preactivation, FP32 dG, zero-filled history gradient). Those
+options are worth 1.13-1.56x at H = 1 (section 49).
