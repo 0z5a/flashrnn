@@ -147,8 +147,11 @@ class _Recurrence(torch.autograd.Function):
             # zero-filled FP32 history gradient); dG stored in the input dtype with the input-dtype dR GEMM.
             width, heads, batch = wx.shape[-1], wx.shape[3], wx.shape[0]
 
-            def default_from(table):  # H = 1 defaults by D -> smallest B (hybrid_bw2d)
-                return heads == 1 and batch >= table.get(width, 1 << 30)
+            # H > 1: the three options as one bundle at the timed (D, H), B <= 64 (section 61).
+            bundle = heads > 1 and (width, heads) in hybrid_bw2d.HEADS_OPTIONS and batch <= 64
+
+            def default_from(table):  # H = 1 defaults by D -> smallest B (hybrid_bw2d), or the H > 1 bundle
+                return (heads == 1 and batch >= table.get(width, 1 << 30)) or bundle
             honly = (options.get("honly", default_from(hybrid_bw2d.HONLY_MIN_BATCH)) and ctx.output_mode == "hidden"
                      and d_output is not None and d_output.dtype == wx.dtype)
             if "dg_dtype" not in options and "wgrad" not in options and default_from(hybrid_bw2d.DGLP_MIN_BATCH):

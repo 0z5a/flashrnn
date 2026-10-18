@@ -36,6 +36,9 @@ PRE_FUSED_MIN_BATCH = {1024: 1, 1280: 1, 1536: 1, 1792: 1, 2048: 1}
 DGLP_MIN_BATCH = {1024: 1, 1280: 1, 1536: 1, 1792: 1, 2048: 1}
 # h-only history gradient read by the kernel (honly; sections 42, 47, 51): D -> smallest B; timed at B = 16 and 64.
 HONLY_MIN_BATCH = {1024: 1, 1280: 1, 1536: 1, 1792: 1, 2048: 1}
+# H > 1 (max-width.md section 61): pre_fused + dG_LP + honly together at the timed (D, H) for B <= 64 (both B = 16
+# and B = 64 held: 1.31-1.57x on the training step).
+HEADS_OPTIONS = {(1024, 4), (1024, 16), (1536, 4), (2048, 4)}
 VERIFY_BITS = dict(check=1, delay=2, no_b1=4, no_b2=8, prof=16, mg_no_wait=32)
 _LIBS = {}
 

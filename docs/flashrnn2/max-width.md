@@ -1831,3 +1831,46 @@ options are worth 1.13-1.56x at H = 1 (section 49).
 
 **Rule.** The bundle becomes the H > 1 default on the 2-D path at the (D, H, B) rows where W6-hopts holds for both cells.
 At a (D, H) where both B = 16 and B = 64 hold, it applies at every B ≤ 64.
+
+## 61. Results of the "hopts" batch (section 60, 2026-10-18)
+
+Evidence: `max-width-evidence/hopts-analysis.json` and `hopts-checks.json`. Every archived file was checked against its
+SHA-256 manifest (284 files). All 48 claim starts ran.
+
+**R-hopts: 2/2.** The correct kernels count 0 violations; no_b1 and no_b2 are each flagged 21/21, never silently.
+
+**Q-hopts: 16/16**, the per-head bitwise checks included. With the bundle on and conc pinned alike, every head of an
+H-head training call is bitwise equal to the H = 1 call on that head, at D = 1024-2048, H = 2-4.
+
+**W6-hopts holds 16/16 and W4-hopts 16/16.** Training step, bundle off / on, with the library forward and conc:
+
+| D | H | B = 16 | B = 64 |
+| --- | --- | --- | --- |
+| 1024 | 4 | 1.49-1.53 | 1.57 |
+| 1024 | 16 | 1.51-1.54 | 1.56-1.57 |
+| 1536 | 4 | 1.31 | 1.53 |
+| 2048 | 4 | 1.37-1.40 | 1.50-1.52 |
+
+`cuda` / library, with the bundle:
+
+| D | H | B = 16 | B = 64 |
+| --- | --- | --- | --- |
+| 1024 | 4 | 2.74-2.81 | 1.44-1.49 |
+| 1024 | 16 | 2.46-2.49 | 1.27-1.31 |
+| 1536 | 4 | 2.73-2.92 | 1.52-1.56 |
+| 2048 | 4 | 3.37-3.46 | 1.42-1.47 |
+
+The prediction (1.1-1.4x) was too low. At H > 1, the TF32 preactivation, the FP32 dG with its TF32 dR, and the
+zero-filled history gradient scale with H, so they were a larger share of the step than at H = 1. The section 59 gap
+to FlashRNN1 at H > 1, B = 64 (0.82-0.96x) has turned into a lead of 1.27-1.56x.
+
+**Default (by the section 60 rule).** For B = 16 and B = 64 both held at every timed (D, H), so the bundle is the H > 1
+default on the 2-D path for B ≤ 64 at (D, H) ∈ {(1024, 4), (1024, 16), (1536, 4), (2048, 4)}
+(`hybrid_bw2d.HEADS_OPTIONS`). Other H keep the earlier H > 1 path options until timed.
+
+## 62. Qualification of the section 61 defaults (pre-registration, 2026-10-18, before any run of it)
+
+Batch "final6", qualification only. No options and no configuration, within the FP64 budgets: (D, H) ∈ {(1024, 4),
+(1024, 16), (1536, 4), (2048, 4)} × B ∈ {16, 64} × (LSTM FP16, sLSTM BF16), 16 cases. At D = 1024, B = 64 this
+combines the conc 2-D forward, the conc backward and the bundle.
+**Rule.** A failure removes the bundle default at that (D, H).
