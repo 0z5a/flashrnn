@@ -1728,3 +1728,32 @@ valid: 0.87-0.91 at H = 4, B = 64 and 0.77-0.79 at H = 16, B = 64; 1.61-1.80 at 
   held for both cells at H = 4, H = 16 and H = 1, B = 256).
 
 The backward's conc stays opt-in until it is re-timed (section 58).
+
+## 58. The backward's conc re-timed, and the section 57 defaults end to end (pre-registration, 2026-10-18)
+
+Batch "conc2". It uses the fixed `alt_backward` handling: an empty or explicit option dict is used as given.
+
+**Runs:**
+* **W6-concbw2 and W4-concbw2, training step.** D = 1024, (H ∈ {4, 16} × B ∈ {16, 64} and H = 1, B = 256) × (LSTM
+  FP16, sLSTM BF16).
+  * The backward runs `conc=True` against `conc=False`.
+  * The forward in both arms is pinned to the current library forward at that shape: the conc 2-D forward at
+    B ≥ 64, the TileLang grid at B = 16.
+* **D6, qualification of the combined defaults.** No options and no configuration, within the FP64 budgets. Shapes:
+  * D = 1024: H ∈ {4, 16}, B = 64 and H = 1, B = 256;
+  * D = 2048: H = 1, B ∈ {64, 128};
+  * each × (LSTM FP16, sLSTM BF16), 10 cases.
+* **W6-final5 and W4-final5 (report only), training step.** The current library default (forward and backward)
+  against two baselines: the forward as before section 57 (the TileLang configurations pinned earlier, same backward),
+  and FlashRNN1 `cuda`. Shapes: D = 1024 at H ∈ {4, 16} with B = 64, and H = 1 with B = 256; D = 2048 at H = 1 with
+  B ∈ {64, 128}.
+
+**Prediction.**
+* W6-concbw2 holds at H ≥ 4, B = 64 (four heads resident instead of one at a time) and is about even at B = 16.
+* D6 passes.
+* W4-final5 at H = 4, B = 64 moves from 0.87-0.91 (section 57) to at least parity.
+
+**Rules.**
+* conc becomes the backward default at the shapes where W6-concbw2 holds for both cells.
+* A D6 failure removes the section 57 forward default at that shape.
+* W6-final5 and W4-final5 change nothing.
