@@ -31,7 +31,8 @@
 // exchange buffer of every GPU (address table xpeers), fences at system scope, and B2 becomes the GPU's grid barrier
 // followed by one arrival on every GPU's counter (speers, CTA 0) and a wait for np arrivals per step. Verification:
 // the A-operand content check reads the owning GPU's stored dG (dgpeers); bit 32 broken: no cross-GPU wait (except
-// at the last step); a wait longer than 5 s counts err[10] and gives up.
+// at the last step); bit 8 (no B2) drops both the grid barrier and the cross-GPU wait; a wait longer than 5 s counts
+// err[10] and gives up.
 #include <cooperative_groups.h>
 #include <cuda_bf16.h>
 #include <cuda_fp16.h>
@@ -381,7 +382,9 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw2d_kernel(Args a) {
 #endif
       if (!(VERIFY & V_NO_B2) || last) grid.sync();  // B2: dG_t complete in xbuf
 #if FRNN_MG
-      if (!(VERIFY & V_MG_NO_WAIT) || last) {  // B2 across GPUs
+      // B2 across GPUs; the broken variant "no B2" drops it too (section 18: dropping only the grid barrier left
+      // the cross-GPU wait ordering the exchange, so that variant removed nothing).
+      if (!(VERIFY & (V_MG_NO_WAIT | V_NO_B2)) || last) {
         if (blockIdx.x == 0 && blockIdx.y == 0 && tid == 0) {
           __threadfence_system();
           for (int q = 0; q < a.np; ++q) atomicAdd_system(reinterpret_cast<int*>(a.speers[q]), 1);

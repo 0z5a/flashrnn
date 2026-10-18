@@ -128,11 +128,12 @@ def main():
     p.add_argument("--rounds", type=int, default=2000)
     p.add_argument("--allocs", default="uva")
     p.add_argument("--warmup", type=int, default=0)
+    p.add_argument("--passes", type=int, default=1, help="full pair sweeps; only the last one is recorded")
     a = p.parse_args()
     devices = [int(x) for x in a.devices.split(",")]
     allocs = a.allocs.split(",")
     rec = dict(devices=devices, started=time.time(), gpu=torch.cuda.get_device_name(devices[0]), pair={}, hbm={},
-               pcie={}, errors={}, allocs=allocs, warmup=a.warmup, pair_by_alloc={})
+               pcie={}, errors={}, allocs=allocs, warmup=a.warmup, passes=a.passes, pair_by_alloc={})
     try:
         rec["peer_probe"] = enable_peer_access(devices)
     except Exception as error:  # noqa: BLE001
@@ -149,6 +150,14 @@ def main():
         except Exception as error:  # noqa: BLE001 - reported outcome; the uva rows still run
             rec["errors"]["symm_init"] = repr(error)
             allocs = [x for x in allocs if x != "nccl_symm"]
+    if a.passes > 1:  # untimed full passes first (section 18: pair 0-1 stayed slow after the per-size warm-up)
+        for _ in range(a.passes - 1):
+            for alloc in allocs:
+                for i, x in enumerate(devices):
+                    for y in devices[i + 1:]:
+                        for nbytes in SIZES:
+                            pair_bench(x, y, nbytes, a.rounds if nbytes <= 65536 else max(200, a.rounds // 8),
+                                       alloc, devices)
     for alloc in allocs:
         rec["pair_by_alloc"][alloc] = {}
         for i, x in enumerate(devices):

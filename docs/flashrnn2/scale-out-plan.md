@@ -654,3 +654,18 @@ Against the expectation:
 Splitting the backward over GPUs pays only where one GPU's grid is the limit, D = 2048 at P = 4. A better multi-GPU
 layout would keep BM = 64 and split the K blocks rather than the column blocks; that needs cross-GPU partial sums. It
 is not built.
+
+## 19. Batch "mg2d2" (pre-registration, 2026-10-18, before any run of it)
+
+**Check 2 rerun with the calibration fixed.** The micro now runs two full untimed sweeps of every pair and size
+(`--passes 3`) before the recorded one. A second micro task keeps the old procedure (one warm-up launch per size)
+so the two can be compared. The phase A timing and `predict()` are unchanged, and checks 2 and 3 are evaluated as
+pre-registered.
+
+Prediction (stated now, from section 18's post hoc analysis):
+* If pair 0-1 measures like the others, check 2 still fails, at about 28/37 within ±20%, because P = 4 direct runs at
+  1.35-1.45x and the D = 2048 stream at 0.63x.
+* The orderings improve.
+
+**H2 rerun.** Race verification of the multi-GPU 2-D backward, with the "no B2" variant now dropping both the grid
+barrier and the cross-GPU wait. Same three cases and rule as section 17.
