@@ -748,3 +748,23 @@ within ±20% in 34 of 37 configurations and orders every schedule pair it separa
 one system fence, relaxed arrivals) is the fastest at P ≤ 4 on this node, as the model says for a full mesh. Ring and
 recursive doubling pay a per-GPU barrier and one release per round. That cost is not in the model, which explains the
 1.1-1.2x on those rows.
+
+## 23. The repaired multi-GPU forward against the best single-GPU forward (pre-registration, 2026-10-18, before any run of it)
+
+Check 3 compares resident slices on several GPUs with one GPU streaming R, which is a weak baseline. The question for
+the paper is whether splitting the forward over GPUs beats FlashRNN2's best single-GPU forward, i.e. the library's
+configuration from its tables and the large-D TileLang kernels.
+
+**Runs (batch "vs1"):** `tools/scale_vs_single.py`, FP16, T = 256, LSTM/sLSTM.
+* D = 1024: direct schedule at P = 2 and P = 4, slice width 16;
+* D = 2048: direct schedule at P = 2 and P = 4, slice width 8;
+* both at B ∈ {16, 64}.
+
+Paired blocks (20 per start, 3 calls per arm, order rotated), three process starts. Arms: one GPU (library) and each
+multi-GPU configuration (uva buffers). Kernel time is CUDA events, the slowest GPU for multi-GPU. Reading: one GPU /
+multi-GPU with the 95% hierarchical bootstrap; multi-GPU faster if the lower bound is ≥ 1.02, slower if the upper
+bound is ≤ 0.98.
+
+**Prediction.** At B = 16, D = 2048 the multi-GPU forward is faster, since one GPU cannot hold R in fast memory and
+streams it every step. At D = 1024 one GPU is faster, since R fits one GPU's shared memory and the cross-GPU wait costs
+more than it saves. At B = 64 the one-GPU wide-tile kernels (max-width section 16) narrow any multi-GPU gain.
