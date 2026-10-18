@@ -3,7 +3,9 @@
 Usage: hybrid_bw2d_race.py --task JSON --out FILE
 task: {"cell", "dtype", "width", "batch", "steps", "runs": 21, "batch_rows": 16 | 32 | 64 (default: by batch),
        "dg_dtype": null | "input" (the FRNN_DGLP build, max-width.md section 36),
-       "honly": false | true (the FRNN_HONLY build reading the rounded h gradient, max-width.md section 40)}
+       "honly": false | true (the FRNN_HONLY build reading the rounded h gradient, max-width.md section 40),
+       "flags": false | true (the FRNN_FLAGS build: column-group flag wait as B1, max-width.md section 41; no_b1 drops
+       that wait)}
 Variants: correct (content check of every staged dG operand and the per-K-block step stamps read before every partial
 sum; run 0 without delays, runs 1.. with seeded 0-4 us delays), no barrier B1 (partials), no barrier B2 (exchanged
 dG); each broken variant keeps the barriers of the last step. Each run's outputs (dG, d_initial) are compared bitwise
@@ -52,6 +54,8 @@ def main():
             d_history[0] += d_hidden.float()
             args = (wx, r, b, init, history, None, d_final, task["cell"])
             kw.update(d_hidden=d_hidden)
+        if task.get("flags"):
+            kw.update(flags=True)
         if task.get("dg_dtype"):
             kw.update(dg_dtype=task["dg_dtype"], wgrad="bmm_lp")
         ref = hybrid_bw2d.backward(*args, **kw)

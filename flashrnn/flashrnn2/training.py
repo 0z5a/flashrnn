@@ -154,7 +154,8 @@ class _Recurrence(torch.autograd.Function):
                 asyncload=options.get("asyncload", True), pre_tf32=options.get("pre_tf32", False),
                 pre_fused=options.get("pre_fused", wx.shape[3] == 1 and wx.shape[-1] in hybrid_bw2d.PRE_FUSED_WIDTHS
                                       and wx.shape[0] >= hybrid_bw2d.PRE_FUSED_MIN_BATCH),
-                dg_dtype=options.get("dg_dtype"), d_hidden=d_output.contiguous() if honly else None)
+                dg_dtype=options.get("dg_dtype"), d_hidden=d_output.contiguous() if honly else None,
+                flags=options.get("flags", False))
             return (dg.to(wx.dtype), d_recurrent.to(recurrent.dtype), d_bias.to(bias.dtype),
                     d_initial.to(initial.dtype), None, None, None, None, None)
         if backend == "hybrid" or (backend is None and wx.shape[-1] > HYBRID_BACKWARD_ABOVE):

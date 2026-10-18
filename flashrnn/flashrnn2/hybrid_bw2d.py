@@ -36,7 +36,7 @@ def batch_tile(batch):
 
 
 def build(width, bm, slstm, bf16, verify=0, cache_dir=None, mg=False, rowown=True, asyncload=True, dglp=False,
-          honly=False):
+          honly=False, flagwait=False):
     pc, q, cr = CONFIGS[width]
     cuda_home = os.environ.get("FRNN_HYBRID_CUDA_HOME", "/apps/ACC/CUDA/12.8")
     flags = [f"-DFRNN_D={width}", f"-DFRNN_PC={pc}", f"-DFRNN_Q={q}", f"-DFRNN_CR={cr}", f"-DFRNN_BM={int(bm)}",
@@ -51,6 +51,8 @@ def build(width, bm, slstm, bf16, verify=0, cache_dir=None, mg=False, rowown=Tru
         flags.append("-DFRNN_DGLP=1")
     if honly:  # h-only history gradient in the input dtype (section 40)
         flags.append("-DFRNN_HONLY=1")
+    if flagwait:  # column-group flag wait in place of grid barrier B1 (section 41)
+        flags.append("-DFRNN_FLAGS=1")
     digest = hashlib.sha256(SOURCE.read_bytes() + " ".join(flags).encode()).hexdigest()[:16]
     cache = Path(cache_dir or os.environ.get("FRNN_HYBRID_CACHE",
                                              os.environ.get("TMPDIR", str(Path.home() / ".cache")) + "/frnn_hybrid_bw"))
@@ -65,11 +67,12 @@ def build(width, bm, slstm, bf16, verify=0, cache_dir=None, mg=False, rowown=Tru
     return lib
 
 
-def _lib(width, bm, slstm, bf16, verify=0, mg=False, rowown=True, asyncload=True, dglp=False, honly=False):
-    key = (width, bm, slstm, bf16, verify, mg, rowown, asyncload, dglp, honly)
+def _lib(width, bm, slstm, bf16, verify=0, mg=False, rowown=True, asyncload=True, dglp=False, honly=False,
+         flags=False):
+    key = (width, bm, slstm, bf16, verify, mg, rowown, asyncload, dglp, honly, flags)
     if key not in _LIBS:
         lib = ctypes.CDLL(str(build(width, bm, slstm, bf16, verify, mg=mg, rowown=rowown, asyncload=asyncload,
-                                    dglp=dglp, honly=honly)))
+                                    dglp=dglp, honly=honly, flagwait=flags)))
         if mg:
             lib.frnn_hybrid_bw2d_mg.restype = ctypes.c_int
             lib.frnn_hybrid_bw2d_mg.argtypes = ([ctypes.c_void_p] * 12 + [ctypes.c_int] * 7 + [ctypes.c_void_p] * 3
@@ -96,9 +99,12 @@ def verify_bits(verify):
 
 def backward(wx, recurrent, bias, initial, history, d_history, d_final, cell, *, batch_rows=None, tf32=False,
              wgrad="bmm", prof=False, diagnostics=None, rowown=True, asyncload=True, pre_tf32=False, pre_fused=False,
-             dg_dtype=None, d_hidden=None, _verify=None):
+             dg_dtype=None, d_hidden=None, flags=False, _verify=None):
     """Returns (dg [B,T,4,H,D] FP32, or the input dtype with dg_dtype="input", dR, dbias, d_initial FP32), as
     hybrid_bw.backward.
+
+    flags (opt-in, section 41): barrier B1 becomes a wait for the Q step flags of the CTA's own column block; the
+    exchange buffer is double buffered. Same arithmetic and order, so the outputs are bitwise equal.
 
     d_hidden (opt-in, section 40): the gradient of the hidden output [B, T, H, D] in the input dtype, in place of
     d_history when only the h component carries gradient (pass d_history=None); the kernel reads it directly."""
@@ -143,14 +149,14 @@ def backward(wx, recurrent, bias, initial, history, d_history, d_final, cell, *,
         raise ValueError("d_hidden is [B, T, H, D] in the input dtype and replaces d_history")
     dg = torch.empty((batch, steps, 4, heads, width), device=device, dtype=wx.dtype if dglp else torch.float32)
     d_init = torch.empty(initial.shape, device=device, dtype=torch.float32)
-    xbuf = torch.empty((resident, bm, 4 * width), device=device, dtype=wx.dtype)
+    xbuf = torch.empty((2 if flags else 1, resident, bm, 4 * width), device=device, dtype=wx.dtype)
     part = torch.empty((resident, q, bm, width), device=device, dtype=torch.float32)
-    stamp = torch.zeros(resident * q, device=device, dtype=torch.int32)
+    stamp = torch.zeros(resident * (pc if flags else 1) * q, device=device, dtype=torch.int32)
     bits, seed = verify_bits(_verify)
     if prof:
         bits |= VERIFY_BITS["prof"]
     lib = _lib(width, bm, cell == "slstm", wx.dtype == torch.bfloat16, bits, rowown=rowown, asyncload=asyncload,
-               dglp=dglp, honly=honly)
+               dglp=dglp, honly=honly, flags=flags)
     err = torch.zeros(12, device=device, dtype=torch.int32)
     err[3] = seed
     tensors = [pre.contiguous(), history.contiguous(), initial.float().contiguous(),

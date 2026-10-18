@@ -1152,3 +1152,40 @@ input dtype.
 * dG_LP: section 36's rule over the union of 40.1 and this batch, with the D = 1024 rows taken from the rerun.
 * honly becomes the default for hidden output at H = 1 on the 2-D path where W6-honly holds in every row and B2, R2
   and W1-honly pass.
+
+## 41. Column-group flags in place of grid barrier B1 (pre-registration, 2026-10-18, before any run of it)
+
+**Why.** The advisor named SM synchronization as the bottleneck and suggested manual semaphores. In the 2-D kernel each
+step has two grid barriers. B1 (partials complete) cost 2.3 µs per step at D = 1536 (section 23), yet each owner needs
+the partials of only its own column block's Q = 16 CTAs.
+
+**Change.** `flags=True`, opt-in, build flag `FRNN_FLAGS`.
+* After its partial, each CTA writes a step flag with release semantics at GPU scope.
+* The owner's first Q threads spin with acquire loads on the Q flags of its column block, then the CTA synchronizes.
+* B2 stays a grid barrier, and so does the last step's B1.
+
+The hazards B1 used to cover:
+* A partial written in the next step is still separated from the sum by the next B2.
+* The exchange buffer is double buffered by step parity. The pointwise update of step s + 1 writes the buffer last read
+  by the GEMMs of step s - 1, and all of those precede B2 of step s.
+
+The arithmetic and summation order are unchanged, so the outputs must be bitwise equal. ptxas reports no spill (158
+registers at D = 1536, 233 at D = 2048).
+
+**Runs (batch "flags"):**
+* **F1, bitwise.** `bw2d_rowown_check.py --option flags`: dG and d_initial with flags against without. D ∈ {1024,
+  1280, 1536, 1792, 2048} × B ∈ {16, 64, 100} × (LSTM FP16, sLSTM BF16). B = 100 runs two slots, which crosses the
+  slot boundary.
+* **F2, race.** The section 12 rule on the flags build. Here no_b1 drops the flag wait. Cases:
+  * D ∈ {1536, 2048} × (LSTM FP16 B = 64, sLSTM BF16 B = 16);
+  * D = 1024, LSTM FP16, B = 100.
+* **W1-flags.** The training step with `flags=True` within the FP64 budgets: D ∈ {1024, 1536, 2048} × B ∈ {16, 64} ×
+  (LSTM FP16, sLSTM BF16) (12 cases).
+* **W6-flags and W4-flags.** T = 256, D ∈ {1024, 1536, 1792, 2048} × B ∈ {16, 64} × (LSTM FP16, sLSTM BF16). The arms
+  differ only in `flags`; everything else is the library default. W6-flags compares `flags=False` against `True`;
+  W4-flags compares `cuda` against `flags=True`.
+
+**Prediction.** F1, F2 and W1-flags pass. The B1 wait drops to about 1 µs per step. The step gains 2-5%, more at
+D = 1024 and at B = 16, where the barriers are a larger share.
+**Rule.** `flags` becomes the default at H = 1 on the 2-D path in the (D, B) rows where W6-flags holds, provided F1, F2
+and W1-flags pass.

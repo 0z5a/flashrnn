@@ -25,6 +25,14 @@
 // B2 (each keeps the barriers of the last step); bit 16 phase timers (globaltimer, thread 0 of every active CTA, units
 // of 64 ns): err[4] pointwise, err[5] B2, err[6] GEMM, err[7] B1, err[8] partial sum, err[9] steps.
 //
+// Column-group flags (FRNN_FLAGS = 1, opt-in, max-width.md section 41): B1 becomes a wait of the owner CTA for the
+// Q step flags of its own column block (CTAs (i, 0 .. Q - 1), the only writers of the partials it sums) instead of a
+// grid barrier; B2 stays a grid barrier. Hazards: a partial write (GEMM of the next step) follows the next B2, which
+// every reader passes only after its sum; the exchange buffer is double buffered by step parity, so the pointwise update
+// of step s + 1 writes the buffer last read by the GEMMs of step s - 1, all of which precede B2 of step s. The flags are
+// the stamp array [RESIDENT, PC, Q] (release after the partial, acquire by the owner's waiting threads); the last step
+// keeps the grid barrier. Verification as above (bit 4 drops the flag wait). Single GPU only.
+//
 // Multi-GPU (FRNN_MG = 1, docs/flashrnn2/scale-out-plan.md section 17): the PC column blocks are split over np GPUs
 // (GPU r runs column blocks r * PC / np .. with all Q K blocks each), so the partial sums of a column stay on one GPU
 // and B1 stays a grid barrier of that GPU. Only the exchanged dG crosses GPUs: the pointwise update stores it into the
@@ -86,6 +94,13 @@ constexpr bool ASYNC = FRNN_ASYNC != 0;
 // FRNN_DGLP = 1 (opt-in, max-width.md section 36): the stored dG is the input dtype -- the value already published to
 // the exchange buffer (to_elem of the same FP32 dG), so the recurrence is unchanged; the caller's cast and the dR
 // GEMM's operand conversion disappear. Single GPU only.
+#ifndef FRNN_FLAGS
+#define FRNN_FLAGS 0
+#endif
+constexpr bool FLAGS = FRNN_FLAGS != 0;
+#if FRNN_FLAGS && FRNN_MG
+#error "FRNN_FLAGS is single-GPU only"
+#endif
 #ifndef FRNN_HONLY
 #define FRNN_HONLY 0
 #endif
@@ -168,9 +183,9 @@ struct Args {
   const elem_t* R;       // [4, H, D, D]
   dg_t* dg;              // [B, T, 4, H, D] FP32 out (input dtype with FRNN_DGLP)
   float* dinit;          // [S, B, 1, H, D] FP32 out
-  elem_t* xbuf;          // [RESIDENT, BM, 4D] exchanged dG (single buffer)
+  elem_t* xbuf;          // [RESIDENT, BM, 4D] exchanged dG (single buffer; FRNN_FLAGS: [2, RESIDENT, BM, 4D])
   float* part;           // [RESIDENT, Q, BM, D] FP32 partial dh (single buffer)
-  int* stamp;            // [RESIDENT, Q] verification step stamps
+  int* stamp;            // [RESIDENT, Q] verification step stamps (FRNN_FLAGS: [RESIDENT, PC, Q] step flags)
   int* err;              // [12] verification counters / phase timers, [3] delay seed
   int B, T, H, groups, resident, slots, tiles;
   const long long* xpeers;   // FRNN_MG: every GPU's exchange buffer, arrival counter, stored dG
@@ -189,7 +204,8 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw2d_kernel(Args a) {
   const int n_warp = cb * NC + warp * NCW;                                 // first column of this warp's MMA tile
   const int k0 = kb * KQ;                                                   // first reduction index of the K block
   const size_t hd = (size_t)a.H * D, state_stride = (size_t)a.B * hd, history_stride = (size_t)a.B * a.T * hd;
-  elem_t* xb = a.xbuf + (size_t)gy * BM * K;
+  elem_t* xb = a.xbuf + (size_t)gy * BM * K;  // FRNN_FLAGS: re-pointed to the step's parity buffer every step
+  int* const flag = a.stamp + (FLAGS ? ((size_t)gy * PC + cb) * Q : (size_t)gy * Q);  // this column block's flags
   float* pt = a.part + (size_t)gy * Q * BM * D;
   uint32_t rreg[CR > 0 ? CR : 1][NTW][2];
   int cnt = 0;  // steps so far over all slots (stamp value)
@@ -320,11 +336,11 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw2d_kernel(Args a) {
           *reinterpret_cast<float2*>(dst + (size_t)r * D + n) = make_float2(acc[mt][nt][0], acc[mt][nt][1]);
           *reinterpret_cast<float2*>(dst + (size_t)(r + 8) * D + n) = make_float2(acc[mt][nt][2], acc[mt][nt][3]);
         }
-      if (VERIFY & V_CHECK) {  // step stamp after the partial (release at GPU scope)
+      if (FLAGS || (VERIFY & V_CHECK)) {  // step stamp / flag after the partial (release at GPU scope)
         __syncthreads();
         if (tid == 0) {
           __threadfence();
-          asm volatile("st.release.gpu.global.b32 [%0], %1;" ::"l"(a.stamp + gy * Q + kb), "r"(cnt) : "memory");
+          asm volatile("st.release.gpu.global.b32 [%0], %1;" ::"l"(flag + kb), "r"(cnt) : "memory");
         }
       }
       return bad;
@@ -334,6 +350,7 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw2d_kernel(Args a) {
       const int t = a.T - 1 - idx;
       const bool last = idx == a.T - 1;
       unsigned long long t0 = (VERIFY & V_PROF) ? gtime() : 0;
+      if (FLAGS) xb = a.xbuf + ((size_t)(cnt & 1) * a.resident + gy) * BM * K;
       if (VERIFY & V_DELAY) delay(a.err[3], blockIdx.x, g, t);
 #pragma unroll
       for (int e = 0; e < PE; ++e) {
@@ -445,14 +462,24 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw2d_kernel(Args a) {
         if ((VERIFY & V_CHECK) && bad) atomicAdd(a.err + 1, bad);
       }
       unsigned long long t3 = (VERIFY & V_PROF) ? gtime() : 0;
-      if (!(VERIFY & V_NO_B1) || last) grid.sync();  // B1: partials complete
+      if (FLAGS && !last) {  // B1: the Q partials of this column block complete
+        if (!(VERIFY & V_NO_B1) && active && tid < Q) {
+          int s;
+          do {
+            asm volatile("ld.acquire.gpu.global.b32 %0, [%1];" : "=r"(s) : "l"(flag + tid) : "memory");
+          } while (s < cnt);
+        }
+        __syncthreads();
+      } else if (!(VERIFY & V_NO_B1) || last) {
+        grid.sync();  // B1: partials complete
+      }
       unsigned long long t4 = (VERIFY & V_PROF) ? gtime() : 0;
       if (active) {
         int stale = 0;
         if (VERIFY & V_CHECK) {
           for (int jj = 0; jj < Q; ++jj) {
             int s;
-            asm volatile("ld.acquire.gpu.global.b32 %0, [%1];" : "=r"(s) : "l"(a.stamp + gy * Q + jj) : "memory");
+            asm volatile("ld.acquire.gpu.global.b32 %0, [%1];" : "=r"(s) : "l"(flag + jj) : "memory");
             stale += s != cnt;
           }
         }

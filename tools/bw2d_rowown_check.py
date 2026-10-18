@@ -1,11 +1,12 @@
 """Bitwise check of the 2-D backward's row ownership (FRNN_ROWOWN = 1) against the first version's column-sub-block
 ownership (0): same elements and arithmetic per CTA, so dG and d_initial must be equal bit for bit (max-width.md
-section 22). Usage: bw2d_rowown_check.py --out FILE --cases JSON [--option rowown | asyncload | dg_dtype | honly]
+section 22). Usage: bw2d_rowown_check.py --out FILE --cases JSON [--option rowown | asyncload | dg_dtype | honly | flags]
 --option names the layout switch compared (default rowown; asyncload compares cp.async staging against synchronous
 staging, max-width.md section 24; dg_dtype compares the input-dtype dG store against the FP32 store, both with wgrad
 "bmm_lp": the stored dG must equal the FP32 dG rounded to the input dtype, and d_initial and dR must be bitwise
 equal, max-width.md section 36; honly compares the h-only input-dtype history gradient (d_hidden) against the
-zero-filled FP32 one built from the same rounded values: dG, d_initial, dR and dbias bitwise, max-width.md section 40).
+zero-filled FP32 one built from the same rounded values: dG, d_initial, dR and dbias bitwise, max-width.md section 40;
+flags compares the column-group flag wait against grid barrier B1, max-width.md section 41).
 Each case: {"cell", "dtype", "width", "batch", "steps"}; the batch tile is the library's for the batch."""
 import argparse
 import json
@@ -24,7 +25,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--out", required=True)
     p.add_argument("--cases", required=True)
-    p.add_argument("--option", default="rowown", choices=("rowown", "asyncload", "dg_dtype", "honly"))
+    p.add_argument("--option", default="rowown", choices=("rowown", "asyncload", "dg_dtype", "honly", "flags"))
     a = p.parse_args()
     rec = dict(started=time.time(), rows=[])
     for case in json.loads(a.cases):
