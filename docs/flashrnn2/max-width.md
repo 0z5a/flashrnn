@@ -767,3 +767,33 @@ preactivations.
   * Protocol of section 3.
 * **Prediction.** D = 1792 behaves like its neighbours: about 1.4-1.6x against 1-D, and about 1.0-1.15x against
   `cuda`. At B ≤ 32 the 2-D kernel is at least as fast as 1-D, since its bytes per step scale with B as well.
+
+## 26. Results of the "tune2" batch (2026-10-18)
+
+Evidence: `max-width-evidence/tune2-analysis.json`, archive verified by SHA-256. Everything ran with the 2-D defaults:
+row ownership, cp.async staging, FP32 preactivations.
+
+**W1-1792: 8/8; R-1792: 2/2.** The correct kernel counts 0 violations; no B1 and no B2 are each flagged 21/21.
+Difference to the 1-D kernel: dG ≤ 7.5e-6, d_initial ≤ 4.0e-5. **W1-small: 16/16** (B ∈ {16, 32}, D ∈ {1536, 2048}).
+
+**Paired training step:**
+
+| case | vs 1-D backward (W6) | vs `cuda` (W4) |
+| --- | --- | --- |
+| D = 1792, B = 64, LSTM FP16 | 1.81 [1.62, 1.90] | 0.99 [0.96, 1.02] (no) |
+| D = 1792, B = 64, LSTM BF16 | 1.91 | 0.89 [0.87, 0.92] (no) |
+| D = 1792, B = 64, sLSTM FP16 | 1.81 | 1.02 [1.01, 1.03] |
+| D = 1792, B = 64, sLSTM BF16 | 1.86 | 0.96 [0.94, 0.98] (no) |
+| D = 1536, B = 16 / 32, LSTM FP16 | 1.56 / 1.68 | 1.90 / 1.11 |
+| D = 1792, B = 16 / 32, LSTM FP16 | 1.75 / 1.89 | 1.67 / 1.09 |
+| D = 2048, B = 16 / 32, LSTM FP16 | 1.66 / 1.61 | 2.65 / 1.68 |
+| D = 1536, B = 16 / 32, sLSTM BF16 | 1.47 / 1.59 | 1.98 / 1.20 |
+| D = 1792, B = 16 / 32, sLSTM BF16 | 1.78 / 1.83 | 2.16 / 1.26 |
+| D = 2048, B = 16 / 32, sLSTM BF16 | 1.58 / 1.58 | 2.91 / 1.74 |
+
+* **W6-2d1792** holds 4/4 and **W4-2d1792** 1/4: D = 1792 behaves like D = 1536, about at parity with `cuda`.
+* **W6-small** holds 12/12 and **W4-small** 12/12. At B ≤ 32 the 2-D backward is 1.5-1.9x faster than the 1-D kernel,
+  and the training step beats `cuda` by 1.09-2.91x.
+
+**Default (after the run).** The training backward now uses the 2-D kernel at D ∈ {1536, 1792, 2048} for every batch
+size (`hybrid_bw2d.DEFAULT_WIDTHS`). D = 1280 keeps the Triton backward.
