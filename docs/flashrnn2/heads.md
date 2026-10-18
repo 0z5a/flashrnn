@@ -360,3 +360,24 @@ from 112.5 to 90.2 ms. These are profiled steps, so the absolute numbers include
 * dbias is the FP32 sum of the input-dtype dG, as in FlashRNN1.
 
 Both stayed within the FP64 budgets in all 32 qualification cases. Above D = 256 and at H = 1 nothing changes.
+
+### 8.7 The h-only history gradient (pre-registration, 2026-10-18, before any run of it)
+
+**Change.**
+* *Old path.* In hidden output mode the training backward built the full FP32 history gradient: a zero fill of
+  S × [B, T, H, D] plus an add of the output gradient.
+* *Why it was unnecessary.* With the fast kernel and history-gradient components (h, no c, no n), which the hidden mode
+  always sets, the Triton kernel reads only the h component.
+* *New path.* That case now passes the output gradient alone as a [1, B, T, H, D] tensor; the kernel's shape check
+  accepts that only when the other components are declared zero. The hybrid kernels (D > 1280) still get the full
+  gradient.
+* *Expected effect on values.* None: the kernel reads the same h values and adds exact zeros for c / n either way.
+
+**Runs (batch "hgrad"):**
+* **G1**: every training gradient bitwise equal to the old path (`full_history_grad=True`), covering H = 1 at
+  D ∈ {64, 128, 256, 512, 768, 1024} and H ∈ {2, 16} at D ∈ {64, 128}, LSTM/sLSTM, FP16/BF16, B = 16, T = 24.
+* **Paired training step** at section 3's H > 1 claim shapes (24): **H3-hg** against FlashRNN1, **H6-hg** against
+  the old path.
+
+**Prediction.** G1 passes in full. The step gains about 0.5-1.5 ms at D = 64, H = 256 (5-10%), and the LSTM D = 64
+rows reach about 1.0x against FlashRNN1.

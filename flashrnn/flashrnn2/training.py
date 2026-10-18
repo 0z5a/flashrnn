@@ -110,14 +110,20 @@ class _Recurrence(torch.autograd.Function):
         from . import triton_rtiled_bw
 
         wx, recurrent, bias, initial, history = ctx.saved_tensors
-        d_history = torch.zeros_like(history)
-        if d_output is not None:
-            if ctx.output_mode == "full":
-                d_history += d_output.float()
-            elif ctx.output_mode == "hidden":
-                d_history[0] += d_output.float()
-            else:
-                d_history[0][:, -1:] += d_output.float()
+
+        def full_history_gradient():
+            d_history = torch.zeros_like(history)
+            if d_output is not None:
+                if ctx.output_mode == "full":
+                    d_history += d_output.float()
+                elif ctx.output_mode == "hidden":
+                    d_history[0] += d_output.float()
+                else:
+                    d_history[0][:, -1:] += d_output.float()
+            return d_history
+        # The hybrid kernels read every history component; built only for them (the Triton path below may take the
+        # h component alone).
+        d_history = None
         d_final = torch.zeros(initial.shape, device=wx.device, dtype=torch.float32)
         if d_carry is not None:
             d_final += d_carry.float()
@@ -133,7 +139,7 @@ class _Recurrence(torch.autograd.Function):
             from . import hybrid_bw2d
 
             dg, d_recurrent, d_bias, d_initial = hybrid_bw2d.backward(
-                wx, recurrent, bias, initial, history, d_history, d_final, ctx.cell,
+                wx, recurrent, bias, initial, history, full_history_gradient(), d_final, ctx.cell,
                 batch_rows=options.get("batch_rows"), wgrad=options.get("wgrad", "bmm"),
                 prof=options.get("prof_phases", False), tf32=options.get("tf32", False),
                 diagnostics=options.get("diagnostics"), rowown=options.get("rowown", True),
@@ -145,7 +151,7 @@ class _Recurrence(torch.autograd.Function):
             from . import hybrid_bw
 
             dg, d_recurrent, d_bias, d_initial = hybrid_bw.backward(
-                wx, recurrent, bias, initial, history, d_history, d_final, ctx.cell,
+                wx, recurrent, bias, initial, history, full_history_gradient(), d_final, ctx.cell,
                 reg_rows_per_warp=options.get("reg_rows_per_warp"), batch_rows=options.get("batch_rows"),
                 wgrad=options.get("wgrad", "bmm"), prof=options.get("prof_phases", False),
                 cluster=options.get("cluster", 0),
@@ -169,6 +175,13 @@ class _Recurrence(torch.autograd.Function):
             options.setdefault("wgrad", "bmm_lp")
             if options["wgrad"] == "bmm_lp":
                 options.setdefault("dg_dtype", "input")
+        comps = options.get("history_grad_components")
+        full_grad = options.pop("full_history_grad", False)  # A/B: the full, zero-filled history gradient
+        if (not full_grad and options.get("fast") and comps is not None and not any(tuple(comps)[1:])
+                and ctx.output_mode == "hidden" and d_output is not None):
+            d_history = d_output.float().unsqueeze(0).contiguous()  # h component only (heads.md section 8.7)
+        else:
+            d_history = full_history_gradient()
         dg, d_recurrent, d_bias, d_initial = triton_rtiled_bw.backward(
             wx, recurrent, bias, initial, history, d_history, d_final, ctx.cell, **options)
         return (dg.to(wx.dtype), d_recurrent.to(recurrent.dtype), d_bias.to(bias.dtype), d_initial.to(initial.dtype),

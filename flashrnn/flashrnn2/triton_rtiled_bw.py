@@ -721,7 +721,11 @@ def backward(
         raise ValueError("expected public initial state layout")
     if history.shape != (states, batch, steps, heads, width) or history.dtype != torch.float32:
         raise ValueError("expected the forward's FP32 state history")
-    if d_history.shape != history.shape or d_history.dtype != torch.float32:
+    # With ``fast`` and history_grad_components saying that only h carries gradient, the kernel never reads the other
+    # components, so d_history may be the h component alone ([1, B, T, H, D]; heads.md section 8.7).
+    h_only = fast and history_grad_components is not None and not any(tuple(history_grad_components)[1:])
+    if d_history.dtype != torch.float32 or d_history.shape[1:] != history.shape[1:] or not (
+            d_history.shape[0] == states or (h_only and d_history.shape[0] == 1)):
         raise ValueError("expected an FP32 history gradient")
     if d_final.shape != initial.shape or d_final.dtype != torch.float32:
         raise ValueError("expected an FP32 final-carry gradient")
