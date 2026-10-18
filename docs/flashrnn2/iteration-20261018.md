@@ -14,8 +14,8 @@ H100 GPUs, with paired timing (3 process starts × 20 blocks) and a 95% hierarch
 | Training, H > 1, D ≤ 256 | FP32 dG, FP32 dR GEMMs | dG stored in the input dtype, input-dtype dR GEMMs with FP32 accumulation | heads §8.6: 1.19-1.29x |
 | Training backward, hidden output, Triton path | zero-filled full history gradient | h component only | heads §8.8: bitwise identical |
 | Training backward, H = 1, D = 1024-2048, any B | TF32 cuBLAS preactivation GEMM + separate Wx add | fused input-dtype Triton GEMM with the Wx / bias add in its epilogue (`pre_fused`) | max-width §38, §42, §47: 1.12-1.15x at B = 64, 1.07-1.13x at B = 16; more accurate against FP64 |
-| Training backward, H = 1, D ∈ {1024, 1536, 1792, 2048}, B ≥ 64 | FP32 dG store + TF32 dR GEMM | dG stored in the input dtype by the kernel, input-dtype dR GEMM | max-width §40.1, §42, §47: 1.10-1.19x (measured without `pre_fused`) |
-| Training backward, H = 1, hidden output, D ∈ {1024, 1536, 1792, 2048}, B ≥ 64 | zero-filled FP32 history gradient | kernel reads the h gradient itself (`honly`) | max-width §42, §47: 1.03-1.08x, bitwise identical |
+| Training backward, H = 1, D = 1024-2048, any B | FP32 dG store + TF32 dR GEMM | dG stored in the input dtype by the kernel, input-dtype dR GEMM | max-width §40.1, §42, §47, §51: 1.09-1.19x |
+| Training backward, H = 1, hidden output, D = 1024-2048, any B | zero-filled FP32 history gradient | kernel reads the h gradient itself (`honly`) | max-width §42, §47, §51: 1.03-1.13x, bitwise identical |
 | Training backward, H > 1, D ∈ {1024, 1536, 2048}, B ≤ 64 | Triton (D ≤ 1280) / 1-D CUDA kernel (D > 1280) | 2-D split CUDA kernel | max-width §37, §42: 1.05-1.06x (D = 1024, B = 16), 1.45-1.73x elsewhere |
 
 Combined, the three later H = 1 options make the step 1.13-1.56x faster at B = 64 and 1.07-1.14x at B = 16

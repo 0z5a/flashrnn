@@ -1566,3 +1566,12 @@ At B = 16 both options gained more than predicted: dG_LP 9-17% (predicted 3-8%),
 **Defaults (by the section 50 rule).** B = 16 and B = 64 now hold for both options at every D from 1024 to 2048, so
 dG_LP and honly apply at every B there (`DGLP_MIN_BATCH`, `HONLY_MIN_BATCH`). With `pre_fused`, all three later options
 are now the H = 1 default on the whole 2-D range, D = 1024-2048.
+
+## 52. Qualification of the section 51 defaults (pre-registration, 2026-10-18, before any run of it)
+
+Batch "final3", qualification only. No options; the library's selection, forward included. Within the FP64 budgets:
+* H = 1: D ∈ {1024, 1280, 1536, 1792, 2048} × LSTM/sLSTM × FP16/BF16 × B ∈ {16, 40} (40 cases). At B = 40 the 64-row
+  tile is only partly filled.
+* H = 2: D ∈ {1024, 2048} × (LSTM FP16, sLSTM BF16) × B ∈ {16, 64} (8 cases), FP64 only (section 47).
+
+**Rule.** A failure removes the section 51 additions (dG_LP and honly at B < 64, and both at D = 1280) at that shape.
