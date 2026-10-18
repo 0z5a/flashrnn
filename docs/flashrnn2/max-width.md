@@ -855,3 +855,19 @@ Evidence: `max-width-evidence/tune3-analysis.json`, archive verified by SHA-256.
 1792, 2048} for every batch size. H > 1 keeps its earlier paths, since the 2-D kernel is not qualified there. D = 1280
 at B = 64 sits at parity with `cuda`. The step there also contains the forward and the FP32 preactivation and weight
 gradient passes.
+
+## 30. The 2-D backward at D = 512 / 768 (pre-registration, 2026-10-18, before any run of it)
+
+New grids:
+* D = 512: 4 × 16 (64 CTAs);
+* D = 768: 6 × 16 (96 CTAs).
+
+R sits in shared memory. ptxas: 136-138 registers at BM = 64, no spill. These are opt-in; at these widths the training
+default is the tuned Triton backward (gate-batched at B ≤ 16, section 26 of the SPLITG batch).
+
+**Runs (batch "tune4"):**
+* **W1-mid**: FP64 budgets at D ∈ {512, 768} × B ∈ {16, 64} × LSTM/sLSTM × FP16/BF16 (16 cases).
+* **R-mid**: race verification at D = 768, LSTM/sLSTM, BM = 64, B = 100.
+* **Paired training step** at D ∈ {512, 768} × B ∈ {16, 64} × (LSTM FP16, sLSTM BF16) with the library's forward.
+  **W6-mid** compares the current default backward against 2-D, **W4-mid** `cuda` against 2-D.
+* **Rule.** As in section 27: the default changes at a (D, B) only where W6-mid holds in every row.

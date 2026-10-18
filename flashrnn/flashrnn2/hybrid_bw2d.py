@@ -14,7 +14,8 @@ import torch
 SOURCE = Path(__file__).with_name("hybrid_bw2d.cu")
 # D -> (column blocks PC, K blocks Q, register k-steps CR): PC * Q CTAs per group, R block in shared memory (+ CR
 # k-steps of 16 rows per warp in registers at D = 1792 / 2048; D = 1792: 7 column blocks of 256, 112 CTAs).
-CONFIGS = {1024: (8, 16, 0), 1280: (5, 16, 0), 1536: (8, 16, 0), 1792: (7, 16, 4), 2048: (8, 16, 8)}
+CONFIGS = {512: (4, 16, 0), 768: (6, 16, 0), 1024: (8, 16, 0), 1280: (5, 16, 0), 1536: (8, 16, 0), 1792: (7, 16, 4),
+           2048: (8, 16, 8)}
 DEFAULT_WIDTHS = (1024, 1280, 1536, 1792, 2048)  # training default at H = 1, any B (qualified and timed)
 VERIFY_BITS = dict(check=1, delay=2, no_b1=4, no_b2=8, prof=16, mg_no_wait=32)
 _LIBS = {}
