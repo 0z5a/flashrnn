@@ -129,11 +129,14 @@ class _Recurrence(torch.autograd.Function):
             d_final += d_carry.float()
         options = dict(ctx.backward_options)
         backend = options.pop("backend", None)
-        if backend is None and wx.shape[3] == 1:
+        if backend is None:
             from . import hybrid_bw2d
 
-            # Qualified and timed at H = 1 (max-width.md sections 21, 26, 29); H > 1 keeps the earlier paths.
-            if wx.shape[-1] in hybrid_bw2d.DEFAULT_WIDTHS:
+            # Qualified and timed at H = 1 (max-width.md sections 21, 26, 29) and at H > 1 for the measured widths and
+            # batch sizes (section 32); other H > 1 shapes keep the earlier paths.
+            width, heads, batch = wx.shape[-1], wx.shape[3], wx.shape[0]
+            if (width in hybrid_bw2d.DEFAULT_WIDTHS if heads == 1
+                    else batch <= hybrid_bw2d.HEADS_DEFAULT_MAX_BATCH.get(width, 0)):
                 backend = "hybrid2d"
         if backend == "hybrid2d":
             # R split over column blocks and K blocks (max-width.md section 20); opt-in.
@@ -145,7 +148,9 @@ class _Recurrence(torch.autograd.Function):
                 prof=options.get("prof_phases", False), tf32=options.get("tf32", False),
                 diagnostics=options.get("diagnostics"), rowown=options.get("rowown", True),
                 asyncload=options.get("asyncload", True), pre_tf32=options.get("pre_tf32", False),
-                pre_fused=options.get("pre_fused", False), dg_dtype=options.get("dg_dtype"))
+                pre_fused=options.get("pre_fused", wx.shape[3] == 1 and wx.shape[-1] in hybrid_bw2d.PRE_FUSED_WIDTHS
+                                      and wx.shape[0] >= hybrid_bw2d.PRE_FUSED_MIN_BATCH),
+                dg_dtype=options.get("dg_dtype"))
             return (dg.to(wx.dtype), d_recurrent.to(recurrent.dtype), d_bias.to(bias.dtype),
                     d_initial.to(initial.dtype), None, None, None, None, None)
         if backend == "hybrid" or (backend is None and wx.shape[-1] > HYBRID_BACKWARD_ABOVE):

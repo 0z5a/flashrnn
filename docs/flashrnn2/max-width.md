@@ -986,3 +986,68 @@ write). dR is a TF32 GEMM over the FP32 dG (1.32 ms at D = 1536, section 35).
 **Prediction.** B1, R1 and W1-dglp pass. The step gains 0.6-1.0 ms at D = 1536 (4-7%), and W6-dglp holds at every D.
 **Rule.** `dg_dtype="input", wgrad="bmm_lp"` becomes the default at H = 1 on the 2-D path where W6-dglp holds in every
 row and B1, R1 and W1-dglp pass.
+
+## 37. Results of the "heads2d" batch (section 32, 2026-10-18)
+
+Evidence: `max-width-evidence/heads2d-analysis.json`, archive verified by SHA-256.
+
+**H1-2d: 12/12.** Every case is within the FP64 budgets and bitwise per head against the H = 1 runs, at D ∈ {1024, 1536,
+2048} × H ∈ {2, 3}.
+
+**W6-h2d holds 8/8 and W4-h2d holds 8/8.** All starts were stable. Training step, B = 16, T = 256, point ratio with the
+95% interval:
+
+| D | H | cell / dtype | current H > 1 path / 2-D | `cuda` / 2-D |
+| --- | --- | --- | --- | --- |
+| 1024 | 4 | LSTM FP16 | 1.051 (1.033-1.058) | 1.377 |
+| 1024 | 4 | sLSTM BF16 | 1.047 (1.033-1.055) | 1.381 |
+| 1024 | 16 | LSTM FP16 | 1.062 (1.061-1.064) | 1.215 |
+| 1024 | 16 | sLSTM BF16 | 1.051 (1.049-1.057) | 1.194 |
+| 2048 | 4 | LSTM FP16 | 1.454 (1.452-1.455) | 2.451 |
+| 2048 | 4 | sLSTM BF16 | 1.473 (1.471-1.474) | 2.503 |
+| 2048 | 16 | LSTM FP16 | 1.486 (1.485-1.490) | 2.222 |
+| 2048 | 16 | sLSTM BF16 | 1.468 (1.468-1.468) | 3.255 |
+
+The current H > 1 path is Triton at D = 1024 and the 1-D CUDA kernel at D = 2048.
+
+**Default (by the section 27 rule).** At H > 1 the training backward now defaults to the 2-D kernel, but only at the
+measured widths and batch: D ∈ {1024, 2048} with B ≤ 16 (`hybrid_bw2d.HEADS_DEFAULT_MAX_BATCH`). D = 1536 was qualified
+but not timed. It keeps the earlier path, as do larger batches, until they are measured.
+
+## 38. Results of the "pref" batch (section 35, 2026-10-18)
+
+Evidence: `max-width-evidence/pref-analysis.json` and `pref-p1.json`. Every archived file was checked against its
+SHA-256 manifest (216 files).
+
+**P1: 16/16.** In every case the fused preactivation is more accurate against FP64 than the cuBLAS TF32 path, and its
+h_{t-1} equals the library's.
+
+| dtype | fused, largest relative error | TF32 path, largest relative error |
+| --- | --- | --- |
+| FP16 | 1.56e-6 | 2.66e-6 |
+| BF16 | 1.31e-6 | 2.63e-6 |
+
+The largest fused / TF32 ratio over the cases is 0.63.
+
+**W1-pref: 24/24.** All cases are within the FP64 budgets.
+
+**W6-pref holds 8/8; W4-pref holds 8/8.** All starts were stable. Training step, B = 64, T = 256, point ratio with the
+95% interval:
+
+| D | cell / dtype | default / `pre_fused` | `cuda` / `pre_fused` |
+| --- | --- | --- | --- |
+| 1024 | LSTM FP16 | 1.150 (1.147-1.152) | 1.396 (1.353-1.422) |
+| 1024 | sLSTM BF16 | 1.142 (1.140-1.143) | 1.344 (1.294-1.432) |
+| 1536 | LSTM FP16 | 1.142 (1.141-1.144) | 1.222 (1.213-1.230) |
+| 1536 | sLSTM BF16 | 1.134 (1.133-1.136) | 1.166 (1.143-1.181) |
+| 1792 | LSTM FP16 | 1.139 (1.127-1.143) | 1.138 (1.111-1.178) |
+| 1792 | sLSTM BF16 | 1.146 (1.130-1.188) | 1.077 (1.046-1.096) |
+| 2048 | LSTM FP16 | 1.143 (1.121-1.205) | 1.296 (1.270-1.313) |
+| 2048 | sLSTM BF16 | 1.121 (1.120-1.123) | 1.305 (1.298-1.313) |
+
+The gain is 12-15%, within the 10-18% predicted. With it, D = 1536 / 1792 at B = 64 — previously at parity with `cuda`
+(section 26) — is now 1.08-1.22x faster than `cuda`.
+
+**Default (by the section 35 rule).** `pre_fused` is now the default at H = 1 at the timed widths D ∈ {1024, 1536, 1792,
+2048}, for B ≥ 64 (`hybrid_bw2d.PRE_FUSED_WIDTHS`, `PRE_FUSED_MIN_BATCH`). It was qualified at B = 16 but timed only at
+B = 64, so B < 64 and D = 1280 keep the TF32 preactivation until measured.

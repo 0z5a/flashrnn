@@ -17,6 +17,12 @@ SOURCE = Path(__file__).with_name("hybrid_bw2d.cu")
 CONFIGS = {512: (4, 16, 0), 768: (6, 16, 0), 1024: (8, 16, 0), 1280: (5, 16, 0), 1536: (8, 16, 0), 1792: (7, 16, 4),
            2048: (8, 16, 8)}
 DEFAULT_WIDTHS = (1024, 1280, 1536, 1792, 2048)  # training default at H = 1, any B (qualified and timed)
+# training default at H > 1: D -> largest B timed (max-width.md section 32: H in {4, 16}, B = 16; qualified at H in
+# {2, 3}). Other widths and larger batches at H > 1 keep the earlier paths until measured.
+HEADS_DEFAULT_MAX_BATCH = {1024: 16, 2048: 16}
+# pre_fused default (max-width.md section 38): H = 1 at the timed widths and batch sizes (B = 64; qualified at B = 16
+# and 64). D = 1280 and B < 64 keep the TF32 preactivation until measured.
+PRE_FUSED_WIDTHS, PRE_FUSED_MIN_BATCH = (1024, 1536, 1792, 2048), 64
 VERIFY_BITS = dict(check=1, delay=2, no_b1=4, no_b2=8, prof=16, mg_no_wait=32)
 _LIBS = {}
 
