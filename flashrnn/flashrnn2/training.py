@@ -72,13 +72,19 @@ def training_forward(cell, dtype, batch, steps, heads, width, *, policy=None):
     return config, source
 
 
+HYBRID_BACKWARD_ABOVE = 1280  # widest D the Triton backward fits (S = 16, 224 KB of shared memory)
+FUSED_HEADS_MAX_WIDTH = 256  # largest D at which the H > 1 fused-recompute default is qualified (heads v4)
+
+
 def backward_slice_width(width):
     """Qualified backward slice width per D (eight warps; shared memory fits, spill-light)."""
     if width <= 128:
         return 32
     if width <= 512:
         return 16
-    return 32
+    if width <= 768:
+        return 32
+    return 16  # S = 32 exceeds shared memory above D = 768 (328 KB at D = 1024); S = 16 fits up to D = 1280
 
 
 class _Recurrence(torch.autograd.Function):
@@ -104,23 +110,99 @@ class _Recurrence(torch.autograd.Function):
         from . import triton_rtiled_bw
 
         wx, recurrent, bias, initial, history = ctx.saved_tensors
-        d_history = torch.zeros_like(history)
-        if d_output is not None:
-            if ctx.output_mode == "full":
-                d_history += d_output.float()
-            elif ctx.output_mode == "hidden":
-                d_history[0] += d_output.float()
-            else:
-                d_history[0][:, -1:] += d_output.float()
+
+        def full_history_gradient():
+            d_history = torch.zeros_like(history)
+            if d_output is not None:
+                if ctx.output_mode == "full":
+                    d_history += d_output.float()
+                elif ctx.output_mode == "hidden":
+                    d_history[0] += d_output.float()
+                else:
+                    d_history[0][:, -1:] += d_output.float()
+            return d_history
+        # The hybrid kernels read every history component; built only for them (the Triton path below may take the
+        # h component alone).
+        d_history = None
         d_final = torch.zeros(initial.shape, device=wx.device, dtype=torch.float32)
         if d_carry is not None:
             d_final += d_carry.float()
         options = dict(ctx.backward_options)
+        backend = options.pop("backend", None)
+        if backend is None:
+            from . import hybrid_bw2d
+
+            # Qualified and timed at H = 1 (max-width.md sections 21, 26, 29) and at H > 1 for the measured widths and
+            # batch sizes (sections 37, 42); other H > 1 shapes keep the earlier paths.
+            width, heads, batch = wx.shape[-1], wx.shape[3], wx.shape[0]
+            if (width in hybrid_bw2d.DEFAULT_WIDTHS if heads == 1
+                    else batch <= hybrid_bw2d.HEADS_DEFAULT_MAX_BATCH.get(width, 0)):
+                backend = "hybrid2d"
+        if backend == "hybrid2d":
+            # R split over column blocks and K blocks (max-width.md section 20); opt-in.
+            from . import hybrid_bw2d
+
+            # Defaults by (D, B) at H = 1, each where its pre-registered timing held (max-width.md sections 38, 42):
+            # pre_fused (fused preactivation GEMM); honly (hidden output -> the kernel reads d_output itself, no
+            # zero-filled FP32 history gradient); dG stored in the input dtype with the input-dtype dR GEMM.
+            width, heads, batch = wx.shape[-1], wx.shape[3], wx.shape[0]
+
+            # H > 1: the three options as one bundle at the timed (D, H), B <= 64 (section 61).
+            bundle = heads > 1 and (width, heads) in hybrid_bw2d.HEADS_OPTIONS and batch <= 64
+
+            def default_from(table):  # H = 1 defaults by D -> smallest B (hybrid_bw2d), or the H > 1 bundle
+                return (heads == 1 and batch >= table.get(width, 1 << 30)) or bundle
+            honly = (options.get("honly", default_from(hybrid_bw2d.HONLY_MIN_BATCH)) and ctx.output_mode == "hidden"
+                     and d_output is not None and d_output.dtype == wx.dtype)
+            if "dg_dtype" not in options and "wgrad" not in options and default_from(hybrid_bw2d.DGLP_MIN_BATCH):
+                options.update(dg_dtype="input", wgrad="bmm_lp")
+            dg, d_recurrent, d_bias, d_initial = hybrid_bw2d.backward(
+                wx, recurrent, bias, initial, history, None if honly else full_history_gradient(), d_final, ctx.cell,
+                batch_rows=options.get("batch_rows"), wgrad=options.get("wgrad", "bmm"),
+                prof=options.get("prof_phases", False), tf32=options.get("tf32", False),
+                diagnostics=options.get("diagnostics"), rowown=options.get("rowown", True),
+                asyncload=options.get("asyncload", True), pre_tf32=options.get("pre_tf32", False),
+                pre_fused=options.get("pre_fused", default_from(hybrid_bw2d.PRE_FUSED_MIN_BATCH)),
+                dg_dtype=options.get("dg_dtype"), d_hidden=d_output.contiguous() if honly else None,
+                flags=options.get("flags", False), conc=options.get("conc"))
+            return (dg.to(wx.dtype), d_recurrent.to(recurrent.dtype), d_bias.to(bias.dtype),
+                    d_initial.to(initial.dtype), None, None, None, None, None)
+        if backend == "hybrid" or (backend is None and wx.shape[-1] > HYBRID_BACKWARD_ABOVE):
+            # D > 1280: R does not fit the Triton kernel's shared memory; the CUDA kernel keeps part of it in registers.
+            from . import hybrid_bw
+
+            dg, d_recurrent, d_bias, d_initial = hybrid_bw.backward(
+                wx, recurrent, bias, initial, history, full_history_gradient(), d_final, ctx.cell,
+                reg_rows_per_warp=options.get("reg_rows_per_warp"), batch_rows=options.get("batch_rows"),
+                wgrad=options.get("wgrad", "bmm"), prof=options.get("prof_phases", False),
+                cluster=options.get("cluster", 0),
+                tf32=options.get("tf32", False),
+                diagnostics=options.get("diagnostics"))
+            return (dg.to(wx.dtype), d_recurrent.to(recurrent.dtype), d_bias.to(bias.dtype),
+                    d_initial.to(initial.dtype), None, None, None, None, None)
         if options.get("fast") and "history_grad_components" not in options:
             full = ctx.output_mode == "full" and d_output is not None
             options["history_grad_components"] = (True, full, full)
         if options.get("slice_width") is None:
             options["slice_width"] = backward_slice_width(wx.shape[-1])
+        legacy_heads = options.pop("legacy_heads", False)
+        if wx.shape[3] > 1 and not legacy_heads and wx.shape[-1] <= FUSED_HEADS_MAX_WIDTH:
+            # H > 1: recompute the gate preactivations inside the kernel (no [B, T, 4, H, D] FP32 preactivation
+            # tensor and its permuted copies; heads profiling, docs/flashrnn2/heads.md section 8). Above D = 256 the
+            # fused variant does not fit shared memory (heads v4: D = 768 needs 320-416 KB), so the default stays.
+            options.setdefault("fast", True)
+            options.setdefault("fuse_pre", 2 if options["fast"] else 0)
+            # dG stored in the input dtype and the dR GEMMs on input-dtype operands (FP32 accumulation): heads.md 8.6
+            options.setdefault("wgrad", "bmm_lp")
+            if options["wgrad"] == "bmm_lp":
+                options.setdefault("dg_dtype", "input")
+        comps = options.get("history_grad_components")
+        full_grad = options.pop("full_history_grad", False)  # A/B: the full, zero-filled history gradient
+        if (not full_grad and options.get("fast") and comps is not None and not any(tuple(comps)[1:])
+                and ctx.output_mode == "hidden" and d_output is not None):
+            d_history = d_output.float().unsqueeze(0).contiguous()  # h component only (heads.md section 8.7)
+        else:
+            d_history = full_history_gradient()
         dg, d_recurrent, d_bias, d_initial = triton_rtiled_bw.backward(
             wx, recurrent, bias, initial, history, d_history, d_final, ctx.cell, **options)
         return (dg.to(wx.dtype), d_recurrent.to(recurrent.dtype), d_bias.to(bias.dtype), d_initial.to(initial.dtype),

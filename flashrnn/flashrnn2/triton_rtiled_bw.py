@@ -609,9 +609,35 @@ def preactivations(wx, recurrent, bias, initial, history, tf32=False):
     return pre, h_prev
 
 
-def weight_gradients(dg, h_prev, tf32=False):
-    """dR[g,n,o,p] = sum_{b,t} dG[b,t,g,n,o] round(h_{t-1})[b,t,n,p] and dbias, FP32, no atomics."""
+def weight_gradients(dg, h_prev, tf32=False, method="bmm"):
+    """dR[g,n,o,p] = sum_{b,t} dG[b,t,g,n,o] round(h_{t-1})[b,t,n,p] and dbias, FP32, no atomics.
+
+    H > 1: method "bmm" (default) runs one strided batched GEMM per gate on views of dG and h (batch = head, no
+    permuted copy of dG); "einsum" is the earlier path (permutes dG into a contiguous copy first).
+    Method "bmm_lp" (opt-in, heads.md section 8.3): the GEMM operands are dG rounded to the input dtype and h as
+    stored (input dtype, no FP32 copy of h), FP32 accumulation, result rounded to the input dtype (the dtype dR is
+    returned in) -- FlashRNN1's arrangement; dbias stays an FP32 sum of the FP32 dG."""
     batch, steps, gates, heads, width = dg.shape
+    if method == "bmm_lp":
+        m = torch.backends.cuda.matmul  # FP32 accumulation: no reduced-precision split-K reductions
+        saved = (m.allow_fp16_reduced_precision_reduction, m.allow_bf16_reduced_precision_reduction)
+        m.allow_fp16_reduced_precision_reduction = m.allow_bf16_reduced_precision_reduction = False
+        try:
+            lp, bt = h_prev.dtype, batch * steps
+            dgl = dg if dg.dtype == lp else dg.to(lp)
+            if heads == 1:
+                d_recurrent = (dgl.view(bt, gates * width).t() @ h_prev.reshape(bt, width)).float().view(
+                    gates, 1, width, width)
+            else:
+                hp = h_prev.view(bt, heads, width).transpose(0, 1)  # [H, BT, D], input dtype
+                dgv = dgl.view(bt, gates, heads, width)
+                out = torch.empty((gates, heads, width, width), device=dg.device, dtype=lp)
+                for g in range(gates):
+                    torch.bmm(dgv[:, g].transpose(0, 1).transpose(1, 2), hp, out=out[g])
+                d_recurrent = out.float()
+        finally:
+            m.allow_fp16_reduced_precision_reduction, m.allow_bf16_reduced_precision_reduction = saved
+        return d_recurrent, torch.sum(dg, dim=(0, 1), dtype=torch.float32).view(gates, heads, width)
     previous = torch.backends.cuda.matmul.allow_tf32
     torch.backends.cuda.matmul.allow_tf32 = tf32  # TF32 rounds the FP32 dG operand
     try:
@@ -619,8 +645,16 @@ def weight_gradients(dg, h_prev, tf32=False):
             flat = dg.view(batch * steps, gates * width)
             d_recurrent = (flat.t() @ h_prev.reshape(batch * steps, width).float()).view(gates, 1, width, width)
             d_bias = flat.sum(dim=0).view(gates, 1, width)
-        else:
+        elif method == "einsum":
             d_recurrent = torch.einsum("btgno,btnp->gnop", dg, h_prev.float())
+            d_bias = dg.sum(dim=(0, 1))
+        else:
+            bt = batch * steps
+            hp = h_prev.float().view(bt, heads, width).transpose(0, 1)  # [H, BT, D]
+            dgv = dg.view(bt, gates, heads, width)
+            d_recurrent = torch.empty((gates, heads, width, width), device=dg.device, dtype=torch.float32)
+            for g in range(gates):
+                torch.bmm(dgv[:, g].transpose(0, 1).transpose(1, 2), hp, out=d_recurrent[g])  # [H,D,BT] x [H,BT,D]
             d_bias = dg.sum(dim=(0, 1))
     finally:
         torch.backends.cuda.matmul.allow_tf32 = previous
@@ -646,6 +680,8 @@ def backward(
     _verify: dict[str, object] | None = None,
     fast: bool = False,
     fuse_pre: bool | int = False,
+    dg_dtype: str | None = None,
+    wgrad: str = "bmm",
     split_gates: bool = False,
     profile_steps: bool = False,
     history_grad_components: tuple[bool, ...] | None = None,
@@ -685,7 +721,11 @@ def backward(
         raise ValueError("expected public initial state layout")
     if history.shape != (states, batch, steps, heads, width) or history.dtype != torch.float32:
         raise ValueError("expected the forward's FP32 state history")
-    if d_history.shape != history.shape or d_history.dtype != torch.float32:
+    # With ``fast`` and history_grad_components saying that only h carries gradient, the kernel never reads the other
+    # components, so d_history may be the h component alone ([1, B, T, H, D]; heads.md section 8.7).
+    h_only = fast and history_grad_components is not None and not any(tuple(history_grad_components)[1:])
+    if d_history.dtype != torch.float32 or d_history.shape[1:] != history.shape[1:] or not (
+            d_history.shape[0] == states or (h_only and d_history.shape[0] == 1)):
         raise ValueError("expected an FP32 history gradient")
     if d_final.shape != initial.shape or d_final.dtype != torch.float32:
         raise ValueError("expected an FP32 final-carry gradient")
@@ -702,6 +742,8 @@ def backward(
         raise ValueError("fuse_pre must be 0/False, 1/True or 2")
     if fuse and not fast:
         raise ValueError("fuse_pre needs the fast kernel variant")
+    if dg_dtype not in (None, "input") or (dg_dtype == "input" and wgrad != "bmm_lp"):
+        raise ValueError('dg_dtype must be None or "input", and "input" needs wgrad="bmm_lp"')
     sms = torch.cuda.get_device_properties(device).multi_processor_count
     splits, groups, slots = plan(batch, heads, width, slice_width, sms=sms, max_ctas=max_ctas)
     if fuse:  # preactivations are recomputed in the kernel; bias and round(h_{t-1}) ride behind the exchange buffer
@@ -713,7 +755,11 @@ def backward(
     if events:
         events[1].record()
     k1, k2 = k_parts(width, pad_k)
-    dg = torch.empty((batch, steps, 4, heads, width), device=device, dtype=torch.float32)
+    # dg_dtype="input" (opt-in, heads.md section 8.5): the kernel stores dG in the input dtype. Every read of dG inside
+    # the kernel rounds it to the input dtype first (_dh_from_dg, _verify_dg), so the recurrence is unchanged; the
+    # returned dG is the input-dtype tensor the caller would otherwise cast to, and bmm_lp uses it directly.
+    dg = torch.empty((batch, steps, 4, heads, width), device=device,
+                     dtype=wx.dtype if dg_dtype == "input" else torch.float32)
     d_init = torch.empty((states, batch, 1, heads, width), device=device, dtype=torch.float32)
     carry = torch.zeros((2, batch, heads, width), device=device, dtype=torch.float32)
     launches = 1 if sync == "grid" else steps + 1
@@ -753,7 +799,7 @@ def backward(
         _verify.update(barrier_error=counts[0], after_barrier=counts[1], after_mma=counts[2])
     if events:
         events[2].record()
-    d_recurrent, d_bias = weight_gradients(dg, h_prev, tf32)
+    d_recurrent, d_bias = weight_gradients(dg, h_prev, tf32, wgrad)
     if events:
         events[3].record()
         torch.cuda.synchronize()

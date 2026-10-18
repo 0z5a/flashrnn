@@ -98,7 +98,7 @@ class TileLangPolicyContract(unittest.TestCase):
 
 
 class PackagedTableContract(unittest.TestCase):
-    """The M6 H100 table (run M6 v2) as shipped: every entry valid, bound to its identity, no silent switch."""
+    """The M6 H100 table as shipped: every entry valid, bound to its identity, no silent switch."""
 
     path = module.TABLES / "h100-rtiled-m6-20261014.json"
 
