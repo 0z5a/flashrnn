@@ -1254,3 +1254,31 @@ at D ∈ {1536, 1792, 2048} (`DGLP_MIN_BATCH`). Every row there held, and B1, R1
 
 **Untested combination.** These defaults were measured one at a time. The integration batch of section 43 checks
 them together.
+
+## 43. Integration check of the 2026-10-18 defaults, and reruns (pre-registration, 2026-10-18, before any run of it)
+
+Batch "final". It uses the paired harness with the warm-up block of section 42.3. Arms without options are the
+library's own selection, forward included.
+
+**Runs:**
+* **D2, qualification of the combined defaults.** No options at all, within the FP64 budgets:
+  * H = 1: D ∈ {1024, 1280, 1536, 1792, 2048} × LSTM/sLSTM × FP16/BF16 × B ∈ {16, 64} (40 cases);
+  * H = 2: D ∈ {1024, 1536, 2048} × (LSTM FP16, sLSTM BF16) × B ∈ {16, 64} (12 cases).
+* **W6-final and W4-final.** H = 1, T = 256, D ∈ {1024, 1280, 1536, 1792, 2048} × B ∈ {16, 64} × (LSTM FP16, sLSTM
+  BF16), 20 shapes.
+  * The new arm is the library default.
+  * The old arm is the 2-D backward with today's later options all off: `pre_fused=False, honly=False, wgrad="bmm"`.
+  * W6-final compares old against new; W4-final compares `cuda` against new.
+* **Reruns of the rows lost in sections 40.1 and 42**, with the warm-up block. Both cells (LSTM FP16, sLSTM BF16) at
+  each (D, B), with the original arms and every other later option pinned off:
+  * W6-dglp3: D = 1024, B = 64;
+  * W6-honly3: D = 1792, B = 64;
+  * W6-pref3: D = 1536, B = 16; D = 1280, B = 16; D = 1280, B = 64.
+
+**Prediction.** D2 passes 52/52. W6-final holds in every row where at least one later default applies, at 1.15-1.35x
+at B = 64, D ≥ 1536. W4-final holds in every row. The reruns hold.
+
+**Rules.**
+* A D2 failure removes the defaults involved at that shape.
+* A rerun applies the rule of its original section to its (D, B): both cells must hold.
+* W6-final and W4-final are reported; they change nothing.
