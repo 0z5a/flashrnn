@@ -1282,3 +1282,37 @@ at B = 64, D ≥ 1536. W4-final holds in every row. The reruns hold.
 * A D2 failure removes the defaults involved at that shape.
 * A rerun applies the rule of its original section to its (D, B): both cells must hold.
 * W6-final and W4-final are reported; they change nothing.
+
+## 44. Results of the "flags" batch (section 41, 2026-10-18): correct, but slower
+
+Evidence: `max-width-evidence/flags-analysis.json` and `flags-f1-f2.json`. Every archived file was checked against its
+SHA-256 manifest (286 files).
+
+**Correctness passes:**
+* **F1, 30/30.** dG and d_initial are bitwise equal with and without flags, across D = 1024-2048 and B ∈ {16, 64, 100}.
+  The B = 100 cases cross the slot boundary.
+* **F2, 5/5.** The correct kernel has 0 violations. Without the flag wait, B1 is flagged in 21/21 runs in every task;
+  no run changed silently.
+* **W1-flags, 12/12.**
+
+**W6-flags holds 0/16.** The flags build is slower in every row:
+
+| B | grid barrier / flags |
+| --- | --- |
+| 16 | 0.91-0.98 |
+| 64 | 0.95-0.99 |
+
+The largest loss is 9%, for sLSTM at D = 1024, B = 16. W4-flags still holds 15/16, because the 2-D path's lead over
+`cuda` absorbs the loss.
+
+**Reading (not measured).** The design saves the wait on 112-128 CTAs, but it adds per-step costs to every CTA:
+* a `__syncthreads`;
+* a `__threadfence`;
+* a release store after the partial;
+* acquire spins by Q threads, then a second `__syncthreads`.
+
+The next B2 is still a full grid barrier, so a step still ends with every CTA in sync. Whatever B1's wait cost, these
+added costs exceed it. A cheaper variant would drop the `__threadfence`, which the release store may already cover, and
+time the B1 phase with the in-kernel phase counters before the step. Neither was done here.
+
+**Default: none.** `flags` stays opt-in, as a verified negative result.
