@@ -911,3 +911,24 @@ training default uses it at H = 1 only (section 29).
 LSTM FP16 / sLSTM BF16, library defaults, plus D = 1536 with `pre_tf32`. Purpose: attribute the preactivation and
 weight-gradient phases (about 30% of the step, section 23) to operators, and find out why TF32 for the preactivation
 GEMM changed nothing (section 25). No checks.
+
+## 34. Results of the "tune4" batch (2026-10-18)
+
+Evidence: `max-width-evidence/tune4-analysis.json`, archive verified by SHA-256.
+
+**W1-mid: 16/16. R-mid: 2/2** at D = 768 (0 violations; no B1 / no B2 flagged 21/21).
+
+**W6-mid** (current default / 2-D) holds 1/8: 0.91-1.02x. At D = 512 / 768 the tuned Triton backward (gate-batched,
+table-selected) is as fast as the 2-D kernel or faster. Under the section 30 rule the default does not change; the 2-D
+grids stay opt-in. **W4-mid** (`cuda` / 2-D) holds 8/8, at 1.14-2.26x.
+
+| cell | dtype | D | B | default / 2-D | `cuda` / 2-D |
+| --- | --- | --- | --- | --- | --- |
+| lstm | floa | 512 | 16 | 0.91 [0.81, 0.95] | 1.90 |
+| lstm | floa | 512 | 64 | 1.00 [0.97, 1.01] | 1.49 |
+| lstm | floa | 768 | 16 | 0.99 | 2.24 |
+| lstm | floa | 768 | 64 | 0.98 | 1.14 |
+| slstm | bflo | 512 | 16 | 0.94 | 1.83 |
+| slstm | bflo | 512 | 64 | 0.95 [0.84, 0.99] | 1.52 |
+| slstm | bflo | 768 | 16 | 1.02 [1.02, 1.03] | 2.26 |
+| slstm | bflo | 768 | 64 | 0.98 | 1.19 |
