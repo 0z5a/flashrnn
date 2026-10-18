@@ -133,7 +133,7 @@ class _Recurrence(torch.autograd.Function):
             from . import hybrid_bw2d
 
             # Qualified and timed at H = 1 (max-width.md sections 21, 26, 29) and at H > 1 for the measured widths and
-            # batch sizes (section 32); other H > 1 shapes keep the earlier paths.
+            # batch sizes (sections 37, 42); other H > 1 shapes keep the earlier paths.
             width, heads, batch = wx.shape[-1], wx.shape[3], wx.shape[0]
             if (width in hybrid_bw2d.DEFAULT_WIDTHS if heads == 1
                     else batch <= hybrid_bw2d.HEADS_DEFAULT_MAX_BATCH.get(width, 0)):
@@ -142,18 +142,24 @@ class _Recurrence(torch.autograd.Function):
             # R split over column blocks and K blocks (max-width.md section 20); opt-in.
             from . import hybrid_bw2d
 
-            # honly (opt-in, max-width.md section 40): hidden output -> the kernel reads d_output itself, no zero-filled
-            # FP32 history gradient.
-            honly = (options.get("honly", False) and ctx.output_mode == "hidden" and d_output is not None
-                     and d_output.dtype == wx.dtype)
+            # Defaults by (D, B) at H = 1, each where its pre-registered timing held (max-width.md sections 38, 42):
+            # pre_fused (fused preactivation GEMM); honly (hidden output -> the kernel reads d_output itself, no
+            # zero-filled FP32 history gradient); dG stored in the input dtype with the input-dtype dR GEMM.
+            width, heads, batch = wx.shape[-1], wx.shape[3], wx.shape[0]
+
+            def default_from(table):  # H = 1 defaults by D -> smallest B (hybrid_bw2d)
+                return heads == 1 and batch >= table.get(width, 1 << 30)
+            honly = (options.get("honly", default_from(hybrid_bw2d.HONLY_MIN_BATCH)) and ctx.output_mode == "hidden"
+                     and d_output is not None and d_output.dtype == wx.dtype)
+            if "dg_dtype" not in options and "wgrad" not in options and default_from(hybrid_bw2d.DGLP_MIN_BATCH):
+                options.update(dg_dtype="input", wgrad="bmm_lp")
             dg, d_recurrent, d_bias, d_initial = hybrid_bw2d.backward(
                 wx, recurrent, bias, initial, history, None if honly else full_history_gradient(), d_final, ctx.cell,
                 batch_rows=options.get("batch_rows"), wgrad=options.get("wgrad", "bmm"),
                 prof=options.get("prof_phases", False), tf32=options.get("tf32", False),
                 diagnostics=options.get("diagnostics"), rowown=options.get("rowown", True),
                 asyncload=options.get("asyncload", True), pre_tf32=options.get("pre_tf32", False),
-                pre_fused=options.get("pre_fused", wx.shape[3] == 1 and wx.shape[-1] in hybrid_bw2d.PRE_FUSED_WIDTHS
-                                      and wx.shape[0] >= hybrid_bw2d.PRE_FUSED_MIN_BATCH),
+                pre_fused=options.get("pre_fused", default_from(hybrid_bw2d.PRE_FUSED_MIN_BATCH)),
                 dg_dtype=options.get("dg_dtype"), d_hidden=d_output.contiguous() if honly else None,
                 flags=options.get("flags", False))
             return (dg.to(wx.dtype), d_recurrent.to(recurrent.dtype), d_bias.to(bias.dtype),

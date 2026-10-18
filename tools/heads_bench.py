@@ -18,7 +18,8 @@ Modes
   sweep   --case JSON --out FILE                 median CUDA-event ms per call of every arm (2 warm-up calls)
   paired  --case JSON --out FILE --start N        ABBA/BAAB blocks of "one" against every other arm; each block entry
           [--blocks 20] [--calls 3]              is the mean of --calls calls; the outputs of every timed call of an
-                                                 arm must equal that arm's first call (bitwise)
+          [--warmup-blocks 1]                    arm must equal that arm's first call (bitwise); untimed warm-up
+                                                 blocks (every arm, --calls calls) precede the timed ones
 """
 import argparse
 import json
@@ -272,6 +273,12 @@ def mode_paired(args):
             if "one" not in fns:
                 raise RuntimeError("the one-launch arm failed")
             stable = {n: True for n in fns}
+            # Untimed warm-up blocks (max-width.md section 42): 19 of the 20 outlier blocks (> 1.5x the start's
+            # median) seen in five batches were block 0, the first timed block after a single warm-up call per arm.
+            rec["warmup_blocks"] = args.warmup_blocks
+            for _ in range(args.warmup_blocks):
+                for n in fns:
+                    event_ms(fns[n], args.calls)
             for block in range(args.blocks):
                 row = {}
                 for other in [n for n in fns if n != "one"]:
@@ -299,6 +306,7 @@ def main():
     p.add_argument("--out", required=True)
     p.add_argument("--start", type=int, default=0)
     p.add_argument("--blocks", type=int, default=20)
+    p.add_argument("--warmup-blocks", type=int, default=1)
     p.add_argument("--calls", type=int, default=3)
     a = p.parse_args()
     return mode_sweep(a) if a.mode == "sweep" else mode_paired(a)

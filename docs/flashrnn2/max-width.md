@@ -1189,3 +1189,68 @@ registers at D = 1536, 233 at D = 2048).
 D = 1024 and at B = 16, where the barriers are a larger share.
 **Rule.** `flags` becomes the default at H = 1 on the 2-D path in the (D, B) rows where W6-flags holds, provided F1, F2
 and W1-flags pass.
+
+## 42. Results of the "ext" (section 39) and "honly" (section 40.2) batches (2026-10-18)
+
+Evidence: `max-width-evidence/ext-analysis.json`, `honly-analysis.json` and `honly-bitwise-race.json`. Every archived
+file was checked against its SHA-256 manifest (340 and 260 files).
+
+### 42.1 ext
+
+**W1-pref2 8/8, H1-h2d2 4/4.**
+
+**W6-h2d2 holds 10/10.** Earlier H > 1 path / 2-D:
+
+| shape | ratio |
+| --- | --- |
+| H = 4, B = 64, D = 1024 | 1.50 |
+| H = 4, B = 64, D = 1536 | 1.71-1.73 |
+| H = 4, B = 64, D = 2048 | 1.48-1.52 |
+| D = 1536, B = 16, H ∈ {4, 16} | 1.49-1.52 |
+
+**W4-h2d2 holds 5/10.** At H = 4, B = 64, FlashRNN1 `cuda` is faster than the 2-D path at D = 1024 (0.78-0.84x) and at
+D = 2048 (0.95-0.98x). D = 1536 is at parity (0.99-1.03x). At B = 16 the 2-D path is 1.88-2.27x faster than `cuda`.
+
+**W6-pref2 holds 9/12.** At B = 16, `pre_fused` gains 6-10%:
+* D ∈ {1024, 1792, 2048}: both cells hold (1.08-1.10x);
+* D = 1536: LSTM 1.080, sLSTM not held (0.961, interval 0.727-1.080);
+* D = 1280: B = 16 LSTM 1.061, sLSTM not held; B = 64 LSTM 1.127, sLSTM not held (1.079, 0.973-1.122).
+
+**W4-pref2 holds 11/12.**
+
+### 42.2 honly
+
+**dG_LP completion.** B1 at D ≥ 1536: 12/12 bitwise (stored dG = rounded FP32 dG; d_initial and dR equal). R1 at
+D = 2048: 2/2. The D = 1024 rerun of W6-dglp holds 0/2 again: 1.042 (0.939-1.105) and 1.064 (0.972-1.099).
+
+**B2 16/16, bitwise.** dG, d_initial, dR and dbias are equal with and without honly. **R2: 4/4.** **W1-honly: 24/24.**
+
+**W6-honly holds 7/8**, 1.03-1.07x. D = 1792 sLSTM does not hold (1.017, 0.931-1.051). **W4-honly holds 8/8**, 1.11-1.45x.
+
+### 42.3 The rows that did not hold, and a harness defect
+
+Every W6 row that missed in sections 40.1 and 42 has per-start median ratios of 1.04-1.12. Each was lost to a single
+slow block.
+
+The batches ext, dglp, pref and heads2d have 20 blocks slower than 1.5x their start's median. Of these, 19 are block
+0, the first timed block. Before that block, `heads_bench.py paired` had warmed up each arm with a single call.
+
+This is a harness defect. From the next batch on, `--warmup-blocks 1` runs one untimed block of every arm before the
+timed blocks. The rules above are applied as pre-registered, with no post hoc trimming.
+
+### 42.4 Defaults (by the rules of sections 36, 39 and 40.2)
+
+**H > 1.** The 2-D backward is the default up to B = 64 at D ∈ {1024, 1536, 2048}
+(`hybrid_bw2d.HEADS_DEFAULT_MAX_BATCH`). At H = 4, B = 64 it beats the earlier path by 1.5-1.7x, but FlashRNN1
+`cuda` stays faster at D = 1024 and D = 2048.
+
+**`pre_fused`.** Applies at every B for D ∈ {1024, 1792, 2048}, and for B ≥ 64 at D = 1536 (`PRE_FUSED_MIN_BATCH`).
+D = 1280 keeps the TF32 preactivation.
+
+**dG_LP.** The input-dtype dG store with input-dtype dR (`dg_dtype="input", wgrad="bmm_lp"`) is the default for B ≥ 64
+at D ∈ {1536, 1792, 2048} (`DGLP_MIN_BATCH`). Every row there held, and B1, R1 and W1 pass. D = 1024 does not get it.
+
+**honly.** The default for hidden output for B ≥ 64 at D ∈ {1024, 1536, 2048} (`HONLY_MIN_BATCH`).
+
+**Untested combination.** These defaults were measured one at a time. The integration batch of section 43 checks
+them together.

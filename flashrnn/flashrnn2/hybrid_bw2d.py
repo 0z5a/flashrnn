@@ -17,12 +17,20 @@ SOURCE = Path(__file__).with_name("hybrid_bw2d.cu")
 CONFIGS = {512: (4, 16, 0), 768: (6, 16, 0), 1024: (8, 16, 0), 1280: (5, 16, 0), 1536: (8, 16, 0), 1792: (7, 16, 4),
            2048: (8, 16, 8)}
 DEFAULT_WIDTHS = (1024, 1280, 1536, 1792, 2048)  # training default at H = 1, any B (qualified and timed)
-# training default at H > 1: D -> largest B timed (max-width.md section 32: H in {4, 16}, B = 16; qualified at H in
-# {2, 3}). Other widths and larger batches at H > 1 keep the earlier paths until measured.
-HEADS_DEFAULT_MAX_BATCH = {1024: 16, 2048: 16}
-# pre_fused default (max-width.md section 38): H = 1 at the timed widths and batch sizes (B = 64; qualified at B = 16
-# and 64). D = 1280 and B < 64 keep the TF32 preactivation until measured.
-PRE_FUSED_WIDTHS, PRE_FUSED_MIN_BATCH = (1024, 1536, 1792, 2048), 64
+# training default at H > 1: D -> largest B timed with every row at B' <= B holding (max-width.md sections 37 and 42:
+# H in {4, 16} at B = 16, H = 4 at B = 64; qualified at H in {2, 3}, B = 16 and H = 2, B = 64). Other widths and
+# larger batches at H > 1 keep the earlier paths until measured.
+HEADS_DEFAULT_MAX_BATCH = {1024: 64, 1536: 64, 2048: 64}
+# pre_fused default at H = 1 (max-width.md sections 38 and 42): D -> smallest B from which it applies. Every B where
+# both B = 16 and B = 64 held; B >= 64 at D = 1536 (its sLSTM B = 16 row did not hold). D = 1280 keeps the TF32
+# preactivation (no row held for both cells).
+PRE_FUSED_MIN_BATCH = {1024: 1, 1536: 64, 1792: 1, 2048: 1}
+# dG stored in the input dtype with input-dtype dR (dg_dtype="input", wgrad="bmm_lp"; max-width.md section 42): D -> smallest
+# B (timed at B = 64; bitwise and race checks at D >= 1536). D = 1024 did not hold.
+DGLP_MIN_BATCH = {1536: 64, 1792: 64, 2048: 64}
+# h-only history gradient read by the kernel (honly; section 42): D -> smallest B (timed at B = 64). D = 1792 did
+# not hold for sLSTM.
+HONLY_MIN_BATCH = {1024: 64, 1536: 64, 2048: 64}
 VERIFY_BITS = dict(check=1, delay=2, no_b1=4, no_b2=8, prof=16, mg_no_wait=32)
 _LIBS = {}
 
