@@ -381,3 +381,26 @@ Both stayed within the FP64 budgets in all 32 qualification cases. Above D = 256
 
 **Prediction.** G1 passes in full. The step gains about 0.5-1.5 ms at D = 64, H = 256 (5-10%), and the LSTM D = 64
 rows reach about 1.0x against FlashRNN1.
+
+### 8.8 Results (job "hgrad", 2026-10-18)
+
+**G1: 40/40.** Every training gradient is bitwise equal between the h-only history gradient and the old full one
+(H = 1 at D = 64-1024, H ∈ {2, 16} at D = 64 / 128, LSTM/sLSTM, FP16/BF16). The change stays.
+
+**H6-hg: not measured, a plan defect.** The "alt" arm (the old path) needs an `alt_config`; the plan gave none, so every
+alt arm failed at setup and was recorded in `arm_errors`. Its contribution to the step is therefore not established by
+a paired run.
+
+**H3-hg** (FlashRNN1 / FlashRNN2, with every default of sections 8.6-8.7) holds 13/24:
+* D = 128 at H ≥ 256: 1.19-1.49x.
+* sLSTM at D = 64 with H ≥ 256: 1.15-1.18x.
+* LSTM at D = 64, H ≥ 256:
+  * FP16 0.98 [0.93, 1.01] and 1.01 [0.98, 1.03];
+  * BF16 1.02 [0.93, 1.08] and 1.08 [1.05, 1.09].
+  * Section 8.6 had these rows at 0.94 / 0.94 (FP16) and 1.00 / 1.00 (BF16), so the remaining LSTM gap is gone or
+    within noise.
+* Every H = 16 row has a wide interval this run (for example 0.84 [0.65, 1.01]), so none holds; in section 8.6 they
+  were 0.97-1.11 with tight intervals. The H = 16 step is the shortest (about 3 ms), and this node's starts disagreed
+  more; it is reported, not explained.
+
+Evidence: `heads-evidence/hgrad-analysis.json`.
