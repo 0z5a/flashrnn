@@ -288,3 +288,12 @@ CPU check against FP64 (B = 8, T = 16, D = 64): largest dR error relative to the
 
 **Prediction.** H1-lp passes. The step gains 5-15% at H ≥ 256, and H3 rows move toward 1 but most stay below it while
 the copies remain.
+
+### 8.4 Run "heads lp" (2026-10-18): stopped by a plan defect
+
+H1-lp: 9/32. Every case is within the FP64 budgets (rel. Frobenius error about 3-4e-4 on every gradient). The H > 1
+cases fail only the per-head bitwise comparison, and in every gradient, d_wx included, which dR cannot affect. The
+plan passed `wgrad="bmm_lp"` alone, so the H-head calls took the H > 1 default kernel (fused recompute, section 8)
+and the per-head H = 1 calls took the H = 1 default. Section 8 avoided exactly this by passing the fused options to
+both. The timing was skipped because the path did not qualify. The batch is rerun with
+`fast=True, fuse_pre=2, wgrad="bmm_lp"` passed explicitly ("heads lp v2"); nothing else changes.
