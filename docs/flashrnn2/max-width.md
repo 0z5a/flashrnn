@@ -704,3 +704,28 @@ Two next steps follow from this:
    so TF32 represents them exactly and their products are exact in TF32 tensor cores, as the
    `preactivations` docstring notes. Only the summation order changes. The current FP32 path runs as a three-pass
    TF32 emulation kernel (`f32f32_tf32f32`).
+
+## 24. Overlapped dG staging and TF32 preactivations (pre-registration, 2026-10-18, before any run of it)
+
+Two changes, each switchable for the A/B:
+1. **`FRNN_ASYNC = 1`** (default), `asyncload=False` turns it off. The 2-D kernel stages its dG chunks with `cp.async`,
+   so the copy of chunk r + 1 overlaps the MMAs of chunk r. The staged values and the arithmetic are unchanged, so the
+   outputs must be bitwise equal to synchronous staging. ptxas: no spill; 156 / 231 registers at D = 1536 / 2048.
+2. **`pre_tf32=True`** (opt-in for now, training option `pre_tf32`). The 2-D backward's preactivation GEMM runs on
+   TF32 tensor cores. Both operands are input-dtype values and exact in TF32, so only the summation order of the
+   K = D products changes. Not bitwise; qualified against the FP64 budgets.
+
+**Runs (batch "tune"):**
+* **A1**: async against synchronous staging, bitwise. D ∈ {1024, 1280, 1536, 2048} × LSTM/sLSTM × FP16/BF16 ×
+  B ∈ {40, 64, 100}.
+* **A2**: race verification of the async kernel (section 12 rule), D ∈ {1536, 2048} × LSTM/sLSTM, BM = 64, B = 100.
+* **W1-tf32**: training step within the FP64 budgets with `pre_tf32=True`, D ∈ {1024, 1536, 2048}, B ∈ {64, 40},
+  LSTM/sLSTM, FP16/BF16 (24 cases).
+* **Paired timing**, training step, B = 64, T = 256, D ∈ {1024, 1536, 2048} × LSTM/sLSTM × FP16/BF16. The new 2-D
+  path is async + TF32 preactivations. **W6-tune** compares it against the section 23 kernel (synchronous staging,
+  FP32 preactivations); **W4-tune** against `cuda`.
+* **Profile, report only**: the four combinations at D ∈ {1536, 2048}, LSTM FP16, step breakdown and in-kernel
+  phases.
+
+**Prediction.** The GEMM phase shrinks by 1-3 µs per step. The preactivation drops from 2.7 to about 1 ms at
+D = 1536. W4-tune holds at every D, including 1536.

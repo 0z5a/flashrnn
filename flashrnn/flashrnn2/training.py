@@ -136,7 +136,8 @@ class _Recurrence(torch.autograd.Function):
                 wx, recurrent, bias, initial, history, d_history, d_final, ctx.cell,
                 batch_rows=options.get("batch_rows"), wgrad=options.get("wgrad", "bmm"),
                 prof=options.get("prof_phases", False), tf32=options.get("tf32", False),
-                diagnostics=options.get("diagnostics"), rowown=options.get("rowown", True))
+                diagnostics=options.get("diagnostics"), rowown=options.get("rowown", True),
+                asyncload=options.get("asyncload", True), pre_tf32=options.get("pre_tf32", False))
             return (dg.to(wx.dtype), d_recurrent.to(recurrent.dtype), d_bias.to(bias.dtype),
                     d_initial.to(initial.dtype), None, None, None, None, None)
         if backend == "hybrid" or (backend is None and wx.shape[-1] > HYBRID_BACKWARD_ABOVE):

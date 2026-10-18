@@ -70,6 +70,13 @@ constexpr int NC = D / PC, NCW = NC / WARPS, NTW = NCW / 8, KQ = K / Q, KS = KQ 
 // column block i (each row's loads and stores contiguous over NC columns); 0 gives it all BM rows of the NC / Q columns
 // of sub-block j (the first version: 12-16 contiguous columns per row). Same elements per CTA, same arithmetic.
 constexpr bool ROWOWN = FRNN_ROWOWN != 0;
+#ifndef FRNN_ASYNC
+#define FRNN_ASYNC 1
+#endif
+// FRNN_ASYNC = 1 (default): the dG chunks are staged with cp.async (L2 -> shared memory without a register round
+// trip), so the copy of chunk r + 1 overlaps the MMAs of chunk r; 0: load to registers, then store (the warp waits
+// for the data before its MMAs). Same values staged, same arithmetic.
+constexpr bool ASYNC = FRNN_ASYNC != 0;
 constexpr int NCQ = NC / Q, RPQ = BM / Q, PE = (BM * NCQ + THREADS - 1) / THREADS;
 static_assert(!ROWOWN || BM % Q == 0, "row ownership needs BM a multiple of Q");
 constexpr int KC = 64, LDS = KC + 8, ROUNDS = KQ / KC, J = KC / 16, CSM = KS - CR;
@@ -213,9 +220,16 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw2d_kernel(Args a) {
       auto load = [&](int r, int buf) {
         for (int i = tid; i < BM * KC / 8; i += THREADS) {
           int row = i / (KC / 8), col8 = i % (KC / 8);
-          uint4 v = __ldcg(reinterpret_cast<const uint4*>(xb + (size_t)row * K + k0 + r * KC) + col8);
-          *reinterpret_cast<uint4*>(stage + ((size_t)buf * BM + row) * LDS + col8 * 8) = v;
+          const uint4* src = reinterpret_cast<const uint4*>(xb + (size_t)row * K + k0 + r * KC) + col8;
+          elem_t* dst = stage + ((size_t)buf * BM + row) * LDS + col8 * 8;
+          if (ASYNC) {
+            const unsigned sa = (unsigned)__cvta_generic_to_shared(dst);
+            asm volatile("cp.async.cg.shared.global [%0], [%1], 16;" ::"r"(sa), "l"(src) : "memory");
+          } else {
+            *reinterpret_cast<uint4*>(dst) = __ldcg(src);
+          }
         }
+        if (ASYNC) asm volatile("cp.async.commit_group;" ::: "memory");
       };
       const uint2* sb = sr + (size_t)warp * CSM * NTW * 32 + lane;
       auto round = [&](int r, auto in_regs) {
@@ -254,10 +268,12 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw2d_kernel(Args a) {
             for (int nt = 0; nt < NTW; ++nt) mma(acc[mt][nt], a0, a1, a2, a3, b[nt][0], b[nt][1]);
           }
         }
+        if (ASYNC) asm volatile("cp.async.wait_group 0;" ::: "memory");  // this thread's copies of round r + 1
         __syncthreads();  // round r + 1 staged, every warp done with round r's buffer
       };
       constexpr int RREG = (CR + J - 1) / J;  // rounds with at least one register k-step
       load(0, 0);
+      if (ASYNC) asm volatile("cp.async.wait_group 0;" ::: "memory");
       __syncthreads();
 #pragma unroll
       for (int r = 0; r < RREG; ++r) round(r, std::true_type{});

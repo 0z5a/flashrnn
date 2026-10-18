@@ -27,7 +27,7 @@ def batch_tile(batch):
     return 16 if batch <= 16 else 32 if batch <= 32 else 64
 
 
-def build(width, bm, slstm, bf16, verify=0, cache_dir=None, mg=False, rowown=True):
+def build(width, bm, slstm, bf16, verify=0, cache_dir=None, mg=False, rowown=True, asyncload=True):
     pc, q, cr = CONFIGS[width]
     cuda_home = os.environ.get("FRNN_HYBRID_CUDA_HOME", "/apps/ACC/CUDA/12.8")
     flags = [f"-DFRNN_D={width}", f"-DFRNN_PC={pc}", f"-DFRNN_Q={q}", f"-DFRNN_CR={cr}", f"-DFRNN_BM={int(bm)}",
@@ -36,6 +36,8 @@ def build(width, bm, slstm, bf16, verify=0, cache_dir=None, mg=False, rowown=Tru
         flags.append("-DFRNN_MG=1")
     if not rowown:  # the first version's column-sub-block ownership (A/B only)
         flags.append("-DFRNN_ROWOWN=0")
+    if not asyncload:  # synchronous dG staging (A/B only)
+        flags.append("-DFRNN_ASYNC=0")
     digest = hashlib.sha256(SOURCE.read_bytes() + " ".join(flags).encode()).hexdigest()[:16]
     cache = Path(cache_dir or os.environ.get("FRNN_HYBRID_CACHE",
                                              os.environ.get("TMPDIR", str(Path.home() / ".cache")) + "/frnn_hybrid_bw"))
@@ -50,10 +52,10 @@ def build(width, bm, slstm, bf16, verify=0, cache_dir=None, mg=False, rowown=Tru
     return lib
 
 
-def _lib(width, bm, slstm, bf16, verify=0, mg=False, rowown=True):
-    key = (width, bm, slstm, bf16, verify, mg, rowown)
+def _lib(width, bm, slstm, bf16, verify=0, mg=False, rowown=True, asyncload=True):
+    key = (width, bm, slstm, bf16, verify, mg, rowown, asyncload)
     if key not in _LIBS:
-        lib = ctypes.CDLL(str(build(width, bm, slstm, bf16, verify, mg=mg, rowown=rowown)))
+        lib = ctypes.CDLL(str(build(width, bm, slstm, bf16, verify, mg=mg, rowown=rowown, asyncload=asyncload)))
         if mg:
             lib.frnn_hybrid_bw2d_mg.restype = ctypes.c_int
             lib.frnn_hybrid_bw2d_mg.argtypes = ([ctypes.c_void_p] * 12 + [ctypes.c_int] * 7 + [ctypes.c_void_p] * 3
@@ -79,7 +81,7 @@ def verify_bits(verify):
 
 
 def backward(wx, recurrent, bias, initial, history, d_history, d_final, cell, *, batch_rows=None, tf32=False,
-             wgrad="bmm", prof=False, diagnostics=None, rowown=True, _verify=None):
+             wgrad="bmm", prof=False, diagnostics=None, rowown=True, asyncload=True, pre_tf32=False, _verify=None):
     """Returns (dg FP32 [B,T,4,H,D], dR, dbias, d_initial FP32), as hybrid_bw.backward."""
     from .triton_rtiled_bw import preactivations, weight_gradients
 
@@ -102,7 +104,9 @@ def backward(wx, recurrent, bias, initial, history, d_history, d_final, cell, *,
     events = [torch.cuda.Event(enable_timing=True) for _ in range(4)] if (diagnostics or {}).get("time") else None
     if events:
         events[0].record()
-    pre, h_prev = preactivations(wx, recurrent, bias, initial, history, tf32)
+    # pre_tf32: TF32 tensor cores for the preactivation GEMM. Both operands are input-dtype values (exact in TF32),
+    # so the products are exact and only the summation order differs from the FP32 GEMM (max-width.md section 24).
+    pre, h_prev = preactivations(wx, recurrent, bias, initial, history, tf32 or pre_tf32)
     if events:
         events[1].record()
     dg = torch.empty((batch, steps, 4, heads, width), device=device, dtype=torch.float32)
@@ -113,7 +117,7 @@ def backward(wx, recurrent, bias, initial, history, d_history, d_final, cell, *,
     bits, seed = verify_bits(_verify)
     if prof:
         bits |= VERIFY_BITS["prof"]
-    lib = _lib(width, bm, cell == "slstm", wx.dtype == torch.bfloat16, bits, rowown=rowown)
+    lib = _lib(width, bm, cell == "slstm", wx.dtype == torch.bfloat16, bits, rowown=rowown, asyncload=asyncload)
     err = torch.zeros(12, device=device, dtype=torch.int32)
     err[3] = seed
     tensors = [pre.contiguous(), history.contiguous(), initial.float().contiguous(), d_history.contiguous(),

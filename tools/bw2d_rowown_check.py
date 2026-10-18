@@ -1,6 +1,8 @@
 """Bitwise check of the 2-D backward's row ownership (FRNN_ROWOWN = 1) against the first version's column-sub-block
 ownership (0): same elements and arithmetic per CTA, so dG and d_initial must be equal bit for bit (max-width.md
-section 22). Usage: bw2d_rowown_check.py --out FILE [--cases JSON]
+section 22). Usage: bw2d_rowown_check.py --out FILE --cases JSON [--option rowown | asyncload]
+--option names the layout switch compared (default rowown; asyncload compares cp.async staging against synchronous
+staging, max-width.md section 24).
 Each case: {"cell", "dtype", "width", "batch", "steps"}; the batch tile is the library's for the batch."""
 import argparse
 import json
@@ -19,6 +21,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--out", required=True)
     p.add_argument("--cases", required=True)
+    p.add_argument("--option", default="rowown", choices=("rowown", "asyncload"))
     a = p.parse_args()
     rec = dict(started=time.time(), rows=[])
     for case in json.loads(a.cases):
@@ -34,8 +37,8 @@ def main():
             d_history[0] += cot_h.float()
             d_final = torch.zeros(init.shape, device=wx.device, dtype=torch.float32) + cot_f.float()
             args = (wx, r, b, init, history, d_history, d_final, case["cell"])
-            new = hybrid_bw2d.backward(*args, rowown=True)
-            old = hybrid_bw2d.backward(*args, rowown=False)
+            new = hybrid_bw2d.backward(*args, **{a.option: True})
+            old = hybrid_bw2d.backward(*args, **{a.option: False})
             row.update(dg_bitwise=bool(torch.equal(new[0], old[0])), d_init_bitwise=bool(torch.equal(new[3], old[3])))
             row["pass_"] = row["dg_bitwise"] and row["d_init_bitwise"]
         except Exception:  # noqa: BLE001
