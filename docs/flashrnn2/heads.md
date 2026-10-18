@@ -297,3 +297,29 @@ plan passed `wgrad="bmm_lp"` alone, so the H-head calls took the H > 1 default k
 and the per-head H = 1 calls took the H = 1 default. Section 8 avoided exactly this by passing the fused options to
 both. The timing was skipped because the path did not qualify. The batch is rerun with
 `fast=True, fuse_pre=2, wgrad="bmm_lp"` passed explicitly ("heads lp v2"); nothing else changes.
+
+### 8.5 dG stored in the input dtype (pre-registration, 2026-10-18; replaces the "heads lp v2" plan of 8.4, which was cancelled before it started)
+
+**What the profile showed.** The operator profile of the first lp run (report only, D = 64, H = 256, LSTM FP16, one
+step) puts the low-precision dR GEMMs at 0.75 ms against 1.41 ms in FP32. But `bmm_lp` cast dG to the input dtype a
+second time (+1.17 ms), because the training path already casts the FP32 dG for the Wx gradient. Net, it was no
+faster.
+
+**Change.**
+* `triton_rtiled_bw.backward(dg_dtype="input")`, opt-in and requiring `wgrad="bmm_lp"`, stores dG from the kernel in
+  the input dtype.
+* Every read of dG inside the kernel rounds it to the input dtype first (`_dh_from_dg`, `_verify_dg`). The recurrence
+  and dG's values are therefore bitwise unchanged; only the FP32 copy no longer exists.
+* The dR GEMMs use the stored dG directly.
+* dbias is the FP32-accumulated sum of the input-dtype dG. That is a precision change, inside the FP64 budgets or not
+  per the qualification.
+* The training path's cast of dG becomes a no-op.
+
+**Runs (batch "heads lp v3").** These are section 8.3's runs with backward options
+`fast=True, fuse_pre=2, wgrad="bmm_lp", dg_dtype="input"`, passed explicitly to the H-head and the H = 1 calls:
+* H1-lp: 32 cases;
+* H3-lp and H6-lp: paired, 24 shapes each;
+* the operator profile of the default and the new options.
+
+Prediction: H1-lp passes. The step gains about 1.5-2.5 ms at D = 64, H = 256 and about 10% at D = 128, H = 1024, and
+the H3 rows move toward 1.
