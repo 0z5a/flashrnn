@@ -2286,3 +2286,51 @@ therefore uses standard mixed precision:
 * the cudnn arm is an FP32 `nn.LSTM` under `torch.autocast`, the standard PyTorch AMP path for cuDNN.
 
 The layer mode uses the same FP32 parameters.
+
+## 71. Results of "e2e" (section 70, 2026-10-19): cuDNN baseline and end-to-end LM training
+
+**Run.** The same rented 2x H100 SXM machine as sections 67 and 69, with the same two GPUs, torch 2.7.1+cu128 and
+cuDNN 9.7.1. Tool `tools/e2e_bench.py` at ff5b3f7c, with the two amendments of section 70. All 60 runs (20 cases × 3
+starts) completed with no arm errors. Evidence: `max-width-evidence/e2e-analysis.json` (`tools/e2e_analyze.py`).
+Report only.
+
+**Checks pass.**
+* layer: every arm's output and gradients match frnn2 within a relative Frobenius difference of 2.0e-2 (BF16) and
+  5.5e-3 (FP16). cuDNN differs from frnn2 by 5.5e-4 in FP16.
+* lm: over the first 20 AdamW steps from the same weights and data, every arm's loss stays within 1.7e-3
+  (relative) of frnn2's.
+
+**Ratios.** Other arm's time / frnn2's time (> 1: frnn2 faster), with 95% hierarchical bootstrap.
+
+| case | frnn2 (ms) | cudnn | v1 (`cuda_fused`) | v1cuda (`cuda`) |
+| --- | --- | --- | --- | --- |
+| layer LSTM FP16 D1024 B16 | 3.19 | **0.706** [0.703, 0.709] | 1.416 | 2.315 |
+| layer LSTM FP16 D1024 B64 | 6.49 | **0.961** [0.958, 0.965] | 2.923 | 1.504 |
+| layer LSTM FP16 D1536 B16 | 4.25 | 2.068 | 1.600 | 2.042 |
+| layer LSTM FP16 D1536 B64 | 10.14 | 1.142 | 3.394 | 1.209 |
+| layer LSTM FP16 D2048 B16 | 5.47 | 1.895 | 1.702 | 1.892 |
+| layer LSTM FP16 D2048 B64 | 15.01 | 1.004 [0.999, 1.011] | 4.139 | 1.044 |
+| layer LSTM BF16 D1024-2048 B16 | 3.21-5.43 | 16.0-21.2 | 1.39-2.22 | 1.87-2.12 |
+| layer LSTM BF16 D1024-2048 B64 | 6.40-14.95 | 7.3-7.9 | 2.75-4.01 | 1.06-1.43 |
+| lm LSTM FP16 D1024 B16 | 16.03 | **0.768** [0.767, 0.769] | 1.337 | 2.074 |
+| lm LSTM FP16 D1024 B64 | 32.87 | **0.967** [0.964, 0.971] | 2.514 | 1.401 |
+| lm LSTM FP16 D2048 B16 | 29.51 | 1.677 | 1.529 | 1.705 |
+| lm LSTM FP16 D2048 B64 | 72.59 | 1.007 [0.990, 1.028] | 3.529 | 1.051 |
+| lm sLSTM BF16 D1024 B16 / B64 | 16.19 / 33.53 | — | 1.337 / 2.373 | 1.900 / 1.305 |
+| lm sLSTM BF16 D2048 B16 / B64 | 29.43 / 73.88 | — | 1.910 / 3.554 | 1.742 / 1.090 |
+
+**Reading.**
+* **cuDNN, FP16 LSTM.**
+  * At D = 1024, cuDNN is faster: 1.42x per layer at B = 16, 1.04x at B = 64, and 1.30x / 1.03x end to end. This is a
+    loss.
+  * At D ≥ 1536, frnn2 is faster at B = 16: 1.9-2.1x per layer, 1.68x end to end at D = 2048.
+  * At B = 64 and D ≥ 1536 the two are close. frnn2 is 1.14x faster at D = 1536; D = 2048 is a tie, with the interval
+    containing 1, both per layer and end to end.
+* **cuDNN, BF16 LSTM.** cuDNN 9.7 runs 7-21x slower than frnn2. Its BF16 RNN path is evidently not a tuned one, so
+  this is not a meaningful baseline.
+* **End to end against FlashRNN.** In a 4-layer LM step with embedding, norms, readout and AdamW, frnn2 is faster
+  than both FlashRNN backends at all 8 shapes: 1.34-3.55x against `cuda_fused`, 1.05-2.07x against `cuda`. The gains
+  shrink against the layer-level ones at B = 64, as section 70 expected.
+* **What this means for the design.** At D = 1024 a single cuDNN LSTM fits its own resident schedule well. frnn2's
+  two grid barriers per step (sections 46 and 67) cost more there than the larger exchange they avoid. The gap is
+  largest at B = 16, where the barriers dominate the step.
