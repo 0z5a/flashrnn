@@ -2331,6 +2331,6 @@ Report only.
 * **End to end against FlashRNN.** In a 4-layer LM step with embedding, norms, readout and AdamW, frnn2 is faster
   than both FlashRNN backends at all 8 shapes: 1.34-3.55x against `cuda_fused`, 1.05-2.07x against `cuda`. The gains
   shrink against the layer-level ones at B = 64, as section 70 expected.
-* **What this means for the design.** At D = 1024 a single cuDNN LSTM fits its own resident schedule well. frnn2's
-  two grid barriers per step (sections 46 and 67) cost more there than the larger exchange they avoid. The gap is
-  largest at B = 16, where the barriers dominate the step.
+* **Why D = 1024 loses (hypothesis; cuDNN was not profiled).** frnn2's two grid barriers per step (sections 46 and
+  67) are a fixed cost that matters most where the step is short, that is small D and B = 16. That is where the loss
+  is largest. Profiling cuDNN's kernels at this shape would test it.
