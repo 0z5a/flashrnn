@@ -2169,3 +2169,11 @@ Median µs per step; every checksum matched.
   for the single-GPU exchange.
 * NVLS (multi-GPU multicast) could not be tested. Both GPUs of this machine report `MULTICAST_SUPPORTED = 0`, and no
   NVSwitch fabric was exposed to the container.
+
+**Decision (2026-10-19, the user):** the multi-GPU multicast (NVLS) direction is dropped. No reachable machine
+exposes it:
+* the cluster's 4-GPU nodes are full-mesh NVLink without NVSwitch;
+* the rented H100 pair reports `MULTICAST_SUPPORTED = 0`;
+* the announced next system has 4x GH200 nodes without NVSwitch.
+
+Single-GPU cluster multicast is negative by section 67.1.
