@@ -6,7 +6,9 @@ staging, max-width.md section 24; dg_dtype compares the input-dtype dG store aga
 "bmm_lp": the stored dG must equal the FP32 dG rounded to the input dtype, and d_initial and dR must be bitwise
 equal, max-width.md section 36; honly compares the h-only input-dtype history gradient (d_hidden) against the
 zero-filled FP32 one built from the same rounded values: dG, d_initial, dR and dbias bitwise, max-width.md section 40;
-flags compares the column-group flag wait against grid barrier B1, max-width.md section 41).
+flags compares the column-group flag wait against grid barrier B1, max-width.md section 41; prefetch compares the
+split B1 with the next step's operand loads against grid barrier B1, both with the B = 16 defaults -- pre_fused, dG_LP
+and honly -- dG, d_initial, dR and dbias bitwise, max-width.md section 66).
 Each case: {"cell", "dtype", "width", "batch", "steps"}; the batch tile is the library's for the batch."""
 import argparse
 import json
@@ -25,7 +27,8 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--out", required=True)
     p.add_argument("--cases", required=True)
-    p.add_argument("--option", default="rowown", choices=("rowown", "asyncload", "dg_dtype", "honly", "flags"))
+    p.add_argument("--option", default="rowown", choices=("rowown", "asyncload", "dg_dtype", "honly", "flags",
+                                                       "prefetch"))
     a = p.parse_args()
     rec = dict(started=time.time(), rows=[])
     for case in json.loads(a.cases):
@@ -47,6 +50,14 @@ def main():
                 d_full[0] += d_hidden.float()
                 new = hybrid_bw2d.backward(wx, r, b, init, history, None, d_final, case["cell"], d_hidden=d_hidden)
                 old = hybrid_bw2d.backward(wx, r, b, init, history, d_full, d_final, case["cell"])
+                row.update(dg_bitwise=bool(torch.equal(new[0], old[0])), d_init_bitwise=bool(torch.equal(new[3], old[3])),
+                           d_recurrent_bitwise=bool(torch.equal(new[1], old[1])),
+                           d_bias_bitwise=bool(torch.equal(new[2], old[2])))
+            elif a.option == "prefetch":
+                d_hidden = cot_h.to(wx.dtype).contiguous()
+                kw = dict(d_hidden=d_hidden, dg_dtype="input", wgrad="bmm_lp", pre_fused=True)
+                new = hybrid_bw2d.backward(wx, r, b, init, history, None, d_final, case["cell"], prefetch=True, **kw)
+                old = hybrid_bw2d.backward(wx, r, b, init, history, None, d_final, case["cell"], **kw)
                 row.update(dg_bitwise=bool(torch.equal(new[0], old[0])), d_init_bitwise=bool(torch.equal(new[3], old[3])),
                            d_recurrent_bitwise=bool(torch.equal(new[1], old[1])),
                            d_bias_bitwise=bool(torch.equal(new[2], old[2])))

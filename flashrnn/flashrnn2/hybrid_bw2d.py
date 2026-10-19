@@ -52,7 +52,7 @@ def batch_tile(batch):
 
 
 def build(width, bm, slstm, bf16, verify=0, cache_dir=None, mg=False, rowown=True, asyncload=True, dglp=False,
-          honly=False, flagwait=False, grid=None):
+          honly=False, flagwait=False, grid=None, prefetch=False):
     pc, q, cr = grid or CONFIGS[width]
     cuda_home = os.environ.get("FRNN_HYBRID_CUDA_HOME", os.environ.get("CUDA_HOME", "/usr/local/cuda"))
     flags = [f"-DFRNN_D={width}", f"-DFRNN_PC={pc}", f"-DFRNN_Q={q}", f"-DFRNN_CR={cr}", f"-DFRNN_BM={int(bm)}",
@@ -69,6 +69,8 @@ def build(width, bm, slstm, bf16, verify=0, cache_dir=None, mg=False, rowown=Tru
         flags.append("-DFRNN_HONLY=1")
     if flagwait:  # column-group flag wait in place of grid barrier B1 (section 41)
         flags.append("-DFRNN_FLAGS=1")
+    if prefetch:  # split B1 with the next step's operand loads in between (section 66)
+        flags.append("-DFRNN_PREFETCH=1")
     digest = hashlib.sha256(SOURCE.read_bytes() + " ".join(flags).encode()).hexdigest()[:16]
     cache = Path(cache_dir or os.environ.get("FRNN_HYBRID_CACHE",
                                              os.environ.get("TMPDIR", str(Path.home() / ".cache")) + "/frnn_hybrid_bw"))
@@ -84,11 +86,11 @@ def build(width, bm, slstm, bf16, verify=0, cache_dir=None, mg=False, rowown=Tru
 
 
 def _lib(width, bm, slstm, bf16, verify=0, mg=False, rowown=True, asyncload=True, dglp=False, honly=False,
-         flags=False, grid=None):
-    key = (width, bm, slstm, bf16, verify, mg, rowown, asyncload, dglp, honly, flags, grid)
+         flags=False, grid=None, prefetch=False):
+    key = (width, bm, slstm, bf16, verify, mg, rowown, asyncload, dglp, honly, flags, grid, prefetch)
     if key not in _LIBS:
         lib = ctypes.CDLL(str(build(width, bm, slstm, bf16, verify, mg=mg, rowown=rowown, asyncload=asyncload,
-                                    dglp=dglp, honly=honly, flagwait=flags, grid=grid)))
+                                    dglp=dglp, honly=honly, flagwait=flags, grid=grid, prefetch=prefetch)))
         if mg:
             lib.frnn_hybrid_bw2d_mg.restype = ctypes.c_int
             lib.frnn_hybrid_bw2d_mg.argtypes = ([ctypes.c_void_p] * 12 + [ctypes.c_int] * 7 + [ctypes.c_void_p] * 3
@@ -115,7 +117,7 @@ def verify_bits(verify):
 
 def backward(wx, recurrent, bias, initial, history, d_history, d_final, cell, *, batch_rows=None, tf32=False,
              wgrad="bmm", prof=False, diagnostics=None, rowown=True, asyncload=True, pre_tf32=False, pre_fused=False,
-             dg_dtype=None, d_hidden=None, flags=False, conc=None, _verify=None):
+             dg_dtype=None, d_hidden=None, flags=False, conc=None, prefetch=False, _verify=None):
     """Returns (dg [B,T,4,H,D] FP32, or the input dtype with dg_dtype="input", dR, dbias, d_initial FP32), as
     hybrid_bw.backward.
 
@@ -125,6 +127,9 @@ def backward(wx, recurrent, bias, initial, history, d_history, d_final, cell, *,
     flags (opt-in, section 41): barrier B1 becomes a wait for the Q step flags of the CTA's own column block; the
     exchange buffer is double buffered. Same arithmetic and order, so the outputs are bitwise equal.
 
+    prefetch (opt-in, section 66): barrier B1 is split into arrival and wait, and the next step's pointwise operands
+    (read-only inputs) are loaded in between. Same arithmetic and order, so the outputs are bitwise equal.
+
     d_hidden (opt-in, section 40): the gradient of the hidden output [B, T, H, D] in the input dtype, in place of
     d_history when only the h component carries gradient (pass d_history=None); the kernel reads it directly."""
     from .triton_rtiled_bw import preactivations, weight_gradients
@@ -133,6 +138,8 @@ def backward(wx, recurrent, bias, initial, history, d_history, d_final, cell, *,
         raise ValueError("the 2-D backward supports LSTM and sLSTM")
     if dg_dtype not in (None, "input") or (dg_dtype == "input" and wgrad != "bmm_lp"):
         raise ValueError('dg_dtype must be None or "input", and "input" needs wgrad="bmm_lp"')
+    if prefetch and flags:
+        raise ValueError("prefetch and flags both replace barrier B1; choose one")
     batch, steps, gates, heads, width = wx.shape
     if wx.dtype not in (torch.float16, torch.bfloat16) or not supported(width):
         raise ValueError(f"unsupported shape or dtype for the 2-D backward (D in {sorted(CONFIGS)})")
@@ -175,12 +182,14 @@ def backward(wx, recurrent, bias, initial, history, d_history, d_final, cell, *,
     d_init = torch.empty(initial.shape, device=device, dtype=torch.float32)
     xbuf = torch.empty((2 if flags else 1, resident, bm, 4 * width), device=device, dtype=wx.dtype)
     part = torch.empty((resident, q, bm, width), device=device, dtype=torch.float32)
-    stamp = torch.zeros(resident * (pc if flags else 1) * q, device=device, dtype=torch.int32)
+    # prefetch: one more int, the split B1 barrier's counter (zero at launch; bit 31 flips once per barrier)
+    stamp = torch.zeros(resident * (pc if flags else 1) * q + (1 if prefetch else 0), device=device,
+                        dtype=torch.int32)
     bits, seed = verify_bits(_verify)
     if prof:
         bits |= VERIFY_BITS["prof"]
     lib = _lib(width, bm, cell == "slstm", wx.dtype == torch.bfloat16, bits, rowown=rowown, asyncload=asyncload,
-               dglp=dglp, honly=honly, flags=flags, grid=grid)
+               dglp=dglp, honly=honly, flags=flags, grid=grid, prefetch=prefetch)
     err = torch.zeros(12, device=device, dtype=torch.int32)
     err[3] = seed
     tensors = [pre.contiguous(), history.contiguous(), initial.float().contiguous(),

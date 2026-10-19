@@ -6,7 +6,9 @@ task: {"cell", "dtype", "width", "batch", "steps", "runs": 21, "batch_rows": 16 
        "honly": false | true (the FRNN_HONLY build reading the rounded h gradient, max-width.md section 40),
        "conc": false | true (the head-concurrent grid, max-width.md section 56),
        "flags": false | true (the FRNN_FLAGS build: column-group flag wait as B1, max-width.md section 41; no_b1 drops
-       that wait)}
+       that wait),
+       "prefetch": false | true (the FRNN_PREFETCH build: split B1 with the next step's operand loads, max-width.md
+       section 66; no_b1 drops the arrival and the wait)}
 Variants: correct (content check of every staged dG operand and the per-K-block step stamps read before every partial
 sum; run 0 without delays, runs 1.. with seeded 0-4 us delays), no barrier B1 (partials), no barrier B2 (exchanged
 dG); each broken variant keeps the barriers of the last step. Each run's outputs (dG, d_initial) are compared bitwise
@@ -57,6 +59,8 @@ def main():
             kw.update(d_hidden=d_hidden)
         if task.get("flags"):
             kw.update(flags=True)
+        if task.get("prefetch"):
+            kw.update(prefetch=True)
         if task.get("conc"):  # the head-concurrent grid (max-width.md section 56)
             kw.update(conc=True)
         if task.get("dg_dtype"):

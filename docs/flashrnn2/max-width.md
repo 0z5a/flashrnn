@@ -1958,3 +1958,108 @@ uninterruptible sleep for up to six days, among them `nvidia-smi` from root, the
 The driver's first `nvidia-smi` call (the GPU admission query) hung in `uvm_va_space_destroy`. No GPU case started.
 The job was cancelled after 13.5 minutes, about 0.45 allocated GPU-hours. The batch stays prepared and sealed, so it
 can be re-run unchanged on a working node with a new job name.
+
+## 66. B = 16 against `cuda_fused`: an estimate from earlier batches, and prefetch across B1 (2026-10-19)
+
+### 66.1 Estimate (post hoc, not a measurement)
+
+Section 65 did not run. This estimate combines two kinds of ratio, and every ratio comes from a paired run within one
+batch:
+* FlashRNN1's own `cuda_fused` / `cuda` time ratio, which is W3 / W4 of the same claim. These are the B = 16 training
+  rows of "maxd v1" (D = 1024, 1280; section 7) and "bw 2048 v2" (D = 1536-2048; section 14).
+* `cuda` / current default. This is gaps2's W4-dglp4 (dG_LP on) times W6-honly4 (honly off / on); see section 51.
+
+The product assumes the following:
+* the two options compose multiplicatively;
+* FlashRNN1's internal ratio is the same across nodes and days.
+
+The old D = 1536 LSTM FP16 W3 interval was wide, [0.61, 0.79]. The estimated ratio is `cuda_fused` time / current
+default time, at H = 1, T = 256, B = 16:
+
+| D | LSTM FP16 | sLSTM BF16 |
+| --- | --- | --- |
+| 1024 | 1.52 | 1.68 |
+| 1280 | 1.43 | 1.75 |
+| 1536 | 1.65 | 1.92 |
+| 1792 | 1.98 | 2.76 |
+| 2048 | 2.82 | 3.64 |
+
+What this suggests:
+* The B = 16 losses to `cuda_fused` (sections 7 and 14: 0.73-0.94x at D = 1024-1792) predate the 2-D backward, the
+  fused preactivation GEMM, dG_LP and honly.
+* With those, the default is estimated to be 1.4-3.6x faster than `cuda_fused` at every D from 1024 to 2048, for both
+  cells.
+
+The sealed section 65 batch is the measurement that confirms or refutes this. It is unchanged, and it waits for a
+working GPU node.
+
+### 66.2 Prefetch across B1 (pre-registration, before any run of it)
+
+**Target.** At B = 16 the pointwise phase of the 2-D backward takes 1.42-1.50 µs per step (section 46). With one owned
+element per thread (BM = 16 at every D), that phase is mostly the latency of its global loads:
+* preactivations, four FP32 values;
+* the states at t and t - 1;
+* the history gradient.
+
+All of these are read-only inputs and independent of other CTAs. Meanwhile the CTA waits 1.37-1.91 µs per step in
+grid barrier B1.
+
+**Change.** `hybrid_bw2d.cu` gets `FRNN_PREFETCH = 1`, with `backward(prefetch=True)` and the training option
+`prefetch`. It is opt-in and not a default.
+* B1 becomes a split grid barrier with the protocol of cooperative groups' `grid.sync`:
+  * `bar.sync`;
+  * thread 0 adds to a counter with release semantics, and bit 31 flips once per barrier;
+  * acquire polling;
+  * `bar.sync`.
+* Between the arrival and the wait, every thread issues the loads of its next step's pointwise update.
+* Same values, same arithmetic and same order, so the outputs must be bitwise equal to the kernel without it.
+* The broken variant (bit 4, no B1) drops both the arrival and the wait; the last step keeps them.
+* Single GPU, and not combinable with `flags`.
+
+The default (non-prefetch) path is rewritten only in where its loads sit. Its operand loader is shared with the new
+path.
+
+**Ceiling.** At most the pointwise phase, about 0.36-0.38 ms per call (256 steps). With today's defaults that is about
+13% of the B = 16 step at D = 1024, 9% at D = 1536 and 7% at D = 2048.
+
+**Prediction (stated now).** The kernel saves 0.5-1.0 µs per step, because part of the phase is arithmetic and the
+dG stores. On the training step at B = 16 that is 1.03-1.10x. A gain of zero is a legitimate outcome: it would mean
+the barrier's fence waits for the outstanding loads after all.
+
+**Login-node gates (no GPU), before any batch:**
+* ptxas reports no spill for any BM = 16 build at D ∈ {1024, 1280, 1536, 1792, 2048} × (LSTM FP16, sLSTM BF16), in
+  the plain, check, delay, no-B1 and phase-timer builds.
+* The SASS of the default build is identical to the build of the previous source, modulo instruction addresses. If
+  not, gate P0 below must run.
+* In the prefetch build the operand LDGs sit between the B1 arrival atomic and the polling loop.
+
+**GPU gates (next working node, before any timing):**
+* **P0.** The default build of this source is bitwise equal to the previous source's (dG, dR, dbias, d_initial). This
+  is needed only if the SASS gate failed.
+* **P1.** The prefetch build is bitwise equal to the default build at D ∈ {1024, 1280, 1536, 1792, 2048} × (LSTM
+  FP16, sLSTM BF16), B = 16, T = 256.
+* **R-pf.** Race verification of the prefetch build (section 12 rule) at D ∈ {1024, 2048} × (LSTM, sLSTM), B = 16:
+  * the correct kernel shows 0 violations in 21 runs;
+  * no-B1 is flagged in at least 80% of runs, never silently.
+
+**Timing.** W6-pf, the training step, default / default with `prefetch=True`, at the section 65 shapes. It is paired
+with the section 65 claims in one batch.
+
+**Rule.** `prefetch` becomes the BM = 16 default at the D where W6-pf holds for both cells, P1 and R-pf pass, and the
+timing ran on an exclusive compute node. Timings from the shared interactive node are reported only.
+
+**Login-node gates: all pass** (2026-10-19, CUDA 12.8; evidence `max-width-evidence/prefetch-compile.json`).
+
+Scope: 130 BM = 16 builds, at D ∈ {1024, 1280, 1536, 1792, 2048} × (LSTM FP16, sLSTM BF16), with and without prefetch
+(plain, check, check + delay, no-B1, check + no-B1 and phase timers), plus 10 builds of the previous source.
+* **No spills.** None of the builds spills. The prefetch builds use 82-202 registers, against 74-200 without
+  prefetch.
+* **Default SASS unchanged.** The SASS of the default build is byte-identical to the previous source's at all ten
+  (D, cell), so gate P0 is not needed. A first version that shared the operand loader between both paths changed the
+  default build (D = 1024 sLSTM: 76 → 121 registers). The prefetch path is therefore preprocessor-guarded.
+* **Loads overlap the wait.** In the prefetch build (D = 1024 LSTM) the next step's seven operand LDGs (one 16-bit h
+  gradient, six FP32) sit between `ATOM.E.ADD.STRONG.GPU` (the arrival) and `LD.E.STRONG.GPU` (the polling). The
+  arrival's `MEMBAR.ALL.GPU` precedes them, so it does not wait for them.
+
+`tools/bw2d_rowown_check.py --option prefetch` (P1, with pre_fused, dG_LP and honly in both arms) and
+`tools/hybrid_bw2d_race.py` (task key `prefetch`) cover the GPU gates.
