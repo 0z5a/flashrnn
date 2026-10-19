@@ -12,7 +12,8 @@ A recurrent layer is x -> W x (input projection) -> recurrence -> hidden output.
   layer  one layer; one call = forward + backward of <cot, h> into x, W, R, bias
   lm     embedding -> layers x (RMSNorm -> recurrent layer -> residual) -> RMSNorm -> readout, cross-entropy on
          learnable synthetic tokens (each sequence repeats a random 32-token segment); one call = one AdamW step
-         (lr 3e-4, eps 1e-6, gradient norm clipped to 1); every arm owns its model and optimizer
+         (lr 3e-4, gradient norm clipped to 1); every arm owns its model and optimizer
+Parameters and optimizer state are FP32 (mixed precision); every forward runs in the input dtype.
 Before timing: layer mode compares every arm's output and gradients with frnn2's (relative Frobenius); lm mode trains
 every arm for check_steps steps on the same batches and records its losses. Timing: ABBA/BAAB blocks of frnn2 against
 every other arm (paired.json, the layout of heads_bench paired).
@@ -40,14 +41,15 @@ def write(path, value):
 
 
 class Recurrent:
-    """One recurrent layer's parameters (input dtype) and its forward per arm."""
+    """One recurrent layer: FP32 master parameters, run in the input dtype (mixed precision: every arm casts its
+    weights to the input dtype in each forward, as torch.autocast does for cuDNN)."""
 
     def __init__(self, case, gen):
         d, dt = case["width"], DT[case["dtype"]]
         self.cell, self.d, self.dt = case["cell"], d, dt
-        self.W = (torch.randn(4 * d, d, generator=gen) * (1.0 / d ** 0.5)).to("cuda", dt).requires_grad_(True)
-        self.R = (torch.randn(4, 1, d, d, generator=gen) * (0.5 / d ** 0.5)).to("cuda", dt).requires_grad_(True)
-        self.b = (torch.randn(4, 1, d, generator=gen) * 0.1).to("cuda", dt).requires_grad_(True)
+        self.W = (torch.randn(4 * d, d, generator=gen) * (1.0 / d ** 0.5)).cuda().requires_grad_(True)
+        self.R = (torch.randn(4, 1, d, d, generator=gen) * (0.5 / d ** 0.5)).cuda().requires_grad_(True)
+        self.b = (torch.randn(4, 1, d, generator=gen) * 0.1).cuda().requires_grad_(True)
         self.states = 4 if self.cell == "slstm" else 2
 
     def params(self):
@@ -67,22 +69,23 @@ class Recurrent:
 
     def forward(self, x, arm, ctx):
         b, t, d = x.shape
-        wx = (x.reshape(b * t, d) @ self.W.t()).reshape(b, t, 4, 1, d)
+        W, R, bias = (p.to(self.dt) for p in self.params())
+        wx = (x.reshape(b * t, d) @ W.t()).reshape(b, t, 4, 1, d)
         if arm == "frnn2":
-            y, _ = training.recurrence(wx, self.R, self.b, self.init(b), self.cell, output_mode="hidden",
-                                       config=ctx["cfg"])
+            y, _ = training.recurrence(wx, R, bias, self.init(b), self.cell, output_mode="hidden", config=ctx["cfg"])
             return y[:, :, 0]
-        states, _ = ctx["v1"]["flashrnn"](wx, self.R, self.b, self.init(b), config=ctx["v1cfg"][arm])
+        states, _ = ctx["v1"]["flashrnn"](wx, R, bias, self.init(b), config=ctx["v1cfg"][arm])
         return states[0][:, :, 0]
 
 
 class CudnnRecurrent:
-    """torch.nn.LSTM (cuDNN) holding a copy of a Recurrent layer's weights (bias_hh = 0), flattened once."""
+    """torch.nn.LSTM (cuDNN) with FP32 parameters copied from a Recurrent layer (bias_hh = 0), flattened once, run
+    under torch.autocast in the input dtype."""
 
     def __init__(self, src):
         d = src.d
         self.d, self.dt = d, src.dt
-        self.lstm = torch.nn.LSTM(d, d, batch_first=True).to("cuda", src.dt)
+        self.lstm = torch.nn.LSTM(d, d, batch_first=True).cuda()
         with torch.no_grad():
             self.lstm.weight_ih_l0.copy_(src.W)
             self.lstm.weight_hh_l0.copy_(src.R.reshape(4 * d, d))
@@ -94,8 +97,9 @@ class CudnnRecurrent:
         return [self.lstm.weight_ih_l0, self.lstm.weight_hh_l0, self.lstm.bias_ih_l0, self.lstm.bias_hh_l0]
 
     def forward(self, x, arm, ctx):
-        out, _ = self.lstm(x)
-        return out
+        with torch.autocast("cuda", dtype=self.dt):
+            out, _ = self.lstm(x)
+        return out.to(self.dt)
 
 
 def for_arm(layer, arm):
@@ -108,25 +112,27 @@ def rms(x):
 
 class LM:
     def __init__(self, case, gen):
-        d, dt, v = case["width"], DT[case["dtype"]], case.get("vocab", 4096)
-        self.emb = (torch.randn(v, d, generator=gen) * 0.1).to("cuda", dt).requires_grad_(True)
+        d, v = case["width"], case.get("vocab", 4096)
+        self.dt = DT[case["dtype"]]
+        self.emb = (torch.randn(v, d, generator=gen) * 0.1).cuda().requires_grad_(True)
         self.layers = [Recurrent(case, gen) for _ in range(case.get("layers", 4))]
-        self.out = (torch.randn(d, v, generator=gen) * (1.0 / d ** 0.5)).to("cuda", dt).requires_grad_(True)
+        self.out = (torch.randn(d, v, generator=gen) * (1.0 / d ** 0.5)).cuda().requires_grad_(True)
 
     def params(self):
         return [self.emb, self.out] + [p for l in self.layers for p in l.params()]
 
     def clone(self, arm):
         c = LM.__new__(LM)
+        c.dt = self.dt
         c.emb, c.out = (p.detach().clone().requires_grad_(True) for p in (self.emb, self.out))
         c.layers = [for_arm(l, arm) for l in self.layers]
         return c
 
     def loss(self, ids, arm, ctx):
-        x = self.emb[ids]
+        x = self.emb[ids].to(self.dt)
         for layer in self.layers:
             x = x + layer.forward(rms(x), arm, ctx)
-        logits = (rms(x) @ self.out).float()
+        logits = (rms(x) @ self.out.to(self.dt)).float()
         return F.cross_entropy(logits[:, :-1].reshape(-1, logits.shape[-1]), ids[:, 1:].reshape(-1))
 
 
@@ -165,7 +171,7 @@ def build(case, arms, seed):
     seg = torch.randint(0, case.get("vocab", 4096), (64, case["batch"], 32), generator=gen)
     data = seg.repeat(1, 1, -(-case["steps"] // 32))[:, :, :case["steps"]].contiguous().cuda()
     models = {a: base.clone(a) for a in arms}
-    opts = {a: torch.optim.AdamW(m.params(), lr=3e-4, eps=1e-6, foreach=True) for a, m in models.items()}
+    opts = {a: torch.optim.AdamW(m.params(), lr=3e-4, foreach=True) for a, m in models.items()}
     return dict(models=models, opts=opts, data=data, cursor={a: 0 for a in arms})
 
 

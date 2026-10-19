@@ -2276,3 +2276,13 @@ Shapes, arms and the timing protocol are unchanged.
 The smoke run is not part of the results. It also showed, at D = 1024 and B = 16 in FP16, that cuDNN takes 2.16 ms
 per layer step against frnn2's 3.17 ms. If the measured run confirms this, it is a loss to cuDNN that the paper must
 report.
+
+**Second amendment (before the measured run).** The second smoke run still diverged, in every arm alike. The cause
+is the FP16 parameters: AdamW's second moment underflows to zero, so `m / eps` amplifies the update. The measured run
+therefore uses standard mixed precision:
+* FP32 parameters and optimizer state (AdamW, lr 3e-4, default eps, clipping at 1);
+* every forward in the input dtype;
+* the frnn2, v1 and v1cuda arms cast W, R and the bias in each forward;
+* the cudnn arm is an FP32 `nn.LSTM` under `torch.autocast`, the standard PyTorch AMP path for cuDNN.
+
+The layer mode uses the same FP32 parameters.
