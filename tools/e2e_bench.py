@@ -11,7 +11,8 @@ Arms (same function, same initial weights):
 A recurrent layer is x -> W x (input projection) -> recurrence -> hidden output.
   layer  one layer; one call = forward + backward of <cot, h> into x, W, R, bias
   lm     embedding -> layers x (RMSNorm -> recurrent layer -> residual) -> RMSNorm -> readout, cross-entropy on
-         synthetic tokens; one call = one AdamW step; every arm owns its model and optimizer
+         learnable synthetic tokens (each sequence repeats a random 32-token segment); one call = one AdamW step
+         (lr 3e-4, eps 1e-6, gradient norm clipped to 1); every arm owns its model and optimizer
 Before timing: layer mode compares every arm's output and gradients with frnn2's (relative Frobenius); lm mode trains
 every arm for check_steps steps on the same batches and records its losses. Timing: ABBA/BAAB blocks of frnn2 against
 every other arm (paired.json, the layout of heads_bench paired).
@@ -161,9 +162,10 @@ def build(case, arms, seed):
         models = {a: for_arm(base, a) for a in arms}
         return dict(models=models, x=x, cot=cot)
     base = LM(case, gen)
-    data = torch.randint(0, case.get("vocab", 4096), (64, case["batch"], case["steps"]), generator=gen).cuda()
+    seg = torch.randint(0, case.get("vocab", 4096), (64, case["batch"], 32), generator=gen)
+    data = seg.repeat(1, 1, -(-case["steps"] // 32))[:, :, :case["steps"]].contiguous().cuda()
     models = {a: base.clone(a) for a in arms}
-    opts = {a: torch.optim.AdamW(m.params(), lr=1e-3, eps=1e-6, foreach=True) for a, m in models.items()}
+    opts = {a: torch.optim.AdamW(m.params(), lr=3e-4, eps=1e-6, foreach=True) for a, m in models.items()}
     return dict(models=models, opts=opts, data=data, cursor={a: 0 for a in arms})
 
 
@@ -185,6 +187,7 @@ def make_step(case, state, arm, ctx):
         opt.zero_grad(set_to_none=True)
         loss = m.loss(data[i], arm, ctx)
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(m.params(), 1.0, foreach=True)
         opt.step()
         return loss.detach()
     return step

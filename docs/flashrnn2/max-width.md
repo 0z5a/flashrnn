@@ -2262,3 +2262,17 @@ host, section 67).
 * layer: frnn2 beats cudnn wherever it beats `cuda` (sections 67, 69).
 * lm: the end-to-end ratios are smaller than the layer ratios, because embedding, norms and readout add
   backend-independent time.
+
+**Amendment (2026-10-19, after a smoke run of two cases and before the measured run).** The pre-registered lm setup
+diverged in the smoke run: loss 8.86 → 48.7 → 82 in three steps (AdamW, lr 1e-3, FP16 parameters, uniform random
+tokens). Uniform random tokens also leave nothing to learn, so the losses cannot be compared across arms. The
+measured run therefore uses:
+* lr 3e-4;
+* gradient-norm clipping at 1;
+* learnable synthetic data: each sequence repeats a random 32-token segment.
+
+Shapes, arms and the timing protocol are unchanged.
+
+The smoke run is not part of the results. It also showed, at D = 1024 and B = 16 in FP16, that cuDNN takes 2.16 ms
+per layer step against frnn2's 3.17 ms. If the measured run confirms this, it is a loss to cuDNN that the paper must
+report.
