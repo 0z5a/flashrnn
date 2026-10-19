@@ -33,6 +33,14 @@
 // the stamp array [RESIDENT, PC, Q] (release after the partial, acquire by the owner's waiting threads); the last step
 // keeps the grid barrier. Verification as above (bit 4 drops the flag wait). Single GPU only.
 //
+// Prefetch across B1 (FRNN_PREFETCH = 1, opt-in, max-width.md section 66): B1 becomes a split grid barrier with the
+// same protocol as cooperative groups' grid.sync (bar.sync; thread 0: release add of 1, or of 2^31 - (CTAs - 1) by CTA
+// 0, so bit 31 flips once per barrier; acquire polling; bar.sync), counter after the stamps. Between the arrival and
+// the wait every thread issues the loads of its next pointwise update (preactivations, states, initial state, history
+// gradient): read-only inputs, independent of every other CTA, so their latency overlaps the wait. Same values, same
+// arithmetic, so the outputs are bitwise equal to the kernel without it. Bit 4 (no B1) drops the arrival and the wait
+// (the last step keeps them). Single GPU, no flags. Preprocessor-guarded: without it the source compiles as before.
+//
 // Multi-GPU (FRNN_MG = 1, docs/flashrnn2/scale-out-plan.md section 17): the PC column blocks are split over np GPUs
 // (GPU r runs column blocks r * PC / np .. with all Q K blocks each), so the partial sums of a column stay on one GPU
 // and B1 stays a grid barrier of that GPU. Only the exchanged dG crosses GPUs: the pointwise update stores it into the
@@ -111,6 +119,12 @@ constexpr bool HONLY = FRNN_HONLY != 0;
 #if FRNN_HONLY && FRNN_MG
 #error "FRNN_HONLY is single-GPU only"
 #endif
+#ifndef FRNN_PREFETCH
+#define FRNN_PREFETCH 0
+#endif
+#if FRNN_PREFETCH && (FRNN_MG || FRNN_FLAGS)
+#error "FRNN_PREFETCH is single-GPU only and excludes FRNN_FLAGS"
+#endif
 #if FRNN_DGLP
 #if FRNN_MG
 #error "FRNN_DGLP is single-GPU only"
@@ -174,6 +188,35 @@ __device__ __forceinline__ uint32_t r_pair(const elem_t* R, int H, int head, int
   return pack(R[base], R[base + D]);
 }
 
+#if FRNN_PREFETCH
+// Split grid barrier: the protocol of cooperative groups' sync_grids_arrive / sync_grids_wait.
+__device__ __forceinline__ unsigned grid_arrive(unsigned* ctr) {
+  __syncthreads();
+  unsigned old = 0;
+  if (threadIdx.x == 0) {
+    const unsigned expected = gridDim.x * gridDim.y * gridDim.z;
+    const unsigned nb = blockIdx.x + blockIdx.y + blockIdx.z == 0 ? 0x80000000u - (expected - 1) : 1u;
+    asm volatile("atom.add.release.gpu.u32 %0, [%1], %2;" : "=r"(old) : "l"(ctr), "r"(nb) : "memory");
+  }
+  return old;
+}
+
+__device__ __forceinline__ void grid_wait(unsigned old, unsigned* ctr) {
+  if (threadIdx.x == 0) {
+    unsigned cur;
+    do {
+      asm volatile("ld.acquire.gpu.u32 %0, [%1];" : "=r"(cur) : "l"(ctr) : "memory");
+    } while (((old ^ cur) & 0x80000000u) == 0);
+  }
+  __syncthreads();
+}
+
+// Read-only operands of one pointwise update (one owned element, one step).
+struct Ops {
+  float dsh, dsc, dsn, gi, gf, gz, go, c_t, c_prev, n_t, m_t, n_prev, m_prev;
+};
+#endif
+
 struct Args {
   const float* pre;      // [B, T, 4, H, D] FP32 gate preactivations
   const float* states;   // [S, B, T, H, D] FP32 forward state history
@@ -185,7 +228,8 @@ struct Args {
   float* dinit;          // [S, B, 1, H, D] FP32 out
   elem_t* xbuf;          // [RESIDENT, BM, 4D] exchanged dG (single buffer; FRNN_FLAGS: [2, RESIDENT, BM, 4D])
   float* part;           // [RESIDENT, Q, BM, D] FP32 partial dh (single buffer)
-  int* stamp;            // [RESIDENT, Q] verification step stamps (FRNN_FLAGS: [RESIDENT, PC, Q] step flags)
+  int* stamp;            // [RESIDENT, Q] verification step stamps (FRNN_FLAGS: [RESIDENT, PC, Q] step flags;
+                         // FRNN_PREFETCH: one more int, the B1 counter)
   int* err;              // [12] verification counters / phase timers, [3] delay seed
   int B, T, H, groups, resident, slots, tiles;
   const long long* xpeers;   // FRNN_MG: every GPU's exchange buffer, arrival counter, stored dG
@@ -346,12 +390,49 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw2d_kernel(Args a) {
       return bad;
     };
 
+#if FRNN_PREFETCH
+    // Loads of the pointwise operands of owned element e at step t (skipped where the update is skipped).
+    unsigned* const b1ctr = reinterpret_cast<unsigned*>(a.stamp + (size_t)a.resident * Q);
+    auto load_ops = [&](int e, int t, Ops& o) {
+      int lrow, p;
+      const bool own = elem(e, lrow, p);
+      const int row = bt * BM + lrow;
+      if (!(active && own && row < a.B)) return;
+      const size_t unit = ((size_t)row * a.H + head) * D + p;
+      const size_t here = (((size_t)row * a.T + t) * a.H + head) * D + p;
+      const size_t pre = (((size_t)row * a.T + t) * 4 * a.H + head) * D + p;
+      const float* dsf = reinterpret_cast<const float*>(a.dstates);
+      o.dsh = HONLY ? from_elem(reinterpret_cast<const elem_t*>(a.dstates)[here]) : dsf[here];
+      if (!HONLY) o.dsc = dsf[history_stride + here];
+      o.gi = a.pre[pre];
+      o.gf = a.pre[pre + hd];
+      o.gz = a.pre[pre + 2 * hd];
+      o.go = a.pre[pre + 3 * hd];
+      o.c_t = a.states[history_stride + here];
+      o.c_prev = t > 0 ? a.states[history_stride + here - hd] : a.initial[state_stride + unit];
+      if (SLSTM) {
+        if (!HONLY) o.dsn = dsf[2 * history_stride + here];
+        o.n_t = a.states[2 * history_stride + here];
+        o.m_t = a.states[3 * history_stride + here];
+        o.n_prev = t > 0 ? a.states[2 * history_stride + here - hd] : a.initial[2 * state_stride + unit];
+        o.m_prev = t > 0 ? a.states[3 * history_stride + here - hd] : a.initial[3 * state_stride + unit];
+      }
+    };
+    Ops ops[PE];  // this step's operands: loaded at the first step, then during the previous step's B1
+#endif
+
     for (int idx = 0; idx < a.T; ++idx) {
       const int t = a.T - 1 - idx;
       const bool last = idx == a.T - 1;
       unsigned long long t0 = (VERIFY & V_PROF) ? gtime() : 0;
       if (FLAGS) xb = a.xbuf + ((size_t)(cnt & 1) * a.resident + gy) * BM * K;
       if (VERIFY & V_DELAY) delay(a.err[3], blockIdx.x, g, t);
+#if FRNN_PREFETCH
+      if (idx == 0) {
+#pragma unroll
+        for (int e = 0; e < PE; ++e) load_ops(e, t, ops[e]);
+      }
+#endif
 #pragma unroll
       for (int e = 0; e < PE; ++e) {
         int lrow, p;
@@ -368,19 +449,35 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw2d_kernel(Args a) {
         const size_t here = (((size_t)row * a.T + t) * a.H + head) * D + p;
         const size_t pre = (((size_t)row * a.T + t) * 4 * a.H + head) * D + p;
         if (valid) {
+#if FRNN_PREFETCH
+          const Ops& op = ops[e];
+          float dh = dh_in[e] + op.dsh;
+          if (!HONLY) dc[e] = dc[e] + op.dsc;
+          float gi = op.gi, gf = op.gf, gz = op.gz, go = op.go;
+          float c_t = op.c_t;
+          float c_prev = op.c_prev;
+#else
           const float* dsf = reinterpret_cast<const float*>(a.dstates);
           float dh = dh_in[e] + (HONLY ? from_elem(reinterpret_cast<const elem_t*>(a.dstates)[here]) : dsf[here]);
           if (!HONLY) dc[e] = dc[e] + dsf[history_stride + here];
           float gi = a.pre[pre], gf = a.pre[pre + hd], gz = a.pre[pre + 2 * hd], go = a.pre[pre + 3 * hd];
           float c_t = a.states[history_stride + here];
           float c_prev = t > 0 ? a.states[history_stride + here - hd] : a.initial[state_stride + unit];
+#endif
           float z = 2.0f * sigmoid(2.0f * gz) - 1.0f;
           float o = sigmoid(go);
           if (SLSTM) {
+#if FRNN_PREFETCH
+            if (!HONLY) dn[e] = dn[e] + op.dsn;
+            float n_t = op.n_t, m_t = op.m_t;
+            float n_prev = op.n_prev;
+            float m_prev = op.m_prev;
+#else
             if (!HONLY) dn[e] = dn[e] + dsf[2 * history_stride + here];
             float n_t = a.states[2 * history_stride + here], m_t = a.states[3 * history_stride + here];
             float n_prev = t > 0 ? a.states[2 * history_stride + here - hd] : a.initial[2 * state_stride + unit];
             float m_prev = t > 0 ? a.states[3 * history_stride + here - hd] : a.initial[3 * state_stride + unit];
+#endif
             float logf_ = fminf(gf, 0.0f) - logf(1.0f + expf(-fabsf(gf))) + m_prev;
             float fgate = expf(logf_ - m_t), igate = expf(gi - m_t);
             dc[e] = dc[e] + dh * o / n_t;
@@ -470,8 +567,18 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_bw2d_kernel(Args a) {
           } while (s < cnt);
         }
         __syncthreads();
-      } else if (!(VERIFY & V_NO_B1) || last) {
-        grid.sync();  // B1: partials complete
+      } else {
+#if FRNN_PREFETCH  // B1 split: the next step's operand loads between the arrival and the wait
+        const bool b1 = !(VERIFY & V_NO_B1) || last;
+        const unsigned old = b1 ? grid_arrive(b1ctr) : 0u;
+        if (!last) {
+#pragma unroll
+          for (int e = 0; e < PE; ++e) load_ops(e, t - 1, ops[e]);
+        }
+        if (b1) grid_wait(old, b1ctr);
+#else
+        if (!(VERIFY & V_NO_B1) || last) grid.sync();  // B1: partials complete
+#endif
       }
       unsigned long long t4 = (VERIFY & V_PROF) ? gtime() : 0;
       if (active) {
