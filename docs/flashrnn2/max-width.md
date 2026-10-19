@@ -2177,3 +2177,23 @@ exposes it:
 * the announced next system has 4x GH200 nodes without NVSwitch.
 
 Single-GPU cluster multicast is negative by section 67.1.
+
+## 68. B = 64 against `cuda_fused` with the final defaults (pre-registration, 2026-10-19, before any run of it)
+
+**Why.** The paper's limitations list FlashRNN's fused backend at B = 64 as unmeasured with the final defaults. The
+B = 64 rows of sections 14 and 17 predate the 2-D backward, the fused GEMMs and the 2-D forward.
+
+**Where it runs.** The rented 2x H100 SXM machine of section 67, on demand. Report only, by the same rule as
+section 67.
+
+**Runs (batch "b64", two lanes).** W3-b64 and W4-b64: training step, library default against `cuda_fused` (W3) and
+`cuda` (W4).
+* Shapes: H = 1, T = 256, B = 64, D ∈ {1024, 1280, 1536, 1792, 2048} × (LSTM FP16, sLSTM BF16).
+* The forward is pinned to the library's B = 64 configuration:
+  * the TileLang grid at D = 1024;
+  * wide streamed tiles at D = 1280-1792;
+  * the 2-D forward at D = 2048.
+* Protocol of section 3: 3 starts × 20 blocks, one warm-up block, 95% hierarchical bootstrap.
+
+**Expectation.** W4 is 1.1-1.6x, as in section 49 (on the cluster). W3 is above 1 at every D: `cuda_fused` was
+already slower than `cuda` at B = 64 in section 17.
