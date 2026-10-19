@@ -2220,8 +2220,8 @@ completed with stable outputs (`ALL_PHASES_RUN`). Evidence: `max-width-evidence/
 | 2048 | sLSTM BF16 | 12.59 | 4.732 [4.714, 4.761] | 1.106 [1.098, 1.114] |
 
 **Reading.**
-* At B = 64, FlashRNN's fused backend is 2.9-4.9x slower than the default. Its per-step kernel does not widen the
-  batch tile.
+* At B = 64, FlashRNN's fused backend is 2.9-4.9x slower than the default. Its gap grows from B = 16 (1.4-2.4x);
+  the cause inside the fused kernel was not profiled.
 * Against `cuda` the default is 1.05-1.56x faster. That matches the cluster's 1.11-1.61x (section 49) except at
   D = 2048 LSTM, where it is 1.05x here against 1.57x there.
 * At B = 16 on this host, `cuda` was also relatively faster than on the cluster (section 67: 2.0x against 2.9x at
