@@ -2227,3 +2227,38 @@ completed with stable outputs (`ALL_PHASES_RUN`). Evidence: `max-width-evidence/
 * At B = 16 on this host, `cuda` was also relatively faster than on the cluster (section 67: 2.0x against 2.9x at
   D = 2048). The alternating baseline is the more host-sensitive of the two: it depends on cuBLAS and the PyTorch
   version.
+
+## 70. cuDNN baseline and end-to-end training (pre-registration, 2026-10-19, before any run of it)
+
+**Why.** These are the paper's two remaining limitations: no cuDNN baseline, and no end-to-end model training.
+
+**Tool.** `tools/e2e_bench.py`. Every arm runs the same function from the same initial weights:
+* **frnn2:** the library default (`training.recurrence`, configuration from `training.training_forward`).
+* **v1, v1cuda:** pinned FlashRNN `cuda_fused` and `cuda`.
+* **cudnn:** `torch.nn.LSTM` (cuDNN), LSTM only. It loads the same W, R and bias, with `bias_hh = 0`.
+
+Each recurrent layer computes `x -> W x` (the input projection GEMM; cuDNN does this itself), then the recurrence,
+giving the hidden output. There are two modes:
+* **layer:** one layer, forward and backward against a fixed cotangent. Gradients go to x, W, R and the bias.
+* **lm:** a 4-layer language model: token embedding (V = 4096), then 4 × (RMSNorm, recurrent layer, residual), then
+  RMSNorm and readout, with cross-entropy on synthetic tokens. Each step is one AdamW update (lr 1e-3, eps 1e-6;
+  parameters in the input dtype). Every arm owns its model and optimizer.
+
+**Shapes.**
+* layer: D ∈ {1024, 1536, 2048} × B ∈ {16, 64}, T = 256. LSTM in FP16 (all four arms) and in BF16 (cudnn only if
+  cuDNN accepts BF16; otherwise its failure is recorded).
+* lm: D ∈ {1024, 2048} × B ∈ {16, 64}, T = 256, for LSTM FP16 (all arms) and sLSTM BF16 (frnn2, v1, v1cuda).
+
+**Checks (reported).**
+* layer: each arm's output and gradients against frnn2's, as relative Frobenius difference.
+* lm: the loss of the first 20 steps for every arm (same seed and data) and the largest relative difference to
+  frnn2's.
+
+**Timing.** Paired ABBA/BAAB blocks of frnn2 against each other arm. Each entry is the mean of 3 steps (layer) or
+2 steps (lm), after one warm-up block. 3 process starts × 20 blocks, 95% hierarchical bootstrap. Report only (rented
+host, section 67).
+
+**Expectation.**
+* layer: frnn2 beats cudnn wherever it beats `cuda` (sections 67, 69).
+* lm: the end-to-end ratios are smaller than the layer ratios, because embedding, norms and readout add
+  backend-independent time.
