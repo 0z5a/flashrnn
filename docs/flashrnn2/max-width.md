@@ -2019,6 +2019,13 @@ grid barrier B1.
 The default (non-prefetch) path is rewritten only in where its loads sit. Its operand loader is shared with the new
 path.
 
+**Relation to the forward's prefetch (hc-rounds.md, round 3).** The TileLang forward's input-projection prefetch
+loads the next step's operands *before* the grid barrier. It was slower everywhere: 1.25x on the grid BM = 64 kernel,
+with registers and spills unchanged. The suspected but unverified cause is that the barrier's memory fence waits for
+those loads. This design issues the loads *after* the release arrival, where no fence follows them. W6-pf therefore
+also tests that explanation. If W6-pf is null, the outstanding loads cost something at the polling or at `bar.sync`
+instead.
+
 **Ceiling.** At most the pointwise phase, about 0.36-0.38 ms per call (256 steps). With today's defaults that is about
 13% of the B = 16 step at D = 1024, 9% at D = 1536 and 7% at D = 2048.
 
