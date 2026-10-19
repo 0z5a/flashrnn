@@ -2080,3 +2080,92 @@ Scope: 130 BM = 16 builds, at D ∈ {1024, 1280, 1536, 1792, 2048} × (LSTM FP16
 
 `tools/bw2d_rowown_check.py --option prefetch` (P1, with pre_fused, dG_LP and honly in both arms) and
 `tools/hybrid_bw2d_race.py` (task key `prefetch`) cover the GPU gates.
+
+## 67. Results of "b16pf" (sections 65 and 66.2), and a cluster-multicast microbenchmark (2026-10-19)
+
+**Where it ran.** The cluster had no working GPU, so the batch ran on a rented on-demand machine with 2x H100 80GB
+HBM3 (SXM, NVLink between the two). The GPUs were used whole: no other process ran on them at the start or the end.
+* Software: driver 550.163, torch 2.7.1+cu128, Triton 3.6.0, TileLang 0.1.15, nvcc 12.8; source 414ee03d.
+* Plan: the section 65/66 plan with two lanes and 30 claim starts. All phases ran (`ALL_PHASES_RUN`), and every start
+  completed with stable outputs.
+* Evidence: `max-width-evidence/b16pf-analysis.json` (`tools/b16pf_analyze.py`). The raw archive is held locally
+  with its SHA-256.
+* Status: the host is not an exclusive cluster node, so by the section 66.2 rule these are **report-only** timings.
+
+**Gates pass.**
+* **P1, 10/10.** The prefetch build is bitwise equal to the default at D = 1024-2048 × (LSTM FP16, sLSTM BF16), B = 16,
+  T = 256, with pre_fused, dG_LP and honly. dG, d_initial, dR and dbias all match.
+* **R-pf, 4/4.** At D ∈ {1024, 2048} × (LSTM, sLSTM):
+  * the correct kernel shows 0 violations and is bitwise stable;
+  * no-B1 is flagged 21/21, and no-B2 21/21;
+  * no run is silent.
+
+**W3-b16 holds 10/10, W4-b16 10/10, W6-pf 10/10.** Training step, H = 1, T = 256, B = 16. The intervals are 95%
+hierarchical bootstrap over 3 starts × 20 blocks. Ratios are other time / default time, except W6-pf, which is
+default time / prefetch time.
+
+| D | cell | default step (ms) | `cuda_fused` / default | `cuda` / default | default / prefetch |
+| --- | --- | --- | --- | --- | --- |
+| 1024 | LSTM FP16 | 2.94 | 1.436 [1.435, 1.437] | 2.416 | 1.050 [1.049, 1.051] |
+| 1280 | LSTM FP16 | 3.61 | 1.433 [1.429, 1.444] | 2.091 | 1.058 [1.057, 1.059] |
+| 1536 | LSTM FP16 | 3.82 | 1.657 [1.648, 1.662] | 2.159 | 1.046 [1.028, 1.053] |
+| 1792 | LSTM FP16 | 4.50 | 1.759 [1.752, 1.765] | 2.003 | 1.047 [1.038, 1.051] |
+| 2048 | LSTM FP16 | 4.82 | 1.774 [1.767, 1.778] | 2.021 | 1.051 [1.042, 1.055] |
+| 1024 | sLSTM BF16 | 2.99 | 1.427 [1.425, 1.428] | 2.143 | 1.087 [1.086, 1.089] |
+| 1280 | sLSTM BF16 | 3.73 | 1.433 [1.429, 1.436] | 1.850 | 1.089 [1.088, 1.090] |
+| 1536 | sLSTM BF16 | 3.92 | 1.753 [1.748, 1.759] | 1.956 | 1.091 [1.090, 1.092] |
+| 1792 | sLSTM BF16 | 4.45 | 1.888 [1.886, 1.891] | 1.891 | 1.052 [1.051, 1.054] |
+| 2048 | sLSTM BF16 | 4.78 | 2.371 [2.369, 2.374] | 2.146 | 1.048 [1.047, 1.050] |
+
+**What this settles.** At B = 16 the library default is faster than FlashRNN1 `cuda_fused` at every D from 1024 to 2048,
+by 1.43-2.37x, and faster than `cuda` by 1.85-2.42x. The section 66.1 estimate (1.4-3.6x) was right in direction. It
+was too high at D = 2048: 1.77-2.37x measured against 2.82-3.64x estimated.
+
+**Prefetch.** Prefetch makes the step 1.046-1.091x faster, inside the predicted 1.03-1.10x.
+
+The phase profile (LSTM FP16, µs per step: default → prefetch) follows the pre-registered reading rule:
+
+| D | pointwise | B2 | GEMM | B1 | partial sum | sum of phases | kernel (ms per call) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1024 | 1.30 → 0.40 | 1.29 → 1.07 | 1.77 → 1.76 | 1.24 → 1.79 | 0.26 → 0.26 | 5.86 → 5.28 | 1.60 → 1.45 |
+| 1536 | 1.32 → 0.45 | 1.28 → 1.05 | 3.05 → 2.86 | 1.82 → 1.97 | 0.31 → 0.26 | 7.78 → 6.59 | 2.10 → 1.80 |
+| 2048 | 1.32 → 0.45 | 1.34 → 1.15 | 4.26 → 4.19 | 1.84 → 1.97 | 0.33 → 0.31 | 9.08 → 8.07 | 2.46 → 2.21 |
+
+* The loads that left the pointwise phase reappear only partly in the B1 window. The net saving is 0.6-1.2 µs per
+  step.
+* The forward's earlier prefetch issued its loads before the barrier's fence and lost 1.25x (hc-rounds round 3).
+  This version issues them after the release arrival and wins. That is consistent with the fence explanation given
+  there.
+
+**Default.** P1 and R-pf pass, and W6-pf holds for both cells at every D. The one remaining condition of the section
+66.2 rule is a timing on an exclusive cluster node. Until that runs, `prefetch` stays opt-in.
+
+### 67.1 Cluster multicast of the exchange tile (report only)
+
+**Question.** Would TMA cluster multicast cut the exchange cost (advisor's question 3)? `tools/tma_multicast_bench.cu`
+tests this on the same machine, after the batch. Evidence: `max-width-evidence/tma-multicast-bench.json`.
+
+**Setup.** 128 CTAs. Every step, each CTA needs the same L2-resident tile of 8-64 KB in shared memory; at B = 16 the
+2-D backward stages 8-16 KB per CTA per step. Three modes:
+* **own:** each CTA bulk-copies the whole tile.
+* **multicast:** each of the C CTAs of a cluster copies 1/C of the tile to all C CTAs (`.multicast::cluster`). One
+  cluster barrier per step guards the double buffer.
+* **own+sync:** own plus the same cluster barrier. This is the control.
+
+Median µs per step; every checksum matched.
+
+| tile | C | own | own+sync | multicast |
+| --- | --- | --- | --- | --- |
+| 8 KB | 2 / 4 / 8 | 0.57 / 0.57 / 0.57 | 1.24 / 1.24 / 1.28 | 1.07 / 1.36 / 1.36 |
+| 16 KB | 2 / 4 / 8 | 0.84 / 0.86 / 0.87 | 1.51 / 1.55 / 1.56 | 1.33 / 1.64 / 1.67 |
+| 32 KB | 2 / 4 / 8 | 1.39 / 1.44 / 1.44 | 2.05 / 2.12 / 2.13 | 1.88 / 2.24 / 2.28 |
+| 64 KB | 2 / 4 / 8 | 2.49 / 4.87 / 4.88 | 3.12 / 6.08 / 6.16 | 2.95 / 5.83 / 5.85 |
+
+**Reading.**
+* The cluster barrier alone costs 0.65-0.7 µs per step. That is more than the whole 8-16 KB copy (0.57-0.87 µs).
+* Even with the barrier treated as free, multicast saves at most 0.17-0.18 µs per step at C = 2, compared with
+  own+sync. At C = 4 and 8 it costs 0.05-0.15 µs more up to 32 KB.
+* At the exchange sizes of B = 16 that is at most about 2-3% of a 6-9 µs kernel step. Multicast is not worth building
+  for the single-GPU exchange.
+* NVLS (multi-GPU multicast) could not be tested. Both GPUs of this machine report `MULTICAST_SUPPORTED = 0`, and no
+  NVSwitch fabric was exposed to the container.
