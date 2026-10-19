@@ -2197,3 +2197,33 @@ section 67.
 
 **Expectation.** W4 is 1.1-1.6x, as in section 49 (on the cluster). W3 is above 1 at every D: `cuda_fused` was
 already slower than `cuda` at B = 64 in section 17.
+
+## 69. Results of "b64" (section 68, 2026-10-19)
+
+**Run.** Same machine and the same two GPUs as section 67 (by UUID), same software, source 414ee03d. Before the run,
+the forward configurations were checked against `default_config(D, 64, 1)` on that host. All 30 claim starts
+completed with stable outputs (`ALL_PHASES_RUN`). Evidence: `max-width-evidence/b64-analysis.json`. Report only.
+
+**W3-b64 holds 10/10, W4-b64 10/10.** Training step, H = 1, T = 256, B = 64:
+
+| D | cell | default step (ms) | `cuda_fused` / default | `cuda` / default |
+| --- | --- | --- | --- | --- |
+| 1024 | LSTM FP16 | 5.77 | 3.129 [3.123, 3.134] | 1.562 [1.559, 1.565] |
+| 1280 | LSTM FP16 | 8.17 | 3.292 [3.284, 3.299] | 1.197 [1.190, 1.202] |
+| 1536 | LSTM FP16 | 8.76 | 3.728 [3.721, 3.736] | 1.245 [1.241, 1.248] |
+| 1792 | LSTM FP16 | 10.69 | 4.914 [4.897, 4.929] | 1.134 [1.128, 1.140] |
+| 2048 | LSTM FP16 | 12.46 | 4.777 [4.766, 4.787] | 1.049 [1.046, 1.052] |
+| 1024 | sLSTM BF16 | 5.97 | 2.869 [2.862, 2.876] | 1.484 [1.477, 1.491] |
+| 1280 | sLSTM BF16 | 8.52 | 3.921 [3.900, 3.940] | 1.141 [1.137, 1.144] |
+| 1536 | sLSTM BF16 | 9.05 | 3.611 [3.597, 3.622] | 1.213 [1.206, 1.219] |
+| 1792 | sLSTM BF16 | 11.00 | 4.397 [4.378, 4.409] | 1.101 [1.093, 1.109] |
+| 2048 | sLSTM BF16 | 12.59 | 4.732 [4.714, 4.761] | 1.106 [1.098, 1.114] |
+
+**Reading.**
+* At B = 64, FlashRNN's fused backend is 2.9-4.9x slower than the default. Its per-step kernel does not widen the
+  batch tile.
+* Against `cuda` the default is 1.05-1.56x faster. That matches the cluster's 1.11-1.61x (section 49) except at
+  D = 2048 LSTM, where it is 1.05x here against 1.57x there.
+* At B = 16 on this host, `cuda` was also relatively faster than on the cluster (section 67: 2.0x against 2.9x at
+  D = 2048). The alternating baseline is the more host-sensitive of the two: it depends on cuBLAS and the PyTorch
+  version.
