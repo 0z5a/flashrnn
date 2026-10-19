@@ -1929,3 +1929,26 @@ option dicts used as given.
 khours). Only an interactive QoS on a shared login node remains: at most two GPUs and 80 CPUs, a 2-hour limit and one
 job. Its timings would not be comparable with the exclusive-node batches the rules above were defined on. Batch
 "hgen" is prepared and sealed in its control directory. The defaults of sections 57-63 stand as they are.
+
+## 65. B = 16 against FlashRNN fused with the final defaults (pre-registration, 2026-10-19, before any run of it)
+
+**Why.** At large D and B = 16, FlashRNN-2 had been timed against FlashRNN `cuda_fused` only before the 2-D backward
+existed. Those runs gave 0.73-1.00x at D = 1024-1792 and 1.35-1.79x at D = 2048 (sections 7, 14). Every later
+B = 16 comparison was against `cuda`. This batch measures the current library default against both FlashRNN
+backends, and profiles where the B = 16 step goes, to decide what to optimize next.
+
+**Where it runs.** Only the interactive QoS is available: the shared ACC login node, at most two GPUs and 80 CPUs,
+two hours. The driver uses only the GPUs Slurm allocated to the job. It starts only if those GPUs run no other
+process, and it records every process on the node at the start and the end. **The timings are reported, not used
+to change defaults.** Paired ABBA blocks protect the ratios against slow drift, but not against concurrent use of
+the node.
+
+**Runs (batch "b16", two lanes):**
+* **W3-b16 and W4-b16.** Training step, library default against `cuda_fused` (W3) and `cuda` (W4). H = 1, T = 256,
+  B = 16, D ∈ {1024, 1280, 1536, 1792, 2048} × (LSTM FP16, sLSTM BF16), with the forward pinned to the library's
+  configuration.
+* **Profile (report only).** LSTM FP16, B = 16, D ∈ {1024, 1536, 2048}. It records the step, forward,
+  preactivation, kernel and weight-gradient times, and the in-kernel phases.
+
+**Expectation.** W3-b16 now holds at most D, because the 2-D backward and the fused GEMMs both apply at B = 16. Any
+row that does not hold is the target of the next change.
