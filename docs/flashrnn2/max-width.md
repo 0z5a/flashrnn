@@ -1952,3 +1952,9 @@ the node.
 
 **Expectation.** W3-b16 now holds at most D, because the 2-D backward and the fused GEMMs both apply at B = 16. Any
 row that does not hold is the target of the next change.
+
+**Outcome (2026-10-19): not run.** The interactive node's NVIDIA driver was wedged. Many processes had been in
+uninterruptible sleep for up to six days, among them `nvidia-smi` from root, the monitoring agent and several users.
+The driver's first `nvidia-smi` call (the GPU admission query) hung in `uvm_va_space_destroy`. No GPU case started.
+The job was cancelled after 13.5 minutes, about 0.45 allocated GPU-hours. The batch stays prepared and sealed, so it
+can be re-run unchanged on a working node with a new job name.
