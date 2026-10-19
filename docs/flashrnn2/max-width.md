@@ -2048,6 +2048,10 @@ with the section 65 claims in one batch.
 **Rule.** `prefetch` becomes the BM = 16 default at the D where W6-pf holds for both cells, P1 and R-pf pass, and the
 timing ran on an exclusive compute node. Timings from the shared interactive node are reported only.
 
+**Reading rule for the phase profile (fixed now, before any run).** With prefetch, the loads are issued inside the B1
+timer window (t3 → t4). The profile will therefore show a shorter pointwise phase while B1 stays the same or grows.
+Prefetch is judged by W6-pf and by the sum of the phases per step, never by the B1 phase alone.
+
 **Login-node gates: all pass** (2026-10-19, CUDA 12.8; evidence `max-width-evidence/prefetch-compile.json`).
 
 Scope: 130 BM = 16 builds, at D ∈ {1024, 1280, 1536, 1792, 2048} × (LSTM FP16, sLSTM BF16), with and without prefetch
@@ -2055,7 +2059,13 @@ Scope: 130 BM = 16 builds, at D ∈ {1024, 1280, 1536, 1792, 2048} × (LSTM FP16
 * **No spills.** None of the builds spills. The prefetch builds use 82-202 registers, against 74-200 without
   prefetch.
 * **Default SASS unchanged.** The SASS of the default build is byte-identical to the previous source's at all ten
-  (D, cell), so gate P0 is not needed. A first version that shared the operand loader between both paths changed the
+  (D, cell). A second comparison covered 268 builds without prefetch, and every one is byte-identical to the previous
+  source's:
+  * BM 16/32/64 with and without dG_LP + honly;
+  * the check, delay, no-B1, no-B2 and phase-timer builds;
+  * `FRNN_FLAGS`, `FRNN_MG`, and the D = 1024 conc grid.
+  
+  So every earlier result of the 2-D backward carries over unchanged, and gate P0 is not needed. A first version that shared the operand loader between both paths changed the
   default build (D = 1024 sLSTM: 76 → 121 registers). The prefetch path is therefore preprocessor-guarded.
 * **Loads overlap the wait.** In the prefetch build (D = 1024 LSTM) the next step's seven operand LDGs (one 16-bit h
   gradient, six FP32) sit between `ATOM.E.ADD.STRONG.GPU` (the arrival) and `LD.E.STRONG.GPU` (the polling). The
