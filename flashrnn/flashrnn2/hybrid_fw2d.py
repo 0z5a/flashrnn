@@ -34,12 +34,16 @@ def batch_tile(batch):
     return 16 if batch <= 16 else 32 if batch <= 32 else 64
 
 
-def build(width, bm, slstm, bf16, mode, snap32, verify=0, cache_dir=None, grid=None):
+def build(width, bm, slstm, bf16, mode, snap32, verify=0, cache_dir=None, grid=None, prefetch=False, stages=2):
     pc, q, cr = grid or CONFIGS[width]
     cuda_home = os.environ.get("FRNN_HYBRID_CUDA_HOME", os.environ.get("CUDA_HOME", "/usr/local/cuda"))
     flags = [f"-DFRNN_D={width}", f"-DFRNN_PC={pc}", f"-DFRNN_Q={q}", f"-DFRNN_CR={cr}", f"-DFRNN_BM={int(bm)}",
              f"-DFRNN_SLSTM={int(slstm)}", f"-DFRNN_BF16={int(bf16)}", f"-DFRNN_MODE={int(mode)}",
              f"-DFRNN_SNAP32={int(snap32)}", f"-DFRNN_VERIFY={int(verify)}"]
+    if prefetch:  # split B2 with this step's Wx loads in between (section 76)
+        flags.append("-DFRNN_FW_PREFETCH=1")
+    if stages != 2:  # cp.async staging depth (section 76)
+        flags.append(f"-DFRNN_STAGES={int(stages)}")
     digest = hashlib.sha256(SOURCE.read_bytes() + " ".join(flags).encode()).hexdigest()[:16]
     cache = Path(cache_dir or os.environ.get("FRNN_HYBRID_CACHE",
                                              os.environ.get("TMPDIR", str(Path.home() / ".cache")) + "/frnn_hybrid_bw"))
@@ -54,10 +58,11 @@ def build(width, bm, slstm, bf16, mode, snap32, verify=0, cache_dir=None, grid=N
     return lib
 
 
-def _lib(width, bm, slstm, bf16, mode, snap32, verify=0, grid=None):
-    key = (width, bm, slstm, bf16, mode, snap32, verify, grid)
+def _lib(width, bm, slstm, bf16, mode, snap32, verify=0, grid=None, prefetch=False, stages=2):
+    key = (width, bm, slstm, bf16, mode, snap32, verify, grid, prefetch, stages)
     if key not in _LIBS:
-        lib = ctypes.CDLL(str(build(width, bm, slstm, bf16, mode, snap32, verify, grid=grid)))
+        lib = ctypes.CDLL(str(build(width, bm, slstm, bf16, mode, snap32, verify, grid=grid, prefetch=prefetch,
+                                    stages=stages)))
         lib.frnn_hybrid_fw2d.restype = ctypes.c_int
         lib.frnn_hybrid_fw2d.argtypes = [ctypes.c_void_p] * 10 + [ctypes.c_int] * 7 + [ctypes.c_void_p] * 2
         lib.frnn_hybrid_fw2d_smem.restype = ctypes.c_int
@@ -79,8 +84,12 @@ def verify_bits(verify):
 
 
 def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context, output_mode="full",
-               snapshot_dtype=None, batch_rows=None, conc=False, prof=False, diagnostics=None, _verify=None):
-    """Returns (output, FP32 compute carry). Whole logical calls only (sequence start)."""
+               snapshot_dtype=None, batch_rows=None, conc=False, prof=False, diagnostics=None, grid=None,
+               prefetch=False, stages=2, _verify=None):
+    """Returns (output, FP32 compute carry). Whole logical calls only (sequence start).
+
+    grid, prefetch, stages (experimental, section 76): a (PC, Q, CR) grid in place of CONFIGS (Q = 1: a 1-D split with
+    one grid barrier per step), the split-B2 Wx prefetch, and the cp.async staging depth."""
     from .state_contract import state_contract
 
     if cell not in ("lstm", "slstm"):
@@ -100,7 +109,7 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context, o
         raise ValueError("snapshot dtype must be input dtype or FP32")
     batch, steps, gates, heads, width = wx.shape
     states = len(contract.components)
-    if gates != 4 or not supported(width) or steps < 1:
+    if gates != 4 or (not supported(width) and grid is None) or steps < 1:
         raise ValueError(f"unsupported shape for the 2-D forward (D in {sorted(CONFIGS)})")
     if recurrent.shape != (4, heads, width, width) or bias.shape != (4, heads, width):
         raise ValueError("expected public weight and bias layouts")
@@ -113,7 +122,7 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context, o
     bm = batch_tile(batch) if batch_rows is None else batch_rows
     if conc and width not in CONC_CONFIGS:
         raise ValueError(f"no head-concurrent grid at D = {width} (D in {sorted(CONC_CONFIGS)})")
-    grid = CONC_CONFIGS[width] if conc else None
+    grid = tuple(grid) if grid is not None else (CONC_CONFIGS[width] if conc else None)
     pc, q, _ = grid or CONFIGS[width]
     ctas = pc * q
     if ctas > sms:
@@ -129,14 +138,14 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context, o
     final = torch.empty(initial.shape, device=device, dtype=torch.float32)
     xbuf = torch.empty((resident, bm, width), device=device, dtype=wx.dtype)
     part = torch.empty((resident, q, bm, 4 * width), device=device, dtype=torch.float32)
-    stamp = torch.zeros(resident * pc * q, device=device, dtype=torch.int32)
+    stamp = torch.zeros(resident * pc * q + (1 if prefetch else 0), device=device, dtype=torch.int32)
     bits, seed = verify_bits(_verify)
     if _verify and output_mode == "last":
         raise ValueError("verification reads the stored history: output mode full or hidden")
     if prof:
         bits |= VERIFY_BITS["prof"]
     lib = _lib(width, bm, cell == "slstm", wx.dtype == torch.bfloat16, MODES[output_mode], snap == torch.float32,
-               bits, grid=grid)
+               bits, grid=grid, prefetch=prefetch, stages=stages)
     err = torch.zeros(12, device=device, dtype=torch.int32)
     err[3].fill_(seed)  # in place, no host copy: CUDA-graph safe
     # sLSTM: the kernel reads the device flag itself (no .item(): no host synchronization, CUDA-graph capturable).
