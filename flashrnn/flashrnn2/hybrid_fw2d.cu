@@ -101,6 +101,10 @@ static_assert(STAGES >= 2 && STAGES <= 8, "cp.async stages");
 #define FRNN_FW_SMEMPART 0
 #endif
 constexpr bool BULK = FRNN_FW_BULK != 0, FLAGBAR = FRNN_FW_FLAGBAR != 0, SMEMPART = FRNN_FW_SMEMPART != 0;
+#ifndef FRNN_TRACE
+#define FRNN_TRACE 0
+#endif
+constexpr bool TRACE = FRNN_TRACE != 0;  // section 82: B2 arrival / release stamps of group 0
 #if FRNN_FW_SMEMPART && FRNN_Q != 1
 #error "FRNN_FW_SMEMPART needs Q = 1"
 #endif
@@ -208,6 +212,7 @@ struct Args {
   int* err;              // [12] verification counters / phase timers, [3] delay seed
   int B, T, H, groups, resident, slots, tiles;
   const bool* zero_first;  // sLSTM: device flag, normalizer state zero at the call's first step (nullptr: false)
+  unsigned long long* trace;  // FRNN_TRACE: [T][PC Q][2] globaltimer stamps of group 0 before / after B2
 };
 
 // B fragment register for k (even) and k + 1, output column (g, o): R[g, head, o, k .. k + 1] (contiguous).
@@ -468,7 +473,7 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fw2d_kernel(Args a) {
 #endif
     for (int t = 0; t < a.T; ++t) {
       const bool last = t == a.T - 1;
-      unsigned long long t0 = (VERIFY & V_PROF) ? gtime() : 0;
+      unsigned long long t0 = ((VERIFY & V_PROF) || TRACE) ? gtime() : 0;
 #if FRNN_FW_FLAGBAR
       {
         const bool b2 = !(VERIFY & V_NO_B2) || last;
@@ -520,7 +525,11 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fw2d_kernel(Args a) {
 #else
       if (!(VERIFY & V_NO_B2) || last) grid.sync();  // B2: round(h_{t-1}) complete in xbuf
 #endif
-      unsigned long long t1 = (VERIFY & V_PROF) ? gtime() : 0;
+      unsigned long long t1 = ((VERIFY & V_PROF) || TRACE) ? gtime() : 0;
+      if (TRACE && tid == 0 && slot == 0 && gy == 0) {
+        a.trace[((size_t)t * PC * Q + blockIdx.x) * 2] = t0;
+        a.trace[((size_t)t * PC * Q + blockIdx.x) * 2 + 1] = t1;
+      }
       if (VERIFY & V_DELAY) delay(a.err[3], blockIdx.x + 977, g, t);
       ++cnt;
       if (active) {
@@ -645,11 +654,11 @@ extern "C" int frnn_hybrid_fw2d_ctas() { return PC * Q; }
 extern "C" int frnn_hybrid_fw2d(const void* wx, const void* R, const void* bias, const float* initial, void* out,
                                 float* final, void* xbuf, float* part, int* stamp, int* err, int B, int T, int H,
                                 int groups, int resident, int slots, int tiles, const void* zero_first,
-                                void* stream) {
+                                void* stream, void* trace) {
   Args a{reinterpret_cast<const elem_t*>(wx), reinterpret_cast<const elem_t*>(R),
          reinterpret_cast<const elem_t*>(bias), initial, reinterpret_cast<snap_t*>(out), final,
          reinterpret_cast<elem_t*>(xbuf), part, stamp, err, B, T, H, groups, resident, slots, tiles,
-         reinterpret_cast<const bool*>(zero_first)};
+         reinterpret_cast<const bool*>(zero_first), reinterpret_cast<unsigned long long*>(trace)};
   int smem = frnn_hybrid_fw2d_smem();
   cudaError_t e = cudaFuncSetAttribute(frnn_hybrid_fw2d_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem);
   if (e != cudaSuccess) return (int)e;

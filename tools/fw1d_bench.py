@@ -6,9 +6,10 @@ Per (cell, D), B = 16, T = 256, the forward with hidden output in the input dtyp
   cudnn        torch.nn.LSTM (cuDNN, LSTM only): total forward time, and the recurrent kernels alone from
                torch.profiler (names containing "lstm"), since cuDNN also runs the input projection
   fw2d         the CUDA 2-D forward with its default grid (D in hybrid_fw2d.CONFIGS only)
-  fwc-c{C}-cr{CR}-k{KSPLIT}[-pull]
-               the cluster forward (hybrid_fwc, section 80): C CTAs in one cluster, CR register k-steps, KSPLIT
-               interleaved accumulators, push (default) or pull (symmetric buffers) exchange; D <= 768
+  fwc-c{C}-cr{CR}-k{KSPLIT}[-bx|-sa][-fm][-mc], fwc-wg-...
+               the cluster forward (hybrid_fwc, sections 80-82): C CTAs in one cluster, CR register k-steps, KSPLIT
+               interleaved accumulators; bx = bulk DSMEM exchange, sa = st.async, fm = fast math, mc = TMA multicast
+               through a global staging slot, wg = warpgroup-MMA GEMM; D <= 768
   fw1d-...     the CUDA forward with a 1-D grid (PC x 1 x CR) and the section 76 / 78 options:
                pf = split-B2 Wx prefetch, st4 = 4-stage cp.async staging, bulk = one bulk copy per staged row,
                flag = flat per-CTA flag barrier as B2, sp = gate partials through shared memory
@@ -127,6 +128,16 @@ def main():
                     arms[f"fwc-c{cl}-cr{cr}-k2-sa"] = (dict(base, stasync=True), "fwc")
                     arms[f"fwc-c{cl}-cr{cr}-k2-sa-fm"] = (dict(base, stasync=True, fastmath=True), "fwc")
                     arms[f"fwc-c{cl}-cr{cr}-k1-sa-fm"] = (dict(base, ksplit=1, stasync=True, fastmath=True), "fwc")
+                    arms[f"fwc-c{cl}-cr{cr}-k2-bx-fm-mc"] = (dict(base, bulkx=True, fastmath=True, mcast=True), "fwc")
+                if hybrid_fwc.wgmma_supported(width, cl):  # section 82: warpgroup-MMA GEMM, register k-steps CR
+                    ks = width // 16
+                    for cr in sorted({16, 24, ks} & set(range(ks + 1))):
+                        wgb = dict(cluster=cl, cr=cr, ksplit=2, wgmma=True)
+                        arms[f"fwc-wg-c{cl}-cr{cr}-k2-bx"] = (dict(wgb, bulkx=True), "fwc")
+                        arms[f"fwc-wg-c{cl}-cr{cr}-k2-bx-fm"] = (dict(wgb, bulkx=True, fastmath=True), "fwc")
+                        arms[f"fwc-wg-c{cl}-cr{cr}-k1-bx-fm"] = (dict(wgb, ksplit=1, bulkx=True, fastmath=True), "fwc")
+                        arms[f"fwc-wg-c{cl}-cr{cr}-k2-sa-fm"] = (dict(wgb, stasync=True, fastmath=True), "fwc")
+                        arms[f"fwc-wg-c{cl}-cr{cr}-k1-bx-fm-mc"] = (dict(wgb, ksplit=1, bulkx=True, fastmath=True, mcast=True), "fwc")
             for pc, cr in GRIDS[width]:
                 arms[f"fw1d-p{pc}-cr{cr}"] = (dict(grid=(pc, 1, cr)), "cuda")
                 for name, opts in VARIANTS.items():

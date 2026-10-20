@@ -37,6 +37,24 @@
 // decides whether the error budget holds).
 // The GEMM loads the fragments of k-step c + 1 while k-step c multiplies (explicit software pipeline).
 //
+// FRNN_FWC_WGMMA = 1 (section 82, needs FRNN_FWC_BULKX and NC = 128): the GEMM is transposed onto Hopper's
+// warpgroup MMA, preact^T [NC x BM] = R_block [NC x D] x round(h)^T [D x BM], as wgmma.m64n16k16 with the CTA's R
+// block as the M = 64 operand (warpgroup w: output columns 64 w .. 64 w + 63) and round(h) as the N = 16 operand.
+// R k-steps c < CR live in registers (A fragments, 4 per k-step and thread), the rest in shared memory as canonical
+// K-major core-matrix tiles (64 x 16 per k-step, 2 KB); round(h) is exchanged straight into the canonical K-major
+// layout of the B operand (8 x 8 core matrices of 128 contiguous bytes; the two 8-row groups adjacent, SBO 128 B;
+// K-adjacent core columns LBO = 288 B apart, 32 B of it padding), so a CTA's block is one contiguous piece: one bulk
+// copy per peer, or 16-byte st.async stores (a quad of lanes gathers its 8 units) into the canonical positions. FRNN_WG_SWAP = 1 swaps the descriptors' leading / stride offsets (tools/wgmma_probe.cu
+// decides the convention).
+// FRNN_TRACE = 1 (section 82): thread 0 of every CTA of group 0 writes globaltimer stamps before and after the
+// per-step exchange wait into trace[(t * C + cta) * 2 + {0, 1}] (arrival-jitter diagnostics).
+// FRNN_FWC_MCAST = 1 (section 82, needs the bulk exchange without st.async): the owner writes its round(h) block to a
+// global staging slot (gstage, double buffered by parity) instead of local shared memory and issues ONE bulk copy
+// global -> shared::cluster with .multicast::cluster to all C CTAs (itself included), completing on every CTA's
+// mbarrier of the target parity. One asynchronous request per CTA and step instead of C, at the price of an L2
+// round trip (generic stores, fence.proxy.async.global, TMA read). Section 67 found the barrier-based form of this
+// unprofitable on H100; this form has no barrier.
+//
 // Build flags: FRNN_D, FRNN_C (cluster size; 16 is non-portable and needs the launch attribute), FRNN_CR (k-steps of
 // R in registers per warp), FRNN_KSPLIT, FRNN_SLSTM, FRNN_BF16, FRNN_MODE (0 full / 1 hidden / 2 last), FRNN_SNAP32,
 // FRNN_VERIFY (bit 16: phase timers; globaltimer, thread 0, units of 64 ns: err[4] barrier, err[5] GEMM, err[6]
@@ -94,6 +112,27 @@ constexpr bool STASYNC = FRNN_FWC_STASYNC != 0;
 #ifndef FRNN_FASTMATH
 #define FRNN_FASTMATH 0
 #endif
+#ifndef FRNN_FWC_WGMMA
+#define FRNN_FWC_WGMMA 0
+#endif
+constexpr bool WG = FRNN_FWC_WGMMA != 0;
+#if FRNN_FWC_WGMMA && !FRNN_FWC_BULKX
+#error "FRNN_FWC_WGMMA needs the mbarrier exchange (FRNN_FWC_BULKX, with or without FRNN_FWC_STASYNC)"
+#endif
+#ifndef FRNN_WG_SWAP
+#define FRNN_WG_SWAP 0
+#endif
+#ifndef FRNN_TRACE
+#define FRNN_TRACE 0
+#endif
+constexpr bool TRACE = FRNN_TRACE != 0;
+#ifndef FRNN_FWC_MCAST
+#define FRNN_FWC_MCAST 0
+#endif
+constexpr bool MCAST = FRNN_FWC_MCAST != 0;
+#if FRNN_FWC_MCAST && (!FRNN_FWC_BULKX || FRNN_FWC_STASYNC)
+#error "FRNN_FWC_MCAST needs the bulk exchange layout (FRNN_FWC_BULKX without FRNN_FWC_STASYNC)"
+#endif
 constexpr int UP = STASYNC ? 2 : 1;  // units per owned slot (st.async moves two adjacent units per store)
 #if FRNN_SNAP32
 typedef float snap_t;
@@ -113,8 +152,15 @@ constexpr int NUP = NU + 8;  // FRNN_FWC_BULKX: padded columns of one unit block
 constexpr int XBLK = BM * NUP;  // elements of one exchanged block
 constexpr int PE = (BM * NU / UP + THREADS - 1) / THREADS;
 constexpr int SMEM_R = WARPS * CSM * NTW * 32 * 8, SMEM_P = BM * NC * 4;
-constexpr int SMEM_H = BULKX ? 2 * C * XBLK * 2 : 2 * BM * LDH * 2;
+// Elements of one exchange buffer (per step parity): canonical K-major [BM x D] (wgmma), unit-block-major (bulk), or
+// padded row-major.
+constexpr int HK = 144;  // wgmma mode: elements per K core column of the h operand (2 x 64 + 16 padding)
+constexpr int PBUF = WG ? (D / 8) * HK : (BULKX ? C * XBLK : BM * LDH);
+constexpr int BLKE = WG ? (NU / 8) * HK : XBLK;  // bulk modes: elements of one CTA's contiguous exchange block
+constexpr int SMEM_H = 2 * PBUF * 2;
 static_assert(!BULKX || (XBLK * 2) % 16 == 0, "bulk copies move multiples of 16 bytes");
+static_assert(!WG || NC == 128, "wgmma mode: two m64 tiles, one per warpgroup (D = 32 C)");
+static_assert(!WG || WARPS * CSM * NTW * 32 * 8 == 2 * CSM * 2048, "wgmma mode: one 2 KB tile per warpgroup and k-step");
 static_assert(D % C == 0 && NU % 16 == 0, "a warp's columns must lie within one gate (NU a multiple of 16)");
 static_assert(NU % NCW == 0, "a warp's columns must not cross a gate");
 static_assert(!PULL || NU % 16 == 0, "pull mode reads one owner per 16-wide k-step");
@@ -182,6 +228,15 @@ __device__ __forceinline__ void bulk_to_peer(const void* local_src, unsigned byt
   asm volatile("cp.async.bulk.shared::cluster.shared::cta.mbarrier::complete_tx::bytes [%0], [%1], %2, [%3];"
                ::"r"(rdst), "r"(src), "r"(bytes), "r"(rbar) : "memory");
 }
+#if FRNN_FWC_MCAST
+// One bulk copy of a global block into the same shared offset of every CTA in ctaMask, completing `bytes` on each
+// CTA's copy of local_bar.
+__device__ __forceinline__ void mcast_from_global(void* local_dst, const void* gsrc, unsigned bytes,
+                                                  unsigned long long* local_bar, unsigned short mask) {
+  asm volatile("cp.async.bulk.shared::cluster.global.mbarrier::complete_tx::bytes.multicast::cluster [%0], [%1], %2, [%3], %4;"
+               ::"r"(smem_u32(local_dst)), "l"(gsrc), "r"(bytes), "r"(smem_u32(local_bar)), "h"(mask) : "memory");
+}
+#endif
 #if FRNN_FWC_STASYNC
 // 4-byte store into peer CTA's shared memory (same offset as local_dst), completing 4 transaction bytes on the peer's
 // copy of local_bar.
@@ -193,7 +248,56 @@ __device__ __forceinline__ void st_async_peer(void* local_dst, uint32_t value, u
   asm volatile("st.async.weak.shared::cluster.mbarrier::complete_tx::bytes.b32 [%0], %1, [%2];"
                ::"r"(rdst), "r"(value), "r"(rbar) : "memory");
 }
+// 16-byte store (four packed unit pairs) into peer CTA's shared memory, completing 16 transaction bytes.
+__device__ __forceinline__ void st_async_peer_v4(void* local_dst, uint32_t v0, uint32_t v1, uint32_t v2, uint32_t v3,
+                                                 unsigned long long* local_bar, int peer) {
+  const unsigned dst = smem_u32(local_dst), bar = smem_u32(local_bar);
+  unsigned rdst, rbar;
+  asm volatile("mapa.shared::cluster.u32 %0, %1, %2;" : "=r"(rdst) : "r"(dst), "r"(peer));
+  asm volatile("mapa.shared::cluster.u32 %0, %1, %2;" : "=r"(rbar) : "r"(bar), "r"(peer));
+  asm volatile("st.async.weak.shared::cluster.mbarrier::complete_tx::bytes.v4.b32 [%0], {%1,%2,%3,%4}, [%5];"
+               ::"r"(rdst), "r"(v0), "r"(v1), "r"(v2), "r"(v3), "r"(rbar) : "memory");
+}
 #endif
+#endif
+
+#if FRNN_FWC_WGMMA
+// Canonical K-major no-swizzle layouts (elements; a core matrix is 8 rows x 16 bytes, contiguous). h operand
+// [BM x D]: the two 8-row groups of one K core column are adjacent (SBO = 128 B) and K-adjacent core columns are
+// HK = 288 B apart (LBO; 256 B of data + 32 B of padding), so that a CTA's block of NU units is one contiguous piece
+// (one bulk copy per peer) and a warp's exchange stores of 4 consecutive core columns hit distinct bank groups. R tile
+// [64 x 16] of one k-step: core matrix (m / 8, k / 8) at (m / 8) * 128 + (k / 8) * 64 (SBO 256 B, LBO 128 B).
+__device__ __forceinline__ int hoff(int n, int k) { return (k >> 3) * HK + (n >> 3) * 64 + (n & 7) * 8 + (k & 7); }
+__device__ __forceinline__ int aoff(int m, int k) { return (m >> 3) * 128 + (k >> 3) * 64 + (m & 7) * 8 + (k & 7); }
+constexpr unsigned WG_LBO_H = FRNN_WG_SWAP ? 128 : HK * 2, WG_SBO_H = FRNN_WG_SWAP ? HK * 2 : 128;
+constexpr unsigned WG_LBO_A = FRNN_WG_SWAP ? 256 : 128, WG_SBO_A = FRNN_WG_SWAP ? 128 : 256;
+__device__ __forceinline__ uint64_t make_desc(const void* p, unsigned lbo, unsigned sbo) {
+  uint64_t d = 0;
+  d |= (uint64_t)((smem_u32(p) & 0x3FFFFu) >> 4);
+  d |= (uint64_t)((lbo & 0x3FFFFu) >> 4) << 16;
+  d |= (uint64_t)((sbo & 0x3FFFFu) >> 4) << 32;
+  return d;  // base offset 0, no swizzle
+}
+__device__ __forceinline__ void wg_fence() { asm volatile("wgmma.fence.sync.aligned;" ::: "memory"); }
+__device__ __forceinline__ void wg_commit() { asm volatile("wgmma.commit_group.sync.aligned;" ::: "memory"); }
+__device__ __forceinline__ void wg_wait0() { asm volatile("wgmma.wait_group.sync.aligned 0;" ::: "memory"); }
+#if FRNN_BF16
+#define FRNN_WGMMA "wgmma.mma_async.sync.aligned.m64n16k16.f32.bf16.bf16"
+#else
+#define FRNN_WGMMA "wgmma.mma_async.sync.aligned.m64n16k16.f32.f16.f16"
+#endif
+__device__ __forceinline__ void wg_ss(float (&d)[8], uint64_t da, uint64_t db) {
+  asm volatile("{\n.reg .pred p;\nsetp.ne.b32 p, %10, 0;\n" FRNN_WGMMA
+               " {%0,%1,%2,%3,%4,%5,%6,%7}, %8, %9, p, 1, 1, 0, 0;\n}\n"
+               : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3]), "+f"(d[4]), "+f"(d[5]), "+f"(d[6]), "+f"(d[7])
+               : "l"(da), "l"(db), "r"(1));
+}
+__device__ __forceinline__ void wg_rs(float (&d)[8], const uint32_t (&a)[4], uint64_t db) {
+  asm volatile("{\n.reg .pred p;\nsetp.ne.b32 p, %13, 0;\n" FRNN_WGMMA
+               " {%0,%1,%2,%3,%4,%5,%6,%7}, {%8,%9,%10,%11}, %12, p, 1, 1, 0;\n}\n"
+               : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3]), "+f"(d[4]), "+f"(d[5]), "+f"(d[6]), "+f"(d[7])
+               : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "l"(db), "r"(1));
+}
 #endif
 
 __device__ __forceinline__ void cluster_arrive() { asm volatile("barrier.cluster.arrive.release.aligned;" ::: "memory"); }
@@ -209,6 +313,8 @@ struct Args {
   int* err;              // [12] phase timers
   const bool* zero_first;  // sLSTM: normalizer zero at the call's first step (device flag; nullptr: false)
   int B, T, H, tiles;
+  unsigned long long* trace;  // FRNN_TRACE: [T][C][2] globaltimer stamps of group 0 (before / after the wait)
+  elem_t* gstage;             // FRNN_FWC_MCAST: [groups][C][2 parities][BLKE] global staging of round(h) blocks
 };
 
 __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
@@ -236,6 +342,30 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
   const size_t hd = (size_t)a.H * D, state_stride = (size_t)a.B * hd, out_stride = (size_t)a.B * a.T * hd;
 
   // Resident R: the first CR k-steps of every warp in registers, the rest in shared memory (fragment order).
+#if FRNN_FWC_WGMMA
+  // wgmma A operand: warpgroup wg owns output columns 64 wg .. + 63; warp wig of it rows 16 wig + fg (+ 8) of that
+  // tile. Registers: A fragments of k-steps c < CR (k = 16 c + 2 ft, + 8); shared memory: canonical tiles of the rest.
+  const int wg = warp >> 2, wig = warp & 3;
+  elem_t* sa = reinterpret_cast<elem_t*>(smem);  // [2 warpgroups][CSM][64 x 16 canonical tile]
+  uint32_t areg[CR > 0 ? CR : 1][4];
+  {
+    const int ol = wg * 64 + wig * 16 + fg;  // local output column (gate ol / NU, unit ol % NU)
+#pragma unroll
+    for (int c = 0; c < CR; ++c) {
+      const int k = c * 16 + 2 * ft;
+      areg[c][0] = r_pair(a.R, a.H, head, ol / NU, cb * NU + ol % NU, k);
+      areg[c][1] = r_pair(a.R, a.H, head, (ol + 8) / NU, cb * NU + (ol + 8) % NU, k);
+      areg[c][2] = r_pair(a.R, a.H, head, ol / NU, cb * NU + ol % NU, k + 8);
+      areg[c][3] = r_pair(a.R, a.H, head, (ol + 8) / NU, cb * NU + (ol + 8) % NU, k + 8);
+    }
+    for (int i = tid; i < 2 * CSM * 1024; i += THREADS) {
+      const int w = i / (CSM * 1024), j = (i / 1024) % CSM, m = (i % 1024) / 16, kk = i % 16;
+      const int o = w * 64 + m, k = (CR + j) * 16 + kk;
+      sa[(size_t)(w * CSM + j) * 1024 + aoff(m, kk)] =
+          a.R[(((size_t)(o / NU) * a.H + head) * D + cb * NU + o % NU) * D + k];
+    }
+  }
+#else
   uint32_t rreg[CR > 0 ? CR : 1][NTW][2];
 #pragma unroll
   for (int c = 0; c < CR; ++c)
@@ -251,6 +381,39 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
       sr[(((size_t)warp * CSM + c) * NTW + nt) * 32 + lane] =
           make_uint2(r_pair(a.R, a.H, head, g_warp, o, k), r_pair(a.R, a.H, head, g_warp, o, k + 8));
     }
+#endif
+  // Element offset of (row lrow, unit u0 of this CTA) within one parity buffer of the exchange layout.
+  auto xoff = [&](int lrow, int u0) -> int {
+#if FRNN_FWC_WGMMA
+    return hoff(lrow, cb * NU + u0);
+#else
+    return BULKX ? cb * XBLK + lrow * NUP + u0 : lrow * LDH + cb * NU + u0;
+#endif
+  };
+#if FRNN_FWC_MCAST
+  // My global staging slots (one per parity); the block's element (lrow, u0) lives at xoff - my block's base.
+  elem_t* const gstage = a.gstage + ((size_t)g * C + cb) * 2 * BLKE;
+  const int blk0 = WG ? cb * (NU / 8) * HK : cb * XBLK;
+#endif
+#if FRNN_FWC_STASYNC
+  // st.async publication of one owned unit pair (packed) to every peer's buffer at parity offset pbase. In wgmma mode
+  // the four lanes of a quad own 8 consecutive units of one row (one 16-byte core-matrix row piece): the quad gathers
+  // its four pairs and lane j stores the 16 bytes to peers j, j + 4, ... (4 v4 stores per lane instead of C b32 stores).
+  auto publish = [&](uint32_t v, int lrow, int u0, size_t pbase, unsigned long long* bar) {
+#if FRNN_FWC_WGMMA
+    static_assert(PE == 1 && NU / UP >= 4 && (NU / UP) % 4 == 0, "wgmma st.async: whole quads own 8-unit pieces");
+    const int q = lane & 3, base = lane & ~3;
+    const uint32_t v0 = __shfl_sync(0xffffffffu, v, base), v1 = __shfl_sync(0xffffffffu, v, base + 1),
+                   v2 = __shfl_sync(0xffffffffu, v, base + 2), v3 = __shfl_sync(0xffffffffu, v, base + 3);
+    elem_t* dst = hbuf + pbase + xoff(lrow, u0 & ~7);
+    for (int r = q; r < C; r += 4) st_async_peer_v4(dst, v0, v1, v2, v3, bar, r);
+#else
+    elem_t* dst = hbuf + pbase + xoff(lrow, u0);
+#pragma unroll
+    for (int r = 0; r < C; ++r) st_async_peer(dst, v, bar, r);
+#endif
+  };
+#endif
 
   // Pointwise ownership: slot e of this thread is (row idx / (NU / UP), units cb * NU + UP * (idx % (NU / UP)) ..
   // + UP - 1), fixed for the call.
@@ -289,33 +452,50 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
       for (int q = 0; q < 4; ++q) bias[e][j][q] = own ? from_elem(a.bias[((size_t)q * a.H + head) * D + o]) : 0.f;
     }
     if (own) {  // round(h_0) into buffer 0 (of every peer, or only the own buffer in pull / bulk mode); rows >= B: 0
+      const int off = xoff(lrow, u0);
       if (STASYNC) {
 #if FRNN_FWC_STASYNC
-        const uint32_t v = pack(to_elem(hs[e][0]), to_elem(hs[e][UP - 1]));
-#pragma unroll
-        for (int r = 0; r < C; ++r) st_async_peer(hbuf + (size_t)cb * XBLK + (size_t)lrow * NUP + u0, v, &xbar[0], r);
+        publish(pack(to_elem(hs[e][0]), to_elem(hs[e][UP - 1])), lrow, u0, 0, &xbar[0]);
 #endif
-      } else if (BULKX) {
-        hbuf[(size_t)cb * XBLK + (size_t)lrow * NUP + u0] = to_elem(hs[e][0]);
-      } else if (PULL) {
-        hbuf[(size_t)lrow * LDH + cb * NU + u0] = to_elem(hs[e][0]);
+      } else if (MCAST) {
+#if FRNN_FWC_MCAST
+        gstage[off - blk0] = to_elem(hs[e][0]);
+#endif
+      } else if (BULKX || PULL) {
+        hbuf[off] = to_elem(hs[e][0]);
       } else {
 #pragma unroll
-        for (int r = 0; r < C; ++r) peer[r][(size_t)lrow * LDH + cb * NU + u0] = to_elem(hs[e][0]);
+        for (int r = 0; r < C; ++r) peer[r][off] = to_elem(hs[e][0]);
       }
     }
   }
 #if FRNN_FWC_BULKX && !FRNN_FWC_STASYNC
-  // Prologue exchange: my block of round(h_0) to every peer's parity-0 buffer; arm my parity-0 barrier.
+  // Prologue exchange: my block of round(h_0) to every peer's parity-0 buffer; arm my parity-0 barrier. In wgmma
+  // mode the block is two contiguous pieces (one per 8-row group), NU * 16 bytes each.
+  // Bytes landing per step (all CTAs' blocks): the canonical layout has no padding; the unit-block-major layout
+  // copies its NUP padded columns too.
+  constexpr unsigned XBYTES = WG ? (unsigned)(PBUF * sizeof(elem_t)) : (unsigned)(C * XBLK * sizeof(elem_t));
   __syncthreads();
+#if FRNN_FWC_MCAST
+  if (tid == 0) {
+    asm volatile("fence.proxy.async.global;" ::: "memory");  // the CTA's generic stores before the async-proxy read
+    mbar_expect(&xbar[0], XBYTES);
+    mcast_from_global(hbuf + blk0, gstage, BLKE * sizeof(elem_t), &xbar[0], (unsigned short)((1u << C) - 1u));
+  }
+#else
   asm volatile("fence.proxy.async.shared::cta;" ::: "memory");
-  if (tid == 0) mbar_expect(&xbar[0], (unsigned)(C * XBLK * sizeof(elem_t)));
-  if (tid < C) bulk_to_peer(hbuf + (size_t)cb * XBLK, XBLK * sizeof(elem_t), &xbar[0], tid);
+  if (tid == 0) mbar_expect(&xbar[0], XBYTES);
+  if (tid < C) bulk_to_peer(hbuf + (size_t)(WG ? cb * (NU / 8) * HK : cb * XBLK), BLKE * sizeof(elem_t), &xbar[0], tid);
+#endif
+#endif
+#if FRNN_FWC_WGMMA
+  __syncthreads();  // the canonical R tiles are complete before any warpgroup MMA reads them
+  asm volatile("fence.proxy.async.shared::cta;" ::: "memory");
 #endif
 
   for (int t = 0; t < a.T; ++t) {
     const bool last = t == a.T - 1;
-    unsigned long long t0 = (VERIFY & V_PROF) ? gtime() : 0;
+    unsigned long long t0 = ((VERIFY & V_PROF) || TRACE) ? gtime() : 0;
     if (!BULKX) cluster_arrive();  // my round(h_{t-1}) stores (and the prologue's h_0) are released to the cluster
 #pragma unroll
     for (int e = 0; e < PE; ++e) {  // this step's input projections, loaded while the cluster arrives
@@ -337,12 +517,56 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
 #else
     cluster_wait();  // every peer's round(h_{t-1}) is in hbuf[t % 2]
 #endif
-    unsigned long long t1 = (VERIFY & V_PROF) ? gtime() : 0;
+    unsigned long long t1 = ((VERIFY & V_PROF) || TRACE) ? gtime() : 0;
+    if (TRACE && tid == 0 && blockIdx.y == 0) {
+      a.trace[((size_t)t * C + cb) * 2] = t0;
+      a.trace[((size_t)t * C + cb) * 2 + 1] = t1;
+    }
 
+#if FRNN_FWC_WGMMA
+    // GEMM (wgmma): preact^T [64 x 16 per warpgroup] = R tile [64 x D] x round(h)^T; A from registers (c < CR) or the
+    // canonical shared-memory tiles, B = hbuf[t % 2] through its descriptor (k-step c: + 256 bytes).
+    {
+      const elem_t* hb = hbuf + (size_t)(t & 1) * PBUF;
+      asm volatile("fence.proxy.async.shared::cta;" ::: "memory");  // peers' generic-proxy stores before the async MMA
+      float acc[KSPLIT][8];
+#pragma unroll
+      for (int s = 0; s < KSPLIT; ++s)
+#pragma unroll
+        for (int q = 0; q < 8; ++q) acc[s][q] = 0.f;
+      wg_fence();
+#pragma unroll
+      for (int c = 0; c < KS; ++c) {
+        const uint64_t db = make_desc(hb + c * 2 * HK, WG_LBO_H, WG_SBO_H);  // k-step c: K core columns 2c, 2c + 1
+        if (c < CR) {
+          wg_rs(acc[c % KSPLIT], areg[c < CR ? c : 0], db);
+        } else {
+          wg_ss(acc[c % KSPLIT], make_desc(sa + (size_t)(wg * CSM + (c - CR)) * 1024, WG_LBO_A, WG_SBO_A), db);
+        }
+      }
+      wg_commit();
+      wg_wait0();
+      if ((VERIFY & V_PROF) && tid == 0) atomicAdd(a.err + 5, (int)((gtime() - t1) >> 6));  // MMA chain
+#pragma unroll
+      for (int s = 1; s < KSPLIT; ++s)
+#pragma unroll
+        for (int q = 0; q < 8; ++q) acc[0][q] += acc[s][q];
+      // D fragment: rows (output columns) 16 wig + fg (+ 8), columns (batch rows) 2 ft (+ 1), + 8.
+      const int ol = wg * 64 + wig * 16 + fg, n0 = 2 * ft;
+      spart[(size_t)n0 * NC + ol] = acc[0][0];
+      spart[(size_t)(n0 + 1) * NC + ol] = acc[0][1];
+      spart[(size_t)n0 * NC + ol + 8] = acc[0][2];
+      spart[(size_t)(n0 + 1) * NC + ol + 8] = acc[0][3];
+      spart[(size_t)(n0 + 8) * NC + ol] = acc[0][4];
+      spart[(size_t)(n0 + 9) * NC + ol] = acc[0][5];
+      spart[(size_t)(n0 + 8) * NC + ol + 8] = acc[0][6];
+      spart[(size_t)(n0 + 9) * NC + ol + 8] = acc[0][7];
+    }
+#else
     // GEMM: hbuf[t % 2] (A, 16 x D) times the resident R block (B) -> gate preactivations of the warp's columns.
     {
-      const elem_t* hb = hbuf + (BULKX ? (size_t)(t & 1) * C * XBLK : (size_t)(t & 1) * BM * LDH);
-      const size_t par = (size_t)(t & 1) * BM * LDH;
+      const elem_t* hb = hbuf + (size_t)(t & 1) * PBUF;
+      const size_t par = (size_t)(t & 1) * PBUF;
       float acc[KSPLIT][NTW][4];
 #pragma unroll
       for (int s = 0; s < KSPLIT; ++s)
@@ -408,12 +632,12 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
         *reinterpret_cast<float2*>(spart + (size_t)(fg + 8) * NC + col) = make_float2(acc[0][nt][2], acc[0][nt][3]);
       }
     }
+#endif
     __syncthreads();  // the warps' preactivations are complete in spart
     unsigned long long t2 = (VERIFY & V_PROF) ? gtime() : 0;
 
     // Pointwise update of the owned elements; round(h_t) into every peer's next-parity buffer.
-    const size_t nb_delta = BULKX ? (size_t)((t + 1) & 1) * C * XBLK + (size_t)cb * XBLK
-                                  : (size_t)((t + 1) & 1) * BM * LDH;
+    const size_t nb_delta = (size_t)((t + 1) & 1) * PBUF;
     elem_t hv[PE][UP];
 #pragma unroll
     for (int e = 0; e < PE; ++e) {
@@ -471,27 +695,35 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
       for (int e = 0; e < PE; ++e) {
         int lrow, u0;
         if (!elem(e, lrow, u0)) continue;
-        const int o = cb * NU + u0;
+        const size_t off = nb_delta + xoff(lrow, u0);
         if (STASYNC) {
 #if FRNN_FWC_STASYNC
-          const uint32_t v = pack(hv[e][0], hv[e][UP - 1]);
-#pragma unroll
-          for (int r = 0; r < C; ++r) st_async_peer(hbuf + nb_delta + (size_t)lrow * NUP + u0, v, &xbar[(t + 1) & 1], r);
+          publish(pack(hv[e][0], hv[e][UP - 1]), lrow, u0, nb_delta, &xbar[(t + 1) & 1]);
 #endif
-        } else if (BULKX) {
-          hbuf[nb_delta + (size_t)lrow * NUP + u0] = hv[e][0];
-        } else if (PULL) {
-          hbuf[nb_delta + (size_t)lrow * LDH + o] = hv[e][0];
+        } else if (MCAST) {
+#if FRNN_FWC_MCAST
+          gstage[(size_t)((t + 1) & 1) * BLKE + xoff(lrow, u0) - blk0] = hv[e][0];
+#endif
+        } else if (BULKX || PULL) {
+          hbuf[off] = hv[e][0];
         } else {
 #pragma unroll
-          for (int r = 0; r < C; ++r) peer[r][nb_delta + (size_t)lrow * LDH + o] = hv[e][0];
+          for (int r = 0; r < C; ++r) peer[r][off] = hv[e][0];
         }
       }
-#if FRNN_FWC_BULKX && !FRNN_FWC_STASYNC
+#if FRNN_FWC_MCAST
+      __syncthreads();  // the block is complete in my global staging slot
+      if (tid == 0) {
+        asm volatile("fence.proxy.async.global;" ::: "memory");
+        mbar_expect(&xbar[(t + 1) & 1], XBYTES);
+        mcast_from_global(hbuf + nb_delta + blk0, gstage + (size_t)((t + 1) & 1) * BLKE, BLKE * sizeof(elem_t),
+                          &xbar[(t + 1) & 1], (unsigned short)((1u << C) - 1u));
+      }
+#elif FRNN_FWC_BULKX && !FRNN_FWC_STASYNC
       __syncthreads();  // the block is complete in local shared memory
       asm volatile("fence.proxy.async.shared::cta;" ::: "memory");  // generic stores before the async-proxy copy
-      if (tid == 0) mbar_expect(&xbar[(t + 1) & 1], (unsigned)(C * XBLK * sizeof(elem_t)));
-      if (tid < C) bulk_to_peer(hbuf + nb_delta, XBLK * sizeof(elem_t), &xbar[(t + 1) & 1], tid);
+      if (tid == 0) mbar_expect(&xbar[(t + 1) & 1], XBYTES);
+      if (tid < C) bulk_to_peer(hbuf + nb_delta + (size_t)(WG ? cb * (NU / 8) * HK : cb * XBLK), BLKE * sizeof(elem_t), &xbar[(t + 1) & 1], tid);
 #endif
     }
     if ((VERIFY & V_PROF) && tid == 0) {
@@ -527,13 +759,15 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
 
 extern "C" int frnn_hybrid_fwc_smem() { return SMEM_R + SMEM_H + SMEM_P; }
 extern "C" int frnn_hybrid_fwc_ctas() { return C; }
+extern "C" int frnn_hybrid_fwc_block_elems() { return BULKX ? BLKE : 0; }
 
 extern "C" int frnn_hybrid_fwc(const void* wx, const void* R, const void* bias, const float* initial, void* out,
                                float* final, int* err, const void* zero_first, int B, int T, int H, int groups,
-                               int tiles, void* stream) {
+                               int tiles, void* stream, void* trace, void* gstage) {
   Args a{reinterpret_cast<const elem_t*>(wx), reinterpret_cast<const elem_t*>(R),
          reinterpret_cast<const elem_t*>(bias), initial, reinterpret_cast<snap_t*>(out), final, err,
-         reinterpret_cast<const bool*>(zero_first), B, T, H, tiles};
+         reinterpret_cast<const bool*>(zero_first), B, T, H, tiles, reinterpret_cast<unsigned long long*>(trace),
+         reinterpret_cast<elem_t*>(gstage)};
   const int smem = frnn_hybrid_fwc_smem();
   cudaError_t e = cudaFuncSetAttribute(frnn_hybrid_fwc_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem);
   if (e != cudaSuccess) return (int)e;

@@ -2796,3 +2796,174 @@ rate: about 0.3 µs for the phase). With it the step would be about 2.0-2.1 µs:
 exchange (0.55), the pointwise (0.49) and the loop overhead (0.4) stay. Beating cuDNN at D = 512 would need all three
 below 0.3 µs as well. That is not established as achievable; the design's remaining headroom is about 1.3x, and the
 gap is 1.84x.
+
+## 82. wgmma for the cluster forward's GEMM, the fast-math FP64 gate, and barrier arrival jitter (pre-registration, 2026-10-20, before any run of it)
+
+**Why.** Section 81 left one lever for the cluster forward's MMA phase (1.1-1.3 µs of 2.90 at D = 512): Hopper's
+warpgroup MMA, and a question about the fast-math pointwise (0.95 → 0.49 µs) that the FP64 qualification has to answer.
+A third, cheaper item follows a claim in a scheduling note the user shared (a synchronization point costs the maximum
+over the participants' arrival jitter, which for N participants grows like E[max of N] of the jitter distribution):
+our grid and cluster barriers are exactly such points, and the per-CTA stamps to test it cost one build flag.
+
+**wgmma (`FRNN_FWC_WGMMA`, `hybrid_fwc.cu`).** The GEMM is transposed: preact^T [NC = 128 × BM = 16] = R_block [128 × D]
+× round(h)^T, as `wgmma.m64n16k16` (f32 accumulate) with the CTA's R block as the M operand (warpgroup w owns output
+columns 64 w .. 64 w + 63; two warpgroups per CTA) and round(h) as N = 16. R k-steps c < CR live in registers as A
+fragments (4 per k-step and thread; CR = 32 = all of D = 512 is 128 registers), the rest in shared memory as canonical
+K-major core-matrix tiles (64 × 16 per k-step, 2 KB). round(h) is exchanged straight into the canonical K-major layout of
+the B operand (8 × 8 core matrices of 128 contiguous bytes; LBO 128 B, SBO 16 D B), so the bulk exchange is two
+copies per peer (one per 8-row group) and st.async stores land at the canonical positions. The descriptor convention
+(which 14-bit field is the K-adjacent core-matrix stride) is decided by `tools/wgmma_probe.cu` against a CPU reference
+before the kernel runs; `FRNN_WG_SWAP` selects the other reading. Only D = 512 (C = 16) and D = 256 (C = 8) satisfy NC = 128.
+
+Projection (not a prediction of success): per step 2 warpgroups × 32 `m64n16k16` = 64 wgmma at about 7.7 cycles each
+at Hopper's dense rate ≈ 0.28 µs, plus B-operand shared-memory traffic (32 KB / 128 B per cycle ≈ 0.15 µs, overlapping);
+with A from shared memory for 32 - CR k-steps, 2 KB per wgmma adds 16 cycles each.
+
+**Predictions.**
+* P1 (MMA phase): with CR = 32 (A entirely in registers) the MMA phase falls from 1.1-1.3 µs to **≤ 0.45 µs** at
+  D = 512, LSTM FP16; the step time falls from 2.90 to **2.1-2.4 µs** (bulk + fast math). Falsified if the phase stays
+  above 0.7 µs or the step above 2.6 µs.
+* P2 (still slower than cuDNN): the best wgmma variant stays **above cuDNN's 1.58 µs** recurrent-kernel time (section
+  81's reading that exchange + pointwise + loop overhead alone exceed it). A step at or below 1.58 would falsify this
+  and change the paper's conclusion.
+* P3 (fast-math FP64 gate, `tools/fwc_fp64_gate.py`): against the FP64 oracle's hidden history, every fwc variant
+  (bulk exact, bulk + fast math, st.async + fast math, wgmma with and without fast math) has rel_fro ≤ C[dtype]
+  (1e-2 FP16, 5e-2 BF16) **and** rel_fro ≤ max(1.25 × the exact-math bulk variant's rel_fro, C/10), repeat calls
+  bitwise. The wgmma variants are not expected to be bitwise to bulk (another accumulation order). A fast-math variant
+  failing the 1.25× bound would make fast math opt-in only, as the prefetch option is.
+* P4 (arrival jitter, `tools/barrier_trace.py` / `barrier_trace_analyze.py`): for the 1-D fw2d grids with N = 16, 32,
+  64 CTAs (D = 512 PC 16 / 32, D = 1024 PC 32 / 64) and the C = 16 cluster, per step the arrival stamps' (max - mean) /
+  std is within **0.85-1.15 of the Gaussian E[max of N standard normals]** (1.77 at 16, 2.07 at 32, 2.33 at 64), and the
+  mean per-CTA wait minus the barrier's own latency (min release - max arrival) is within 0.8-1.2 of (max - mean).
+  Falsified if the ratio is far from Gaussian (structured arrivals: a few systematically late CTAs give ratios well
+  above; synchronized arrivals give std ≈ 0), or if the wait does not track the spread. Either outcome is reported;
+  the point is whether the section 78 flag-barrier result (barrier mechanism not the bottleneck) is explained by the
+  extreme-value term. The prefetch grids (split B2) are traced too but the arrival stamp there includes the Wx loads.
+
+**Run plan (one rented H100).** Builds with `-Xptxas -v` (registers / spills of the wgmma configurations), the
+descriptor probe, the FP64 gate, `compute-sanitizer memcheck` on one wgmma case, `fw1d_bench --only
+tilelang,cudnn,fwc-c16-cr8-k2-bx-fm,fwc-wg` at D = 512 (B = 16, T = 256, 30 calls), the barrier traces (5 calls × 256
+steps per arm). Evidence: `max-width-evidence/wg/`. The instance is destroyed when the run ends. Report only.
+
+## 83. Results of section 82: wgmma GEMM, fast-math FP64 gate, barrier arrival jitter (2026-10-20)
+
+**Run.** A rented 1x **H100 PCIe** (driver 595.71.05; sections 67-81 ran on H100 SXM, so absolute times here are
+about 10% longer: TileLang 4.71 vs 4.25 µs, cuDNN kernel 1.69 vs 1.58, the section 81 best 3.19 vs 2.90), hidden
+output in the input dtype, B = 16, T = 256, medians of 30 calls. Three source states: v1 (first wgmma layout, two bulk
+pieces per peer), v2 (one contiguous block per peer, quad-gathered 16-byte st.async), v3 (adds the TMA multicast
+exchange, section 83.4). Evidence: `max-width-evidence/wg/`. Report only; nothing is a default.
+
+### 83.1 Descriptor probe and gates: pass
+
+* `wgmma_probe`: for f16 and bf16, A from shared memory and from registers, the convention LBO = K-adjacent core
+  matrix stride (128 B), SBO = 8-row group stride reproduces the CPU reference to 2e-7; the swapped reading is off by
+  O(1). `FRNN_WG_SWAP = 0`.
+* Builds: no spills at CR = 16 / 24 / 32 (146-160 / 206-234 / 255 registers; CR = 32 holds all of R in registers).
+* **P3, FP64 gate (`fwc_fp64_gate.py`, `gate-v1.json`, `gate-v2.json`): PASS**, 26 / 26 then 18 / 18 checks. Against the
+  FP64 oracle's hidden history every variant has the same rel_fro to four digits: LSTM FP16 2.098e-4 (exact math) /
+  2.099e-4 (fast math) at D = 512, 2.097e-4 at D = 768; sLSTM BF16 1.677e-3 / 1.679e-3. The difference to the oracle is
+  the output rounding, not the arithmetic; the 1.25x bound is met with room. The **exact-math wgmma variants are
+  bitwise equal to the mma.sync bulk variant** (same k-step order, same FP32 accumulation); the fast-math variants are
+  not bitwise (as expected) and repeat calls are bitwise stable everywhere. `compute-sanitizer memcheck`: 0 errors on
+  bulk + wgmma (CR 16) and st.async + wgmma (CR 32).
+
+### 83.2 wgmma: the MMA phase falls 2.1-2.8x; the step falls 1.3x after a layout fix
+
+µs per step, D = 512, C = 16, LSTM FP16 (sLSTM BF16 in parentheses); phases wait / MMA / pointwise / exchange.
+
+| variant | v1 layout (two pieces per peer) | v2 layout (one block per peer) | phases (v2, LSTM) |
+| --- | --- | --- | --- |
+| TileLang forward | 4.72 (4.52) | 4.71 (4.53) | — |
+| cuDNN recurrent kernel (total forward) | 1.69 (2.22) | 1.69 (2.23) | — |
+| section 81 best: mma.sync CR 8, bulk, fast math | 3.19 (3.41) | 3.20 (3.23) | 0.23 / 1.30 / 0.55 / 0.62 |
+| wgmma CR 16, KSPLIT 1, bulk, fast math | 3.27 (3.61) | 3.06 (3.19) | 0.22 / 0.77 / 0.52 / 0.65 |
+| wgmma CR 24, KSPLIT 1, bulk, fast math | 3.11 (3.21) | 2.62 (3.07) | 0.19 / 0.71 / 0.54 / 0.63 |
+| **wgmma CR 32, KSPLIT 1, bulk, fast math** | 3.33 (3.36) | **2.47** (2.84) | 0.19 / 0.61 / 0.54 / 0.64 |
+| wgmma CR 32, KSPLIT 2, bulk, fast math | 3.49 (3.36) | 2.75 (**2.60**) | 0.19 / 0.65 / 0.54 / 0.63 |
+| wgmma CR 32, KSPLIT 2, bulk, exact math | 3.76 (3.61) | 3.33 (2.96) | 0.19 / 0.60 / 1.06 / 0.70 |
+| wgmma CR 32, KSPLIT 2, st.async, fast math | 3.08 (3.02) | 3.30 (4.06) | 0.52 / 0.83 / 0.50 / 0.49 |
+
+* **P1, MMA phase**: 1.30 → 0.60-0.61 µs at CR = 32 (0.46-0.47 in the v1 run; the phase timer varies by about 0.1),
+  0.66-0.75 at CR = 24, 0.75-0.83 at CR = 16: a 2.1x reduction with all of R in registers, short of the predicted
+  ≤ 0.45. The remaining phase is above the 64 wgmma × 7.7 cycles ≈ 0.28 µs issue floor: the dependent accumulator
+  chain (32 wgmma into one accumulator; KSPLIT = 2 does not shorten it on wgmma) and the B-operand reads.
+* **P1, step time**: in the v1 layout the step did **not** improve (best 3.02-3.11 vs 3.19): the exchange phase doubled
+  (0.62 → 1.21-1.35 µs) because each CTA's block was two pieces, so 32 bulk requests per CTA per step instead of 16;
+  the bulk copy is request-issue bound. The v2 layout (K-adjacent core columns 288 B apart, the two 8-row groups
+  adjacent, so a CTA's block is one 1152-byte piece and a warp's exchange stores hit distinct bank groups) brought the
+  exchange back to 0.62-0.70 and the step to **2.47 µs (LSTM) / 2.60 (sLSTM)**: 1.30x / 1.24x faster than the section
+  81 kernel, **1.91x / 1.74x faster than the TileLang forward**. SXM-equivalent (scaled by 2.90 / 3.19) about 2.25
+  µs, inside the predicted 2.1-2.4.
+* **P2 holds: still slower than cuDNN**, 2.47 vs 1.69 µs (1.46x; the section 81 gap was 1.84x). The remaining step is
+  wait 0.19 + GEMM 0.67 + pointwise 0.54 + exchange 0.64 + about 0.4 loop / arm overhead. cuDNN's 1.69 is below our
+  non-GEMM parts alone (1.8 µs).
+* Fast math is worth 0.5 µs (pointwise 1.06 → 0.54) and passed the FP64 gate (83.1); KSPLIT = 1 is better than 2 for
+  LSTM (2.47 vs 2.75) but not for sLSTM (2.84 vs 2.60), a difference within the run-to-run spread of the arms (the two
+  runs' common arms agree to 0.01-0.2 µs).
+* **Negative: quad-gathered 16-byte st.async** (v2) is slower than the v1 4-byte stores (3.30 vs 3.08 LSTM, 4.06 vs 3.02
+  sLSTM): the exchange phase fell (0.85 → 0.49) but the wait rose (0.44 → 0.52) and the step as a whole lost about
+  0.2-1.0 µs; not pursued (the bulk path wins either way).
+
+### 83.3 P4: barrier arrival jitter (`barrier_trace.py`, `trace-analysis.json`)
+
+globaltimer resolution 32 ns; 256 steps × 5 calls per arm; a_i = arrival of CTA i at the barrier, r_i = its release.
+
+| barrier | N | std(a) | max − mean | (max − mean) / std vs Gaussian E[max_N] | mean wait | min r − max a |
+| --- | --- | --- | --- | --- | --- | --- |
+| grid.sync, D = 512 | 16 / 32 | 88 / 66 ns | 129 / 105 | 0.85x / 0.82x | 1028 / 1086 | 832 / 911 |
+| grid.sync, D = 1024 | 32 / 64 | 117 / 135 | 215 / 274 | 0.89x / 0.87x | 1179 / 1232 | 862 / 851 |
+| split B2 (prefetch), D = 512 / 1024 | 32 / 64 | 77 / 122 | 151 / 241 | 0.95x / 0.85x | 1075 / 1353 | 822 / 906 |
+| hardware cluster barrier (push) | 16 | 52 | 112 | 1.22x | 1072 | 918 |
+| mbarrier flow control (bulk; not a barrier) | 16 | 187 | 305 | 0.92x | 423 | −234 |
+
+* The extreme-value term exists and is roughly Gaussian-shaped (6 of 8 arms within 0.85-1.15 of E[max_N]; the
+  grid arms sit at 0.82-0.95, slightly sub-Gaussian), but it is **0.1-0.3 µs of a 1.0-1.35 µs wait**. The wait is
+  dominated by the barrier mechanism's own latency after the last arrival: **0.83-0.92 µs for cg grid.sync and for
+  the hardware cluster barrier alike**. The second half of P4 (wait − latency ≈ max − mean) fails: 1.4-1.9x, since
+  the release itself is skewed across CTAs.
+* This settles section 78: the flat flag barrier did not beat grid.sync because both are ~0.85 µs mechanisms, not
+  because of arrival jitter; and it explains section 81: the mbarrier design is fast because it is not a barrier
+  (each CTA waits only for its own data; min r − max a is negative).
+* For the user's scheduling note (section 6, item 1): at this scale (N ≤ 64, jitter ~0.1 µs) a synchronization point's
+  cost is the mechanism latency plus release skew, with the extreme-value term a 10-25% correction; the term grows
+  as predicted with N (129 → 274 ns from 16 to 64 CTAs) but the fixed part does not shrink.
+
+### 83.4 TMA multicast exchange (v3): positive, +5-20%
+
+A barrier-free form of section 67's idea (`FRNN_FWC_MCAST`, option `mcast=True`, bulk layout only), tried after a
+remark of the user's about multicast reached this session second-hand — the user later clarified that the remark
+meant NVSwitch multi-GPU multicast (the scale-out exchange, `multi_gpu.py`), not this intra-cluster form; this one
+stays as a measured positive. The owner writes its
+round(h) block to a global staging slot (double buffered by parity, `gstage`), one thread executes
+`fence.proxy.async.global` and issues **one** `cp.async.bulk.shared::cluster.global ... .multicast::cluster` to all 16
+CTAs (itself included), completing the block's bytes on every CTA's mbarrier of the target parity. Section 67 had
+rejected multicast because its form needed a cluster barrier each step; the mbarrier flow control removes that.
+
+| variant (D = 512, C = 16, fast math) | LSTM FP16 | sLSTM BF16 | phases (LSTM): wait / MMA / pointwise / exchange |
+| --- | --- | --- | --- |
+| mma.sync CR 8, bulk DSMEM | 3.19 | 3.29 | 0.23 / 1.30 / 0.55 / 0.62 |
+| mma.sync CR 8, **multicast** | 2.85 | 2.88 | 0.38 / 1.33 / 0.51 / 0.11 |
+| wgmma CR 24, KSPLIT 1, bulk DSMEM | 2.62 | 3.00 | 0.19 / 0.71 / 0.54 / 0.63 |
+| wgmma CR 24, KSPLIT 1, **multicast** | **2.37** | 2.42 | 0.34 / 0.76 / 0.51 / 0.11 |
+| wgmma CR 32, KSPLIT 1, bulk DSMEM | 2.62 (2.47 in the v2 run) | 2.54 | 0.19 / 0.61 / 0.55 / 0.64 |
+| wgmma CR 32, KSPLIT 1, **multicast** | 2.55 | **2.27** | 0.35 / 0.66 / 0.57 / 0.13 |
+
+* The exchange phase falls from 0.62-0.69 to **0.11-0.13 µs** (one asynchronous request per CTA and step instead of
+  16; the generic stores to the staging slot are coalesced and cheap), the wait rises 0.19 → 0.34 (the L2 round trip
+  moves onto the landing path), net **0.1-0.6 µs per step**: best **2.37 µs LSTM / 2.27 sLSTM**, 1.99x / 1.94x faster
+  than the TileLang forward (4.71 / 4.41 here), 1.35x / 1.45x faster than the section 81 kernel, and **1.39x slower
+  than cuDNN's 1.70 µs kernel** (the gap was 1.84x at section 81). P2 still holds. Gate PASS: rel_fro to the FP64 oracle equals the fast-math DSMEM
+  variant's to four digits (2.099e-4 / 1.677e-3); the gate's `vs_bx` is False because its partner is the exact-math
+  `bx` (the fast-math difference), and a bitwise comparison to the fast-math DSMEM variant was not run (the exchange
+  moves the same bytes, so none is expected); memcheck 0 errors.
+* Arm-to-arm spread between runs is about ±0.15 µs (wgmma CR 32 bulk: 2.47 in v2, 2.62 in v3), so the CR 24 vs CR 32
+  ordering is not resolved; the multicast gain (same run, paired arms) is outside that spread for sLSTM and the
+  mma.sync kernel, inside it for the wgmma CR 32 LSTM arm.
+* The Blackwell question (DSMEM and multicast paths differ there) is handed to the B300 session as the same flag; the
+  arms are `fwc-c16-cr8-k2-bx-fm-mc` and `fwc-wg-c16-cr{16,24,32}-k1-bx-fm-mc` in `fw1d_bench.py`.
+
+**Where section 82 leaves the cluster forward.** 3.19 → 2.37 µs on this GPU through wgmma (GEMM −0.6) and multicast
+(exchange −0.5, wait +0.15). Remaining per step: wait 0.34 + GEMM 0.77-0.89 + pointwise 0.51 + exchange 0.11 + about
+0.5 unaccounted (loop, mbarrier arm, timers' own cost in the prof build). cuDNN's 1.70 would need the GEMM at its
+0.3 µs issue floor and the unaccounted part gone; neither is established. Nothing here is a default: the cluster forward
+remains an experimental path (D = 512 / 256 only for wgmma), gated and benchmarked but not dispatched.

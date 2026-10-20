@@ -35,7 +35,7 @@ def batch_tile(batch):
 
 
 def build(width, bm, slstm, bf16, mode, snap32, verify=0, cache_dir=None, grid=None, prefetch=False, stages=2,
-          bulk=False, flagbar=False, smempart=False):
+          bulk=False, flagbar=False, smempart=False, trace=False):
     pc, q, cr = grid or CONFIGS[width]
     cuda_home = os.environ.get("FRNN_HYBRID_CUDA_HOME", os.environ.get("CUDA_HOME", "/usr/local/cuda"))
     flags = [f"-DFRNN_D={width}", f"-DFRNN_PC={pc}", f"-DFRNN_Q={q}", f"-DFRNN_CR={cr}", f"-DFRNN_BM={int(bm)}",
@@ -51,6 +51,8 @@ def build(width, bm, slstm, bf16, mode, snap32, verify=0, cache_dir=None, grid=N
         flags.append("-DFRNN_FW_FLAGBAR=1")
     if smempart:  # gate partials through shared memory, Q = 1 (section 78)
         flags.append("-DFRNN_FW_SMEMPART=1")
+    if trace:  # per-step, per-CTA B2 arrival / release stamps of group 0 (section 82)
+        flags.append("-DFRNN_TRACE=1")
     digest = hashlib.sha256(SOURCE.read_bytes() + " ".join(flags).encode()).hexdigest()[:16]
     cache = Path(cache_dir or os.environ.get("FRNN_HYBRID_CACHE",
                                              os.environ.get("TMPDIR", str(Path.home() / ".cache")) + "/frnn_hybrid_bw"))
@@ -66,13 +68,13 @@ def build(width, bm, slstm, bf16, mode, snap32, verify=0, cache_dir=None, grid=N
 
 
 def _lib(width, bm, slstm, bf16, mode, snap32, verify=0, grid=None, prefetch=False, stages=2, bulk=False,
-         flagbar=False, smempart=False):
-    key = (width, bm, slstm, bf16, mode, snap32, verify, grid, prefetch, stages, bulk, flagbar, smempart)
+         flagbar=False, smempart=False, trace=False):
+    key = (width, bm, slstm, bf16, mode, snap32, verify, grid, prefetch, stages, bulk, flagbar, smempart, trace)
     if key not in _LIBS:
         lib = ctypes.CDLL(str(build(width, bm, slstm, bf16, mode, snap32, verify, grid=grid, prefetch=prefetch,
-                                    stages=stages, bulk=bulk, flagbar=flagbar, smempart=smempart)))
+                                    stages=stages, bulk=bulk, flagbar=flagbar, smempart=smempart, trace=trace)))
         lib.frnn_hybrid_fw2d.restype = ctypes.c_int
-        lib.frnn_hybrid_fw2d.argtypes = [ctypes.c_void_p] * 10 + [ctypes.c_int] * 7 + [ctypes.c_void_p] * 2
+        lib.frnn_hybrid_fw2d.argtypes = [ctypes.c_void_p] * 10 + [ctypes.c_int] * 7 + [ctypes.c_void_p] * 3
         lib.frnn_hybrid_fw2d_smem.restype = ctypes.c_int
         lib.frnn_hybrid_fw2d_ctas.restype = ctypes.c_int
         _LIBS[key] = lib
@@ -93,13 +95,14 @@ def verify_bits(verify):
 
 def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context, output_mode="full",
                snapshot_dtype=None, batch_rows=None, conc=False, prof=False, diagnostics=None, grid=None,
-               prefetch=False, stages=2, bulk=False, flagbar=False, smempart=False, _verify=None):
+               prefetch=False, stages=2, bulk=False, flagbar=False, smempart=False, trace=False, _verify=None):
     """Returns (output, FP32 compute carry). Whole logical calls only (sequence start).
 
     grid, prefetch, stages (experimental, section 76): a (PC, Q, CR) grid in place of CONFIGS (Q = 1: a 1-D split with
     one grid barrier per step), the split-B2 Wx prefetch, and the cp.async staging depth.
     bulk, flagbar, smempart (experimental, section 78): bulk-copy staging of the whole K block, the flat flag barrier
-    as B2, and gate partials through shared memory (Q = 1)."""
+    as B2, and gate partials through shared memory (Q = 1). trace (section 82): per-step, per-CTA globaltimer stamps
+    before / after B2 of group 0 in diagnostics["trace"] ([T, CTAs, 2], ns)."""
     from .state_contract import state_contract
 
     if cell not in ("lstm", "slstm"):
@@ -158,7 +161,9 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context, o
     if prof:
         bits |= VERIFY_BITS["prof"]
     lib = _lib(width, bm, cell == "slstm", wx.dtype == torch.bfloat16, MODES[output_mode], snap == torch.float32,
-               bits, grid=grid, prefetch=prefetch, stages=stages, bulk=bulk, flagbar=flagbar, smempart=smempart)
+               bits, grid=grid, prefetch=prefetch, stages=stages, bulk=bulk, flagbar=flagbar, smempart=smempart,
+               trace=trace)
+    trace_buf = torch.zeros(steps * ctas * 2, device=device, dtype=torch.int64) if trace else None
     err = torch.zeros(12, device=device, dtype=torch.int32)
     err[3].fill_(seed)  # in place, no host copy: CUDA-graph safe
     # sLSTM: the kernel reads the device flag itself (no .item(): no host synchronization, CUDA-graph capturable).
@@ -169,7 +174,8 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context, o
                xbuf, part, stamp, err]
     rc = lib.frnn_hybrid_fw2d(*[ctypes.c_void_p(x.data_ptr()) for x in tensors], batch, steps, heads, groups,
                               resident, slots, tiles, zero_first,
-                              ctypes.c_void_p(torch.cuda.current_stream(device).cuda_stream))
+                              ctypes.c_void_p(torch.cuda.current_stream(device).cuda_stream),
+                              ctypes.c_void_p(trace_buf.data_ptr()) if trace_buf is not None else ctypes.c_void_p(0))
     if rc != 0:
         raise RuntimeError(f"2-D hybrid forward launch failed (cudaError {rc})")
     if _verify is not None:
@@ -181,6 +187,8 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context, o
         diagnostics["phases_us_per_step"] = dict(barrier_b2=c[4] * 64 / 1000 / n, gemm=c[5] * 64 / 1000 / n,
                                                  barrier_b1=c[6] * 64 / 1000 / n, pointwise=c[7] * 64 / 1000 / n,
                                                  cta_steps=c[9])
+    if trace and diagnostics is not None:
+        diagnostics["trace"] = trace_buf.view(steps, ctas, 2).cpu()
     if diagnostics is not None:
         diagnostics.update(batch_rows=bm, unit_blocks=pc, k_blocks=q, ctas=ctas * resident, groups=groups,
                            resident=resident, slots=slots, shared_bytes=lib.frnn_hybrid_fw2d_smem())
