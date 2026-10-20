@@ -2402,3 +2402,54 @@ extension module:
 
 Each group covers the 12 shapes of 72.1, with 3 starts each. The paper must state that FlashRNN's alternating kernel
 needed this patch to run under CUDA graphs.
+
+## 73. Results of "graph" (section 72.1, 2026-10-20): FlashRNN's alternating kernel under CUDA graphs
+
+**Run.** A rented on-demand 1x H100 80GB HBM3 (SXM; a different GPU on the same host type as sections 67-71), with
+torch 2.7.1, Triton 3.6.0 and TileLang 0.1.15. Source db8f7c1b, with the capture-patched FlashRNN base of the 72.1
+amendment. All 72 claim starts ran with stable outputs (`ALL_PHASES_RUN`). Evidence:
+`max-width-evidence/graph-analysis.json` (`tools/graph_analyze.py`). Report only.
+
+**One gap.** At sLSTM BF16, D = 2048, B = 64, FlashRNN-2's training step did not capture (`one_graph` failed in all
+six starts). In the patched group the failed capture also took down `v1cuda_graph` in the same process. That shape
+therefore has no graph rows. LSTM at the same shape captured. The cause is open.
+
+**Ratios.** Other arm's time / FlashRNN-2 default (eager) time, with 95% hierarchical bootstrap. "alt" is FlashRNN's
+alternating kernel; "P" means the capture-patched copy.
+
+| shape | FR2 (ms) | FR2 graph | fused | alt (orig) | alt P | alt P graph | alt P graph / FR2 graph | graph gain of alt P |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| LSTM D1024 B16 | 3.17 | 0.87 | 1.47 | 3.71 | 2.90 | 1.85 [1.82, 1.87] | **2.04** | 1.54 |
+| LSTM D1536 B16 | 4.02 | 0.91 | 1.62 | 2.92 | 2.28 | 1.75 | **1.89** | 1.30 |
+| LSTM D2048 B16 | 5.00 | 0.93 | 1.62 | 2.56 | 2.06 | 1.67 | **1.76** | 1.23 |
+| sLSTM D1024 B16 | 3.22 | 0.87 | 1.44 | 3.82 | 3.17 | 1.60 | **1.78** | 1.96 |
+| sLSTM D1536 B16 | 4.11 | 0.91 | 1.74 | 3.16 | 2.52 | 1.57 | **1.70** | 1.60 |
+| sLSTM D2048 B16 | 4.98 | 0.92 | 2.31 | 2.74 | 2.10 | 1.64 | **1.75** | 1.28 |
+| LSTM D1024 B64 | 5.94 | 0.95 | 3.08 | 2.05 | 1.67 | 1.29 | **1.35** | 1.29 |
+| LSTM D1536 B64 | 8.92 | 0.96 | 3.69 | 1.53 | 1.27 | 1.02 | **1.06** | 1.24 |
+| LSTM D2048 B64 | 12.71 | 0.93 | 4.64 | 1.11 | 1.08 | 0.91 [0.91, 0.92] | **0.94** | 1.18 |
+| sLSTM D1024 B64 | 6.23 | 0.94 | 2.82 | 2.31 | 1.82 | 1.21 | **1.27** | 1.50 |
+| sLSTM D1536 B64 | 9.25 | 0.96 | 3.59 | 1.48 | 1.29 | 1.05 | **1.08** | 1.22 |
+| sLSTM D2048 B64 | 12.98 | — | 4.68 | 1.14 | 1.11 | — | — | — |
+
+The two derived columns are ratios of mean times. Every interval lies within ±0.03 of its point, except "alt (orig)"
+at B = 16 (±0.1-0.4).
+
+**Reading.**
+* **Graphs help FlashRNN's alternating kernel a lot.** The patched alternating kernel gains 1.18-1.96x from graphs,
+  most at B = 16 and D = 1024, where its per-step launches dominate.
+* **Graphs help FlashRNN-2 by 3-13%.**
+* **The original alternating kernel is slower than the patched one.** Its two device synchronizes per pass cost
+  1.03-1.32x on this host. The alternating-baseline numbers of sections 49, 67 and 69 include them.
+* **Fair comparison, both graphed.**
+  * At B = 16, FlashRNN-2 is 1.70-2.04x faster at every D and both cells.
+  * At B = 64 it is 1.27-1.35x faster at D = 1024 and 1.06-1.08x at D = 1536.
+  * At D = 2048 (LSTM) it is **6% slower** (0.94x). This is a loss to report. sLSTM D = 2048, B = 64 is unmeasured.
+* **Against the fused kernel** (which cannot be captured as released), FlashRNN-2 is 1.44-2.31x faster at B = 16 and
+  2.82-4.68x at B = 64. This matches sections 67 and 69.
+
+**For the paper.**
+* The alternating baseline should be quoted graphed and capture-patched, with the patch stated.
+* The B = 16 result stands at about 2x. At B = 64 the large-D advantage over a graphed alternating kernel is gone.
+  This matches the advisor's framing: pick a D that clearly wins, and at D = 2048 state that FlashRNN-2 still runs
+  and roughly matches the alternating kernel.
