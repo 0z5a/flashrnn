@@ -2718,3 +2718,32 @@ above stay on the grid path, where cuDNN's 2.1 µs is out of reach by this analy
 
 **Decision.** No default changes. Bulk staging and the smem partials are kept as options; the flag barrier is kept
 only as a recorded negative.
+
+## 80. A cluster forward for B ≤ 16 and D ≤ 768 (development, 2026-10-20; GPU runs pending)
+
+**Design** (`hybrid_fwc.cu`, `hybrid_fwc.py`; experimental, not a dispatch family). C CTAs (16, non-portable) of one
+thread-block cluster split the output units; each keeps its R block (all four gates, the whole hidden dimension)
+resident in registers and shared memory. The hidden state is exchanged through distributed shared memory under one
+cluster barrier per step, double buffered by step parity (race-free with one barrier, argument in the source). The
+barrier is split into arrival and wait with the step's Wx loads in between; the bias is hoisted into registers; the
+gate preactivations stay in shared memory; the dependent `mma.sync` chain is split over KSPLIT interleaved
+accumulators (a different FP32 summation order, so not bitwise to a single chain).
+* **push** (default): the owner writes round(h_t) into every CTA's next-parity buffer (C remote stores per element).
+* **pull** (`FRNN_FWC_PULL`, "symmetric buffers"): the owner writes only its own buffer; the GEMM reads the A fragments
+  of unit block c's hidden indices from CTA c's shared memory.
+
+**Capacity.** D = 512 with C = 16: R in shared memory (CR = 0, 172 KB); C = 8 needs CR = 12. D = 768 with C = 16: CR = 24
+(144 R registers per thread). D = 1024 does not fit a 16-CTA cluster (512 KB of R per CTA).
+
+**Bench** (`tools/fw1d_bench.py`, arms `fwc-c{C}-cr{CR}-k{KSPLIT}[-pull]`), B = 16, T = 256, hidden output in the input
+dtype, D ∈ {512, 768} × (LSTM FP16, sLSTM BF16), against TileLang, cuDNN (total and recurrent kernel) and the section
+78 grid variants. Checks: difference to the TileLang output (≤ 1e-4 relative is the expectation, a different
+accumulation order), and sLSTM through the device flag.
+
+**Expectation.** Per step: barrier 0.3-0.5 µs, GEMM 0.3-0.5 µs (KSPLIT 2-4), pointwise + exchange 0.4-0.6 µs: 1.0-1.6
+µs at D = 512 against cuDNN's 1.6. Pull trades 16 remote stores per element for remote A loads in the GEMM; the
+section 19 backward found remote loads slow, at B = 64. Either mode below cuDNN's kernel time is a candidate for the
+pre-registered paired protocol.
+
+**Gates before any timing.** Compile without spills (ptxas -v on the login node), then on a GPU: output within 1e-4
+relative of TileLang's for LSTM and sLSTM, the sLSTM flag honoured, repeat calls bitwise stable.

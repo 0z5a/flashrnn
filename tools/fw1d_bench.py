@@ -6,6 +6,9 @@ Per (cell, D), B = 16, T = 256, the forward with hidden output in the input dtyp
   cudnn        torch.nn.LSTM (cuDNN, LSTM only): total forward time, and the recurrent kernels alone from
                torch.profiler (names containing "lstm"), since cuDNN also runs the input projection
   fw2d         the CUDA 2-D forward with its default grid (D in hybrid_fw2d.CONFIGS only)
+  fwc-c{C}-cr{CR}-k{KSPLIT}[-pull]
+               the cluster forward (hybrid_fwc, section 80): C CTAs in one cluster, CR register k-steps, KSPLIT
+               interleaved accumulators, push (default) or pull (symmetric buffers) exchange; D <= 768
   fw1d-...     the CUDA forward with a 1-D grid (PC x 1 x CR) and the section 76 / 78 options:
                pf = split-B2 Wx prefetch, st4 = 4-stage cp.async staging, bulk = one bulk copy per staged row,
                flag = flat per-CTA flag barrier as B2, sp = gate partials through shared memory
@@ -23,7 +26,7 @@ import torch
 from torch.profiler import ProfilerActivity, profile
 
 import bw_qualify
-from flashrnn.flashrnn2 import dispatch, hybrid_fw2d
+from flashrnn.flashrnn2 import dispatch, hybrid_fw2d, hybrid_fwc
 from flashrnn.flashrnn2.execution_policy import KernelConfig
 from flashrnn.flashrnn2.state_contract import begin_sequence
 
@@ -88,7 +91,7 @@ def kernel_us(fn, pattern, calls=5):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
-    ap.add_argument("--widths", default="512,1024")
+    ap.add_argument("--widths", default="512,768,1024")
     ap.add_argument("--cells", default="lstm:float16,slstm:bfloat16")
     ap.add_argument("--calls", type=int, default=30)
     a = ap.parse_args()
@@ -110,6 +113,15 @@ def main():
                 arms["cudnn"] = (cudnn_arm(wx, r, b, width, wx.dtype), "cudnn")
             if hybrid_fw2d.supported(width):
                 arms["fw2d"] = (dict(), "cuda")
+            for cl in (16, 8):
+                if not hybrid_fwc.supported(width, cl):
+                    continue
+                cr0 = hybrid_fwc.min_register_ksteps(width, cl)
+                for ks in (1, 2, 4):
+                    arms[f"fwc-c{cl}-cr{cr0}-k{ks}"] = (dict(cluster=cl, cr=cr0, ksplit=ks), "fwc")
+                arms[f"fwc-c{cl}-cr{cr0}-k2-pull"] = (dict(cluster=cl, cr=cr0, ksplit=2, pull=True), "fwc")
+                if cr0 + 8 <= width // 16:
+                    arms[f"fwc-c{cl}-cr{cr0 + 8}-k2"] = (dict(cluster=cl, cr=cr0 + 8, ksplit=2), "fwc")
             for pc, cr in GRIDS[width]:
                 arms[f"fw1d-p{pc}-cr{cr}"] = (dict(grid=(pc, 1, cr)), "cuda")
                 for name, opts in VARIANTS.items():
@@ -120,6 +132,11 @@ def main():
                 try:
                     if kind in (None, "cudnn"):
                         fn = spec
+                    elif kind == "fwc":
+                        def fn(spec=spec):
+                            with torch.no_grad():
+                                return hybrid_fwc.recurrence(wx, r, b, init, cell, sequence_context=ctx,
+                                                             output_mode="hidden", **spec)[0]
                     else:
                         def fn(spec=spec):
                             with torch.no_grad():
@@ -132,11 +149,12 @@ def main():
                         ent["recurrent_kernel_us_per_step"] = kernel_us(fn, "lstm") / 256
                     else:
                         outs[name] = out
-                    if kind == "cuda":  # phase timers (separate build; not the timed one)
+                    if kind in ("cuda", "fwc"):  # phase timers (separate build; not the timed one)
                         diag = {}
+                        mod = hybrid_fwc if kind == "fwc" else hybrid_fw2d
                         with torch.no_grad():
-                            hybrid_fw2d.recurrence(wx, r, b, init, cell, sequence_context=ctx, output_mode="hidden",
-                                                   prof=True, diagnostics=diag, **spec)
+                            mod.recurrence(wx, r, b, init, cell, sequence_context=ctx, output_mode="hidden",
+                                           prof=True, diagnostics=diag, **spec)
                         ent["phases_us_per_step"] = diag.get("phases_us_per_step")
                         ent["shared_bytes"] = diag.get("shared_bytes")
                 except Exception:  # noqa: BLE001
@@ -154,7 +172,7 @@ def main():
             rec["rows"].append(row)
             for k, v in row["arms"].items():
                 ph = v.get("phases_us_per_step") or {}
-                print(f"{cell} D{width} {k:28s} {v.get('us_per_step', 0):6.2f} us/step  B2 {ph.get('barrier_b2', 0):.2f} "
+                print(f"{cell} D{width} {k:28s} {v.get('us_per_step', 0):6.2f} us/step  B2 {ph.get('barrier_b2', ph.get('barrier', 0)):.2f} "
                       f"gemm {ph.get('gemm', 0):.2f} pw {ph.get('pointwise', 0):.2f}  "
                       f"ker {v.get('recurrent_kernel_us_per_step', 0):.2f}  bw={v.get('bitwise_vs_fw1d_base')} "
                       f"err={(v.get('error') or '')[-160:]}", flush=True)
