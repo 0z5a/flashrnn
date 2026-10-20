@@ -34,6 +34,15 @@ def batch_tile(batch):
     return 16 if batch <= 16 else 32 if batch <= 32 else 64
 
 
+def _gencode():
+    """nvcc target flags: FRNN_CUDA_ARCH (default sm_90a; e.g. sm_100a / sm_103a on Blackwell) in the -gencode form, so
+    that no plain compute_* PTX is embedded (nvcc 13 rejects some sm_90a-era asm there)."""
+    arch = os.environ.get("FRNN_CUDA_ARCH", "sm_90a")
+    if arch.startswith("sm_"):
+        return [f"-gencode=arch=compute_{arch[3:]},code={arch}"]
+    return [f"-arch={arch}"]
+
+
 def build(width, bm, slstm, bf16, mode, snap32, verify=0, cache_dir=None, grid=None, prefetch=False, stages=2,
           bulk=False, flagbar=False, smempart=False):
     pc, q, cr = grid or CONFIGS[width]
@@ -51,14 +60,14 @@ def build(width, bm, slstm, bf16, mode, snap32, verify=0, cache_dir=None, grid=N
         flags.append("-DFRNN_FW_FLAGBAR=1")
     if smempart:  # gate partials through shared memory, Q = 1 (section 78)
         flags.append("-DFRNN_FW_SMEMPART=1")
-    digest = hashlib.sha256(SOURCE.read_bytes() + " ".join(flags).encode()).hexdigest()[:16]
+    digest = hashlib.sha256(SOURCE.read_bytes() + " ".join(flags + _gencode()).encode()).hexdigest()[:16]
     cache = Path(cache_dir or os.environ.get("FRNN_HYBRID_CACHE",
                                              os.environ.get("TMPDIR", str(Path.home() / ".cache")) + "/frnn_hybrid_bw"))
     cache.mkdir(parents=True, exist_ok=True)
     lib = cache / f"hybrid_fw2d_{digest}.so"
     if not lib.exists():
         tmp = lib.with_suffix(f".{os.getpid()}.tmp.so")
-        cmd = [os.path.join(cuda_home, "bin", "nvcc"), "-std=c++17", "-O3", "-arch=sm_90a", "-shared",
+        cmd = [os.path.join(cuda_home, "bin", "nvcc"), "-std=c++17", "-O3", *_gencode(), "-shared",
                "-Xcompiler=-fPIC", "-cudart=static", *flags, str(SOURCE), "-o", str(tmp)]
         subprocess.run(cmd, check=True, capture_output=True)
         tmp.replace(lib)

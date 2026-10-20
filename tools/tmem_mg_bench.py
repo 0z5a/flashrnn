@@ -4,12 +4,16 @@ docs/flashrnn2/tmem-beta-handoff.md, "Multi-GPU"). Report only.
 Usage: tmem_mg_bench.py --devices 4,5,6,7 [--widths 512,1024] [--cells lstm:float16,slstm:bfloat16] [--calls 20]
        [--steps 256] --out FILE
 Per (cell, D), B = 16, hidden output in the input dtype:
-  tilelang        the library's TileLang forward on devices[0] (reference for max_abs / rel_fro)
+  oracle          flashrnn2.grad_reference on the CPU in FP64 (always available; the primary reference)
+  tilelang        the library's TileLang forward on devices[0] (unavailable on sm_103 with tilelang 0.1.15)
+  fw2d            hybrid_fw2d on devices[0] where D is in its CONFIGS (D >= 1024; needs FRNN_CUDA_ARCH=sm_1xxa)
   tmem-c16        the single-GPU tensor-memory cluster forward on devices[0], where D fits (D <= 512)
   mg-p{P}-c{C}    recurrence_mg over the first P devices (P = 2, 4, 8 as available and divisible), default cluster C
 Records median wall-clock µs per call (the multi-GPU call synchronizes every device), µs per step, phase timers of a
-separate prof build (barrier / remote / gemm / pointwise per rank), max_abs and rel_fro to TileLang, repeat-call
-bitwise stability, and the per-rank err words. A missing NVSwitch / multicast support is a recorded error.
+separate prof build (barrier / remote / gemm / pointwise per rank), max_abs / rel_fro to the FP64 oracle and to
+TileLang where it ran (an FP16 kernel against the oracle: rel_fro ~2e-4; BF16 ~2e-3; an order of magnitude more is a
+layout error), repeat-call bitwise stability, and the per-rank err words. A missing NVSwitch / multicast support is a
+recorded error.
 """
 import argparse
 import json
@@ -20,7 +24,7 @@ from pathlib import Path
 import torch
 
 import bw_qualify
-from flashrnn.flashrnn2 import dispatch, hybrid_fwc_tmem
+from flashrnn.flashrnn2 import dispatch, grad_reference, hybrid_fw2d, hybrid_fwc_tmem
 from flashrnn.flashrnn2.execution_policy import KernelConfig
 from flashrnn.flashrnn2.state_contract import begin_sequence
 
@@ -55,8 +59,12 @@ def main():
             wx, r, b, init = [x.to(dev0) for x in leaves]
             ctx = begin_sequence(init, cell, wx.dtype)
             row = dict(cell=cell, dtype=dtype, width=width, batch=16, arms={})
+            oracle = grad_reference.recurrence(*[x.detach().double().cpu() for x in leaves], cell)[0][0]  # [B,T,H,D] FP64
             ref = None
             arms = {}
+            if width in hybrid_fw2d.CONFIGS:
+                arms["fw2d"] = lambda: hybrid_fw2d.recurrence(wx, r, b, init, cell, sequence_context=ctx,
+                                                              output_mode="hidden")[0]
             if width in TL:
                 arms["tilelang"] = lambda: dispatch.recurrence(wx, r, b, init, cell, output_mode="hidden",
                                                                config=KernelConfig(**TL[width]))[0]
@@ -88,6 +96,9 @@ def main():
                             ts.append((time.perf_counter() - t0) * 1e6)
                         ent["us_per_call"] = median(ts)
                         ent["us_per_step"] = ent["us_per_call"] / a.steps
+                        od = o1.detach().double().cpu()
+                        ent["max_abs_vs_oracle"] = (od - oracle).abs().max().item()
+                        ent["rel_fro_vs_oracle"] = ((od - oracle).norm() / oracle.norm()).item()
                         if name == "tilelang":
                             ref = o1
                         elif ref is not None:
@@ -114,7 +125,8 @@ def main():
                 ph = ent.get("phases_us_per_step") or {}
                 print(f"{cell} D{width} {name:12s} {ent.get('us_per_step', 0):7.2f} us/step  bar {ph.get('barrier', 0):.2f} "
                       f"remote {ph.get('remote', 0):.2f} gemm {ph.get('gemm', 0):.2f} pw {ph.get('pointwise', 0):.2f}  "
-                      f"max_abs {ent.get('max_abs_vs_tilelang', float('nan')):.2e} repeat={ent.get('repeat_bitwise')} "
+                      f"rel_fro_oracle {ent.get('rel_fro_vs_oracle', float('nan')):.2e} "
+                      f"max_abs_tl {ent.get('max_abs_vs_tilelang', float('nan')):.2e} repeat={ent.get('repeat_bitwise')} "
                       f"err={(ent.get('error') or '')[-160:]}", flush=True)
                 torch.cuda.empty_cache()
             rec["rows"].append(row)

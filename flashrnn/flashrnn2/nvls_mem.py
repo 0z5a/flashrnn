@@ -157,11 +157,21 @@ class MulticastGroup:
         self.zero()
 
     def zero(self):
-        """Zero every device's copy (synchronously, through the unicast mappings)."""
+        """Zero every device's copy (synchronously, through the unicast mappings). Driver calls that need a current
+        context run under the device's primary context, pushed and popped here: the host thread has none bound by
+        default (torch's lazy init leaves none; B300 run 1 failed in cuMemsetD8 with error 201 otherwise)."""
         lib = driver()
-        for p in self.uc_ptr:
-            check(lib.cuMemsetD8(p, ctypes.c_ubyte(0), ctypes.c_size_t(self.size)), "cuMemsetD8")
-        check(lib.cuCtxSynchronize(), "cuCtxSynchronize")
+        for cd, p in zip(self.cudevs, self.uc_ptr):
+            ctx = ctypes.c_void_p()
+            check(lib.cuDevicePrimaryCtxRetain(ctypes.byref(ctx), cd), "cuDevicePrimaryCtxRetain")
+            check(lib.cuCtxPushCurrent(ctx), "cuCtxPushCurrent")
+            try:
+                check(lib.cuMemsetD8(p, ctypes.c_ubyte(0), ctypes.c_size_t(self.size)), "cuMemsetD8")
+                check(lib.cuCtxSynchronize(), "cuCtxSynchronize")
+            finally:
+                old = ctypes.c_void_p()
+                lib.cuCtxPopCurrent(ctypes.byref(old))
+                lib.cuDevicePrimaryCtxRelease(cd)
 
     def mc(self, offset=0):
         return self.mc_ptr.value + offset

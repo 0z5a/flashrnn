@@ -117,6 +117,18 @@ P-GPU step is slower than the one-GPU step at D = 512 (this is a reach-D experim
 it is the only TMEM number there is; the comparison that matters there is against the single-GPU TileLang forward at
 D = 1024 (≈ 4 µs/step on H100) and against `multi_gpu.recurrence` (uva / nccl_symm) if Triton runs on the host.
 
+**B300 multi-GPU run 1 (GPUs 4-7, shared; 632b76be).** All four devices report `MULTICAST_SUPPORTED`; `cuMulticastCreate`,
+`AddDevice`, `BindMem` and both `cuMemMap`s succeeded — the multicast object itself works in one process over four
+devices (assumption (b) below holds). `MulticastGroup.zero()` then failed in `cuMemsetD8` with error 201 (no current
+context on the host thread; torch's lazy init leaves none), so neither the probe's kernels nor `recurrence_mg` ran.
+Fixed: `zero()` pushes each device's primary context around its memset. The bench's TileLang reference does not load
+on sm_103 (tilelang 0.1.15: `CUDA_ERROR_NO_BINARY_FOR_GPU`), so the bench now also compares against the CPU FP64
+oracle (`grad_reference`; always available) and, at D >= 1024, `hybrid_fw2d` (whose build, like `hybrid_fwc`'s, now
+honours `FRNN_CUDA_ARCH` in the -gencode form). The single-GPU `tmem-c16` arm ran inside the bench: LSTM FP16 D = 512
+4.62 µs/step (barrier 0.76 / GEMM 1.73 / pointwise 1.74), sLSTM BF16 4.46, repeat bitwise — on a GPU shared with
+another test, so reference only; the 1.73 µs GEMM phase is far from the 0.3 µs that would make TMEM worthwhile, but
+that number waits for a clean GPU. The GPUs were then taken by another user's job; reruns wait for the user.
+
 **Unverified assumptions (in order of risk):** (a) ordering of multicast data stores before the multicast flag store
 under `__threadfence_system` (the probe tests exactly this); (b) `cuMemMap` of the multicast handle at one VA with
 access for all P devices in one process (NCCL maps per process; one-process multi-device is the documented but less
