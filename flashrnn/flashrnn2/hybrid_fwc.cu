@@ -48,6 +48,17 @@
 // decides the convention).
 // FRNN_TRACE = 1 (section 82): thread 0 of every CTA of group 0 writes globaltimer stamps before and after the
 // per-step exchange wait into trace[(t * C + cta) * 2 + {0, 1}] (arrival-jitter diagnostics).
+// FRNN_P > 1 (multi-GPU over NVSwitch multicast; max-width section 84, docs/flashrnn2/tmem-beta-handoff.md
+// "Multi-GPU"): P GPUs split the units, GPU `rank` owns [rank D / P, (rank + 1) D / P) with its C CTAs owning
+// NU = D / (P C) each; every CTA still holds the whole round(h) [BM x D]. Per step the owner publishes its block into
+// the local peers (bulk or st.async, as without FRNN_P) and, element by element, into a multicast-mapped global
+// exchange buffer (nvls_mem; the NVSwitch replicates the store into every GPU's copy); after its CTA's stores it
+// releases a per-(parity, GPU, CTA) flag through the multicast mapping (value flag_base + step + 1). Before the GEMM a
+// CTA waits for the local exchange, polls the (P - 1) C remote flags on its local copy (ld.acquire.sys, 2^26 spins
+// then err[1]) and pulls each remote GPU's slice of round(h) with one cp.async.bulk into its parity buffer. The
+// exchange layouts are block-major by global block (bulk) or K-core-major (wgmma), so a GPU's slice is one contiguous
+// piece in shared memory and in the exchange buffer alike. Needs FRNN_FWC_BULKX (with or without st.async); excludes
+// FRNN_FWC_MCAST.
 // FRNN_FWC_MCAST = 1 (section 82, needs the bulk exchange without st.async): the owner writes its round(h) block to a
 // global staging slot (gstage, double buffered by parity) instead of local shared memory and issues ONE bulk copy
 // global -> shared::cluster with .multicast::cluster to all C CTAs (itself included), completing on every CTA's
@@ -133,6 +144,15 @@ constexpr bool MCAST = FRNN_FWC_MCAST != 0;
 #if FRNN_FWC_MCAST && (!FRNN_FWC_BULKX || FRNN_FWC_STASYNC)
 #error "FRNN_FWC_MCAST needs the bulk exchange layout (FRNN_FWC_BULKX without FRNN_FWC_STASYNC)"
 #endif
+#ifndef FRNN_P
+#define FRNN_P 1
+#endif
+constexpr int P = FRNN_P;
+constexpr bool MG = P > 1;
+#if FRNN_P > 1 && (!FRNN_FWC_BULKX || FRNN_FWC_MCAST)
+#error "FRNN_P > 1 (multi-GPU) needs FRNN_FWC_BULKX (with or without st.async) and excludes FRNN_FWC_MCAST"
+#endif
+constexpr unsigned SPIN = 1u << 26;
 constexpr int UP = STASYNC ? 2 : 1;  // units per owned slot (st.async moves two adjacent units per store)
 #if FRNN_SNAP32
 typedef float snap_t;
@@ -146,7 +166,8 @@ constexpr int D = FRNN_D, C = FRNN_C, CR = FRNN_CR, KSPLIT = FRNN_KSPLIT;
 constexpr bool SLSTM = FRNN_SLSTM != 0;
 constexpr int S = SLSTM ? 4 : 2;
 constexpr int THREADS = 256, WARPS = 8, BM = 16;
-constexpr int NU = D / C, NC = 4 * NU, NCW = NC / WARPS, NTW = NCW / 8, KS = D / 16, CSM = KS - CR;
+constexpr int DP = D / P;  // units per GPU
+constexpr int NU = DP / C, NC = 4 * NU, NCW = NC / WARPS, NTW = NCW / 8, KS = D / 16, CSM = KS - CR;
 constexpr int LDH = D + 8;  // padded row stride of the hidden-state buffers (elements)
 constexpr int NUP = NU + 8;  // FRNN_FWC_BULKX: padded columns of one unit block
 constexpr int XBLK = BM * NUP;  // elements of one exchanged block
@@ -155,13 +176,14 @@ constexpr int SMEM_R = WARPS * CSM * NTW * 32 * 8, SMEM_P = BM * NC * 4;
 // Elements of one exchange buffer (per step parity): canonical K-major [BM x D] (wgmma), unit-block-major (bulk), or
 // padded row-major.
 constexpr int HK = 144;  // wgmma mode: elements per K core column of the h operand (2 x 64 + 16 padding)
-constexpr int PBUF = WG ? (D / 8) * HK : (BULKX ? C * XBLK : BM * LDH);
+constexpr int PBUF = WG ? (D / 8) * HK : (BULKX ? P * C * XBLK : BM * LDH);
 constexpr int BLKE = WG ? (NU / 8) * HK : XBLK;  // bulk modes: elements of one CTA's contiguous exchange block
+constexpr int SLICE = (WG ? (DP / 8) * HK : C * XBLK) * 2;  // bytes of one GPU's slice of a parity buffer (bulk modes)
 constexpr int SMEM_H = 2 * PBUF * 2;
 static_assert(!BULKX || (XBLK * 2) % 16 == 0, "bulk copies move multiples of 16 bytes");
 static_assert(!WG || NC == 128, "wgmma mode: two m64 tiles, one per warpgroup (D = 32 C)");
 static_assert(!WG || WARPS * CSM * NTW * 32 * 8 == 2 * CSM * 2048, "wgmma mode: one 2 KB tile per warpgroup and k-step");
-static_assert(D % C == 0 && NU % 16 == 0, "a warp's columns must lie within one gate (NU a multiple of 16)");
+static_assert(D % (P * C) == 0 && NU % 16 == 0, "a warp's columns must lie within one gate (NU a multiple of 16)");
 static_assert(NU % NCW == 0, "a warp's columns must not cross a gate");
 static_assert(!PULL || NU % 16 == 0, "pull mode reads one owner per 16-wide k-step");
 static_assert(CR >= 0 && CR <= KS, "register k-steps");
@@ -235,6 +257,21 @@ __device__ __forceinline__ void mcast_from_global(void* local_dst, const void* g
                                                   unsigned long long* local_bar, unsigned short mask) {
   asm volatile("cp.async.bulk.shared::cluster.global.mbarrier::complete_tx::bytes.multicast::cluster [%0], [%1], %2, [%3], %4;"
                ::"r"(smem_u32(local_dst)), "l"(gsrc), "r"(bytes), "r"(smem_u32(local_bar)), "h"(mask) : "memory");
+}
+#endif
+#if FRNN_P > 1
+// One bulk copy global -> this CTA's shared memory, completing `bytes` on the mbarrier (remote GPUs' slices).
+__device__ __forceinline__ void bulk_g2s(void* smem_dst, const void* gsrc, unsigned bytes, unsigned long long* bar) {
+  asm volatile("cp.async.bulk.shared::cluster.global.mbarrier::complete_tx::bytes [%0], [%1], %2, [%3];"
+               ::"r"(smem_u32(smem_dst)), "l"(gsrc), "r"(bytes), "r"(smem_u32(bar)) : "memory");
+}
+__device__ __forceinline__ int ld_acquire_sys(const int* p) {
+  int v;
+  asm volatile("ld.acquire.sys.global.s32 %0, [%1];" : "=r"(v) : "l"(p) : "memory");
+  return v;
+}
+__device__ __forceinline__ void st_release_sys(int* p, int v) {
+  asm volatile("st.release.sys.global.s32 [%0], %1;" ::"l"(p), "r"(v) : "memory");
 }
 #endif
 #if FRNN_FWC_STASYNC
@@ -315,6 +352,13 @@ struct Args {
   int B, T, H, tiles;
   unsigned long long* trace;  // FRNN_TRACE: [T][C][2] globaltimer stamps of group 0 (before / after the wait)
   elem_t* gstage;             // FRNN_FWC_MCAST: [groups][C][2 parities][BLKE] global staging of round(h) blocks
+  // FRNN_P > 1: multicast-mapped exchange buffer ([2 parities][PBUF] elements, the parity-buffer layout) and flags
+  // ([2][P C] int32), each as the multicast address (stores) and this GPU's unicast copy (loads).
+  unsigned char* mc_x;
+  const unsigned char* uc_x;
+  int* mc_flag;
+  const int* uc_flag;
+  int rank, flag_base;
 };
 
 __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
@@ -325,20 +369,24 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
   cg::cluster_group cluster = cg::this_cluster();
 #if FRNN_FWC_BULKX
   __shared__ __align__(8) unsigned long long xbar[2];  // one per buffer parity
-  unsigned xphase[2] = {0u, 0u};
+  __shared__ __align__(8) unsigned long long rbar;     // FRNN_P > 1: remote GPUs' slices landed
+  unsigned xphase[2] = {0u, 0u}, rphase = 0u;
   if (threadIdx.x == 0) {
     mbar_init(&xbar[0], 1);
     mbar_init(&xbar[1], 1);
+    mbar_init(&rbar, 1);
     asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory");
   }
   cluster.sync();  // barriers initialized in every CTA before any peer's copy can target them
 #endif
   const int tid = threadIdx.x, warp = tid >> 5, lane = tid & 31, fg = lane >> 2, ft = lane & 3;
-  const int cb = (int)cluster.block_rank();  // unit block of this CTA
+  const int cb = (int)cluster.block_rank();  // unit block of this CTA (within this GPU)
+  const int ub = MG ? a.rank * DP : 0;        // first unit of this GPU
+  const int gblk = (MG ? a.rank * C : 0) + cb;  // global unit block (exchange-layout block index)
   const int g = blockIdx.y;                  // group: (head, batch tile)
   const int head = g / a.tiles, bt = g % a.tiles;
   const bool zero_first = SLSTM && a.zero_first != nullptr && *a.zero_first;
-  const int c_warp = warp * NCW, g_warp = c_warp / NU, o_warp = cb * NU + c_warp % NU;
+  const int c_warp = warp * NCW, g_warp = c_warp / NU, o_warp = ub + cb * NU + c_warp % NU;
   const size_t hd = (size_t)a.H * D, state_stride = (size_t)a.B * hd, out_stride = (size_t)a.B * a.T * hd;
 
   // Resident R: the first CR k-steps of every warp in registers, the rest in shared memory (fragment order).
@@ -353,16 +401,16 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
 #pragma unroll
     for (int c = 0; c < CR; ++c) {
       const int k = c * 16 + 2 * ft;
-      areg[c][0] = r_pair(a.R, a.H, head, ol / NU, cb * NU + ol % NU, k);
-      areg[c][1] = r_pair(a.R, a.H, head, (ol + 8) / NU, cb * NU + (ol + 8) % NU, k);
-      areg[c][2] = r_pair(a.R, a.H, head, ol / NU, cb * NU + ol % NU, k + 8);
-      areg[c][3] = r_pair(a.R, a.H, head, (ol + 8) / NU, cb * NU + (ol + 8) % NU, k + 8);
+      areg[c][0] = r_pair(a.R, a.H, head, ol / NU, ub + cb * NU + ol % NU, k);
+      areg[c][1] = r_pair(a.R, a.H, head, (ol + 8) / NU, ub + cb * NU + (ol + 8) % NU, k);
+      areg[c][2] = r_pair(a.R, a.H, head, ol / NU, ub + cb * NU + ol % NU, k + 8);
+      areg[c][3] = r_pair(a.R, a.H, head, (ol + 8) / NU, ub + cb * NU + (ol + 8) % NU, k + 8);
     }
     for (int i = tid; i < 2 * CSM * 1024; i += THREADS) {
       const int w = i / (CSM * 1024), j = (i / 1024) % CSM, m = (i % 1024) / 16, kk = i % 16;
       const int o = w * 64 + m, k = (CR + j) * 16 + kk;
       sa[(size_t)(w * CSM + j) * 1024 + aoff(m, kk)] =
-          a.R[(((size_t)(o / NU) * a.H + head) * D + cb * NU + o % NU) * D + k];
+          a.R[(((size_t)(o / NU) * a.H + head) * D + ub + cb * NU + o % NU) * D + k];
     }
   }
 #else
@@ -385,9 +433,9 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
   // Element offset of (row lrow, unit u0 of this CTA) within one parity buffer of the exchange layout.
   auto xoff = [&](int lrow, int u0) -> int {
 #if FRNN_FWC_WGMMA
-    return hoff(lrow, cb * NU + u0);
+    return hoff(lrow, ub + cb * NU + u0);
 #else
-    return BULKX ? cb * XBLK + lrow * NUP + u0 : lrow * LDH + cb * NU + u0;
+    return BULKX ? gblk * XBLK + lrow * NUP + u0 : lrow * LDH + cb * NU + u0;
 #endif
   };
 #if FRNN_FWC_MCAST
@@ -442,7 +490,7 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
     const bool valid = own && row < a.B;
 #pragma unroll
     for (int j = 0; j < UP; ++j) {
-      const int o = cb * NU + u0 + j;
+      const int o = ub + cb * NU + u0 + j;
       const size_t unit = ((size_t)row * a.H + head) * D + o;
       hs[e][j] = valid ? a.initial[unit] : 0.f;
       cs[e][j] = valid ? a.initial[state_stride + unit] : 0.f;
@@ -453,6 +501,11 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
     }
     if (own) {  // round(h_0) into buffer 0 (of every peer, or only the own buffer in pull / bulk mode); rows >= B: 0
       const int off = xoff(lrow, u0);
+#if FRNN_P > 1
+#pragma unroll
+      for (int j = 0; j < UP; ++j)  // and into every GPU's parity-0 copy through the multicast mapping
+        reinterpret_cast<elem_t*>(a.mc_x)[off + j] = to_elem(hs[e][j]);
+#endif
       if (STASYNC) {
 #if FRNN_FWC_STASYNC
         publish(pack(to_elem(hs[e][0]), to_elem(hs[e][UP - 1])), lrow, u0, 0, &xbar[0]);
@@ -474,7 +527,7 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
   // mode the block is two contiguous pieces (one per 8-row group), NU * 16 bytes each.
   // Bytes landing per step (all CTAs' blocks): the canonical layout has no padding; the unit-block-major layout
   // copies its NUP padded columns too.
-  constexpr unsigned XBYTES = WG ? (unsigned)(PBUF * sizeof(elem_t)) : (unsigned)(C * XBLK * sizeof(elem_t));
+  constexpr unsigned XBYTES = (unsigned)SLICE;  // this GPU's C blocks
   __syncthreads();
 #if FRNN_FWC_MCAST
   if (tid == 0) {
@@ -485,8 +538,15 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
 #else
   asm volatile("fence.proxy.async.shared::cta;" ::: "memory");
   if (tid == 0) mbar_expect(&xbar[0], XBYTES);
-  if (tid < C) bulk_to_peer(hbuf + (size_t)(WG ? cb * (NU / 8) * HK : cb * XBLK), BLKE * sizeof(elem_t), &xbar[0], tid);
+  if (tid < C) bulk_to_peer(hbuf + (size_t)(WG ? gblk * (NU / 8) * HK : gblk * XBLK), BLKE * sizeof(elem_t), &xbar[0], tid);
 #endif
+#endif
+#if FRNN_P > 1
+  __syncthreads();  // this CTA's multicast stores of round(h_0) are issued: release its flag (parity 0, base + 1)
+  if (tid == 0) {
+    __threadfence_system();
+    st_release_sys(a.mc_flag + gblk, a.flag_base + 1);
+  }
 #endif
 #if FRNN_FWC_WGMMA
   __syncthreads();  // the canonical R tiles are complete before any warpgroup MMA reads them
@@ -505,7 +565,7 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
       if (own && row < a.B) {
 #pragma unroll
         for (int j = 0; j < UP; ++j) {
-          const size_t xo = (((size_t)row * a.T + t) * 4 * a.H + head) * D + cb * NU + u0 + j;
+          const size_t xo = (((size_t)row * a.T + t) * 4 * a.H + head) * D + ub + cb * NU + u0 + j;
 #pragma unroll
           for (int q = 0; q < 4; ++q) wxr[e][j][q] = a.wx[xo + (size_t)q * hd];
         }
@@ -516,6 +576,32 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
     xphase[t & 1] ^= 1u;
 #else
     cluster_wait();  // every peer's round(h_{t-1}) is in hbuf[t % 2]
+#endif
+    unsigned long long t1a = (VERIFY & V_PROF) ? gtime() : 0;
+#if FRNN_P > 1
+    {
+      // Remote GPUs' blocks of round(h_{t-1}) have landed in this GPU's copy when their flags reach base + t + 1.
+      const int want = a.flag_base + t + 1;
+      const int* flags = a.uc_flag + (size_t)(t & 1) * P * C;
+      for (int i = tid; i < (P - 1) * C; i += THREADS) {
+        const int q = i / C, qq = q < a.rank ? q : q + 1, c2 = i % C;
+        unsigned spins = 0;
+        while (ld_acquire_sys(flags + qq * C + c2) < want && ++spins < SPIN) {
+        }
+        if (spins >= SPIN) a.err[1] = 1;
+      }
+      __syncthreads();
+      if (tid == 0) {  // pull every remote slice into this parity's buffer: one bulk copy per remote GPU
+        asm volatile("fence.proxy.async;" ::: "memory");
+        mbar_expect(&rbar, (unsigned)((P - 1) * SLICE));
+        unsigned char* hb8 = reinterpret_cast<unsigned char*>(hbuf) + (size_t)(t & 1) * PBUF * sizeof(elem_t);
+        const unsigned char* uc8 = a.uc_x + (size_t)(t & 1) * PBUF * sizeof(elem_t);
+        for (int q = 0; q < P; ++q)
+          if (q != a.rank) bulk_g2s(hb8 + (size_t)q * SLICE, uc8 + (size_t)q * SLICE, (unsigned)SLICE, &rbar);
+      }
+      mbar_wait(&rbar, rphase);
+      rphase ^= 1u;
+    }
 #endif
     unsigned long long t1 = ((VERIFY & V_PROF) || TRACE) ? gtime() : 0;
     if (TRACE && tid == 0 && blockIdx.y == 0) {
@@ -647,7 +733,7 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
       const int row = bt * BM + lrow;
 #pragma unroll
       for (int j = 0; j < UP; ++j) {
-        const int u = u0 + j, o = cb * NU + u;
+        const int u = u0 + j, o = ub + cb * NU + u;
         float h = 0.f;
         if (row < a.B) {
           float gate[4];
@@ -696,6 +782,10 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
         int lrow, u0;
         if (!elem(e, lrow, u0)) continue;
         const size_t off = nb_delta + xoff(lrow, u0);
+#if FRNN_P > 1
+#pragma unroll
+        for (int j = 0; j < UP; ++j) reinterpret_cast<elem_t*>(a.mc_x)[off + j] = hv[e][j];  // every GPU's copy
+#endif
         if (STASYNC) {
 #if FRNN_FWC_STASYNC
           publish(pack(hv[e][0], hv[e][UP - 1]), lrow, u0, nb_delta, &xbar[(t + 1) & 1]);
@@ -723,12 +813,20 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
       __syncthreads();  // the block is complete in local shared memory
       asm volatile("fence.proxy.async.shared::cta;" ::: "memory");  // generic stores before the async-proxy copy
       if (tid == 0) mbar_expect(&xbar[(t + 1) & 1], XBYTES);
-      if (tid < C) bulk_to_peer(hbuf + nb_delta + (size_t)(WG ? cb * (NU / 8) * HK : cb * XBLK), BLKE * sizeof(elem_t), &xbar[(t + 1) & 1], tid);
+      if (tid < C) bulk_to_peer(hbuf + nb_delta + (size_t)(WG ? gblk * (NU / 8) * HK : gblk * XBLK), BLKE * sizeof(elem_t), &xbar[(t + 1) & 1], tid);
+#endif
+#if FRNN_P > 1
+      __syncthreads();  // this CTA's multicast stores of round(h_t) are issued: release its flag (parity nb, base + t + 2)
+      if (tid == 0) {
+        __threadfence_system();
+        st_release_sys(a.mc_flag + ((t + 1) & 1) * P * C + gblk, a.flag_base + t + 2);
+      }
 #endif
     }
     if ((VERIFY & V_PROF) && tid == 0) {
       const unsigned long long t3 = gtime();
-      atomicAdd(a.err + 4, (int)((t1 - t0) >> 6));   // wait (with the Wx loads)
+      atomicAdd(a.err + 4, (int)((t1a - t0) >> 6));  // wait (with the Wx loads)
+      atomicAdd(a.err + 10, (int)((t1 - t1a) >> 6));  // FRNN_P > 1: remote flags + slice pull
       atomicAdd(a.err + 6, (int)((t2 - t1) >> 6));   // MMA chain + partial store + CTA barrier (err[5]: chain alone)
       atomicAdd(a.err + 7, (int)((t3a - t2) >> 6));  // pointwise math + outputs
       atomicAdd(a.err + 8, (int)((t3 - t3a) >> 6));  // exchange
@@ -743,7 +841,7 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
     const int row = bt * BM + lrow;
 #pragma unroll
     for (int j = 0; j < UP; ++j) {
-      const size_t unit = ((size_t)row * a.H + head) * D + cb * NU + u0 + j;
+      const size_t unit = ((size_t)row * a.H + head) * D + ub + cb * NU + u0 + j;
       if (own && row < a.B) {
         a.final[unit] = hs[e][j];
         a.final[state_stride + unit] = cs[e][j];
@@ -760,14 +858,20 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
 extern "C" int frnn_hybrid_fwc_smem() { return SMEM_R + SMEM_H + SMEM_P; }
 extern "C" int frnn_hybrid_fwc_ctas() { return C; }
 extern "C" int frnn_hybrid_fwc_block_elems() { return BULKX ? BLKE : 0; }
+extern "C" int frnn_hybrid_fwc_peers() { return P; }
+extern "C" int frnn_hybrid_fwc_xbytes() { return SMEM_H; }  // FRNN_P > 1: exchange buffer bytes per GPU (2 parities)
 
 extern "C" int frnn_hybrid_fwc(const void* wx, const void* R, const void* bias, const float* initial, void* out,
                                float* final, int* err, const void* zero_first, int B, int T, int H, int groups,
-                               int tiles, void* stream, void* trace, void* gstage) {
+                               int tiles, void* stream, void* trace, void* gstage, void* mc_x, const void* uc_x,
+                               void* mc_flag, const void* uc_flag, int rank, int flag_base) {
   Args a{reinterpret_cast<const elem_t*>(wx), reinterpret_cast<const elem_t*>(R),
          reinterpret_cast<const elem_t*>(bias), initial, reinterpret_cast<snap_t*>(out), final, err,
          reinterpret_cast<const bool*>(zero_first), B, T, H, tiles, reinterpret_cast<unsigned long long*>(trace),
-         reinterpret_cast<elem_t*>(gstage)};
+         reinterpret_cast<elem_t*>(gstage), reinterpret_cast<unsigned char*>(mc_x),
+         reinterpret_cast<const unsigned char*>(uc_x), reinterpret_cast<int*>(mc_flag),
+         reinterpret_cast<const int*>(uc_flag), rank, flag_base};
+  if (MG && (mc_x == nullptr || uc_x == nullptr || mc_flag == nullptr || uc_flag == nullptr)) return -1;
   const int smem = frnn_hybrid_fwc_smem();
   cudaError_t e = cudaFuncSetAttribute(frnn_hybrid_fwc_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem);
   if (e != cudaSuccess) return (int)e;

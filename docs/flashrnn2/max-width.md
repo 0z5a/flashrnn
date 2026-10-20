@@ -2967,3 +2967,43 @@ rejected multicast because its form needed a cluster barrier each step; the mbar
 0.5 unaccounted (loop, mbarrier arm, timers' own cost in the prof build). cuDNN's 1.70 would need the GEMM at its
 0.3 µs issue floor and the unaccounted part gone; neither is established. Nothing here is a default: the cluster forward
 remains an experimental path (D = 512 / 256 only for wgmma), gated and benchmarked but not dispatched.
+
+## 84. Multi-GPU cluster forward over NVSwitch multicast, H100-class (pre-registration, 2026-10-20, before any run of it)
+
+**Why.** The user's remark that FlashRNN2 could use TMA multicast meant NVSwitch multi-GPU multicast (not section 83.4's
+intra-cluster form). The cluster forward's reach ends where a CTA's R block no longer fits (D ≤ 768 for `hybrid_fwc`,
+D ≤ 512 for the tensor-memory kernel); splitting the units over P GPUs of one NVSwitch domain restores it, at the price
+of a per-step all-gather of round(h) across GPUs. The user asked for the sm_90 version first (the Blackwell version is
+on branch `flashrnn2-tmem-mg-20261020`, unrun).
+
+**Design (`FRNN_P`, `hybrid_fwc.cu`, `hybrid_fwc.recurrence_mg`, `nvls_mem.py`).** GPU `rank` owns units
+[rank D / P, (rank + 1) D / P), its C CTAs NU = D / (P C) each; every CTA keeps the whole round(h) [16 × D] in shared
+memory. The owner publishes its block into its local peers as before (bulk or st.async) and, element by element, into
+a **multicast-mapped global exchange buffer** (`cuMulticastCreate` / `AddDevice` / `BindMem`; one multicast VA, one
+unicast copy per GPU; a store to the multicast VA is replicated by the switch into every copy), then releases a
+per-(parity, GPU, CTA) flag through the same mapping (`__syncthreads`, `__threadfence_system`, `st.release.sys`; value
+flag_base + step + 1, rising across calls). Before its GEMM a CTA waits for the local exchange, polls the (P − 1) C remote
+flags on its **local** copy (`ld.acquire.sys`, 2^26 spins then err[1]) and pulls each remote GPU's slice with one
+`cp.async.bulk` global → shared (one mbarrier). The exchange layouts (block-major by global block for bulk, K-core-major
+for wgmma) make a GPU's slice contiguous in shared memory and in the buffer alike. Geometry: D = 512 with P = 2 (C 16),
+4 (8), 8 (4); D = 1024 with P = 4 (C 16), 8 (8), and P = 2 (C 16) for wgmma only; wgmma needs 4 D / (P C) = 128.
+
+**Predictions.**
+* P1 (probe, `tools/nvls_probe.py`): `MULTICAST_SUPPORTED` on all GPUs of an 8-GPU HGX host, the multicast object maps,
+  and the data-then-flag protocol has **0 mismatched words** over 2000 iterations at P = 2, 4, 8. A nonzero count
+  falsifies the ordering assumption (multicast data before multicast flag under `__threadfence_system`); the kernel
+  would then need another signal and this section's timing is void.
+* P2 (probe timing): the unicast fan-out step grows with P while the multicast step does not; multicast per-step
+  latency 1-3 µs (one NVLink hop plus switch replication, 8 KB blocks).
+* P3 (correctness): every `mg-*` arm has rel_fro to the FP64 oracle within 1.5× of the single-GPU `fwc` arm's at the
+  same (cell, D) where one exists (D = 512), and ≤ 1e-3 (FP16) / ≤ 5e-3 (BF16) at D = 1024; repeat calls bitwise.
+* P4 (time): the multi-GPU step at D = 512 is **slower** than the single-GPU cluster forward (the remote phase, ≈ the
+  probe's multicast latency, sits on the critical path); at D = 1024 the P = 4 step is within 1.5× of the single-GPU
+  TileLang / fw2d forward (≈ 4.1 / 4.8 µs on H100 SXM). Beating them at D = 1024 would be a positive result, not
+  expected. P = 8 is slower than P = 4 at the same D (more flags, smaller GEMMs).
+* P5 (wgmma): at D = 1024 the wgmma arm beats the mma.sync arm by the GEMM phase difference, as in section 83.
+
+**Run plan.** One rented 8-GPU NVSwitch Hopper host (vast; the only one available at writing time is 8× H200 at about
+$53 per hour — H200 is sm_90, so the same binaries). Builds with `-Xptxas -v`, the probe at P = 2 / 4 / 8, `fwc_mg_bench`
+at D = 512 / 1024 (B = 16, T = 256, 20 calls), the single-GPU FP64 gate as a regression check of the FRNN_P = 1 build.
+Evidence: `max-width-evidence/mg/`. The instance is destroyed when the run ends. Report only; nothing is a default.
