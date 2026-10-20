@@ -2747,3 +2747,52 @@ pre-registered paired protocol.
 
 **Gates before any timing.** Compile without spills (ptxas -v on the login node), then on a GPU: output within 1e-4
 relative of TileLang's for LSTM and sLSTM, the sLSTM flag honoured, repeat calls bitwise stable.
+
+## 81. Results of the cluster forward, versions 1-3 (section 80, 2026-10-20)
+
+**Run.** A rented 1x H100 80GB HBM3 (driver 595), source c0c77174 → b7a8dcf3 → 6d0b3a32, hidden output in the input
+dtype, B = 16, T = 256, medians of 30 calls. Evidence: `max-width-evidence/fwc/`. Report only.
+
+**Gates: pass** (v1 and v3, `gates-v1.json`, `gates-v3.log`): against the TileLang forward, relative Frobenius 4.6-4.9e-5
+(LSTM FP16) and 2.0-3.7e-4 (sLSTM BF16) at D = 512 and 768; repeat calls bitwise stable; the sLSTM zero flag honoured;
+`compute-sanitizer memcheck` 0 errors for push, bulk and st.async; bulk and st.async bitwise equal to push.
+
+**Versions.** v1: push exchange (owner stores round(h) into every peer, cluster barrier). v2 (`FRNN_FWC_BULKX`): local
+block + one bulk copy per peer, mbarrier flow control, no cluster barrier. v3: software-pipelined fragments,
+`FRNN_FWC_STASYNC` (st.async with remote mbarrier completion, pairs of units), `FRNN_FASTMATH` (`__expf`, `__logf`,
+`__fdividef`).
+
+**µs per step, D = 512, C = 16, CR = 8** (phases: wait / MMA / pointwise / exchange):
+
+| variant | LSTM FP16 | sLSTM BF16 | phases (LSTM) |
+| --- | --- | --- | --- |
+| TileLang forward | 4.25 | 4.03 | — |
+| cuDNN recurrent kernel (total with input GEMM) | **1.58** (2.13) | — | — |
+| v1 push | 3.96 | 3.90 | 0.82 / 1.15 / 0.95 / 0.59 |
+| v2 bulk | 3.34 | 3.20 | 0.23 / 1.11 / 0.95 / 0.57 |
+| v3 bulk + fast math | **2.90** | **2.97** | 0.25 / 1.14 / 0.49 / 0.54 |
+| v3 st.async + fast math | 3.05 | 3.18 | 0.41 / 1.15 / 0.43 / 0.54 |
+| pull (remote A loads) | 36 | 36 | MMA 32 |
+
+D = 768 (C = 16, CR = 22, 255 registers): best v3 4.31 (LSTM) / 4.58 (sLSTM) against TileLang 3.70 / 3.71 and cuDNN's
+kernel 1.27: slower than TileLang. C = 8 at D = 512 is slower than C = 16 in every variant (a 1.1-1.9 µs pointwise
+phase from four units per thread).
+
+**Reading.**
+* The cluster design does what it was built for: the exchange wait fell from 0.8-1.1 µs (grid barrier) to 0.23 µs
+  (mbarrier flow control), and the exchange itself costs about 0.55 µs in both bulk and st.async form (a 16-way DSMEM
+  fan-out of 1 KB per CTA per step). Pull mode is 10x slower: remote A-fragment loads in the MMA loop.
+* Fast math halves the pointwise phase (0.95 → 0.49 µs) at a 5-10% larger difference to TileLang (still ≤ 4e-4
+  relative); whether it passes the FP64 qualification is the next gate, not assumed here.
+* **The MMA phase does not move**: 1.1-1.3 µs whatever the accumulator split or the fragment pipelining. It is
+  tensor-core issue throughput: per sub-partition 2 warps × 32 k-steps × 2 n-tiles = 128 `mma.sync.m16n8k16` per
+  step, at about 16 cycles each (the legacy MMA path does not reach Hopper's wgmma rate), 2048 cycles = 1.1 µs.
+* The remaining 0.4 µs between the phase sum and the step time is loop control, address arithmetic and the mbarrier
+  arm.
+
+**Where this leaves it.** 2.90 µs against cuDNN's 1.58 at D = 512; 1.47x faster than the TileLang forward there. The
+one lever left for the MMA phase is wgmma (m64n16k16 with R as the M = 64 operand and h^T as N = 16, at Hopper's full
+rate: about 0.3 µs for the phase). With it the step would be about 2.0-2.1 µs: still above cuDNN's 1.58, because the
+exchange (0.55), the pointwise (0.49) and the loop overhead (0.4) stay. Beating cuDNN at D = 512 would need all three
+below 0.3 µs as well. That is not established as achievable; the design's remaining headroom is about 1.3x, and the
+gap is 1.84x.
