@@ -1,0 +1,255 @@
+{
+ "case": {
+  "mode": "layer",
+  "cell": "lstm",
+  "dtype": "float16",
+  "width": 1024,
+  "batch": 64,
+  "steps": 256,
+  "arms": [
+   "frnn2",
+   "cudnn"
+  ],
+  "calls": 3,
+  "config": {
+   "family": "tilelang",
+   "slice_width": 16,
+   "sync": "grid"
+  }
+ },
+ "config": {
+  "family": "tilelang",
+  "batch_tile": 16,
+  "warps": 4,
+  "weight_operand": "b",
+  "slice_width": 16,
+  "sync": "grid",
+  "pad_k": false,
+  "prefetch": false,
+  "reg_k": 0,
+  "stream_h": false,
+  "conc": false
+ },
+ "arms": {
+  "frnn2": {
+   "total_us_per_step": 6267.597200000008,
+   "kernels": [
+    {
+     "name": "frnn_hybrid_bw2d_kernel(Args)",
+     "launches_per_step": 1.0,
+     "us_per_step": 2523.6288000000013
+    },
+    {
+     "name": "main_kernel",
+     "launches_per_step": 1.0,
+     "us_per_step": 2071.3088000000016
+    },
+    {
+     "name": "nvjet_hsh_128x256_64x4_2x1_v_bz_coopA_NTN",
+     "launches_per_step": 2.0,
+     "us_per_step": 350.2784
+    },
+    {
+     "name": "_preact_kernel",
+     "launches_per_step": 1.0,
+     "us_per_step": 314.63040000000035
+    },
+    {
+     "name": "nvjet_hsh_128x320_64x3_2x1_v_bz_coopB_TNN",
+     "launches_per_step": 1.0,
+     "us_per_step": 201.10100000000094
+    },
+    {
+     "name": "nvjet_hsh_256x128_64x4_1x2_h_bz_coopA_NNT",
+     "launches_per_step": 1.0,
+     "us_per_step": 178.0863999999994
+    },
+    {
+     "name": "void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}:",
+     "launches_per_step": 7.0,
+     "us_per_step": 100.8637999999999
+    },
+    {
+     "name": "void at::native::vectorized_elementwise_kernel<8, at::native::float16_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda",
+     "launches_per_step": 8.0,
+     "us_per_step": 99.47519999999932
+    },
+    {
+     "name": "Memcpy DtoD (Device -> Device)",
+     "launches_per_step": 3.0,
+     "us_per_step": 73.81120000000047
+    },
+    {
+     "name": "void at::native::vectorized_elementwise_kernel<4, at::native::BinaryFunctor<float, float, float, at::native::binary_inte",
+     "launches_per_step": 1.0,
+     "us_per_step": 68.0130000000001
+    },
+    {
+     "name": "void at::native::reduce_kernel<128, 4, at::native::ReduceOp<c10::Half, at::native::func_wrapper_t<float, at::native::sum",
+     "launches_per_step": 1.0,
+     "us_per_step": 67.37259999999806
+    },
+    {
+     "name": "void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<float, float, f",
+     "launches_per_step": 1.0,
+     "us_per_step": 52.262399999999616
+    },
+    {
+     "name": "void at::native::elementwise_kernel<128, 4, at::native::gpu_kernel_impl_nocast<at::native::float16_copy_kernel_cuda(at::",
+     "launches_per_step": 1.0,
+     "us_per_step": 49.363199999999416
+    },
+    {
+     "name": "void at::native::elementwise_kernel<128, 4, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::T",
+     "launches_per_step": 2.0,
+     "us_per_step": 36.019600000001084
+    },
+    {
+     "name": "void at::native::vectorized_elementwise_kernel<8, at::native::FillFunctor<c10::Half>, std::array<char*, 1ul> >(int, at::",
+     "launches_per_step": 4.0,
+     "us_per_step": 34.09879999999939
+    },
+    {
+     "name": "void at::native::reduce_kernel<512, 1, at::native::ReduceOp<float, at::native::func_wrapper_t<float, at::native::sum_fun",
+     "launches_per_step": 1.0,
+     "us_per_step": 33.54880000000121
+    },
+    {
+     "name": "Memset (Device)",
+     "launches_per_step": 4.0,
+     "us_per_step": 3.750200000001132
+    },
+    {
+     "name": "void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<float>, std::array<char*, 1ul> >(int, at::nati",
+     "launches_per_step": 3.0,
+     "us_per_step": 3.1172000000027764
+    },
+    {
+     "name": "void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<int>, std::array<char*, 1ul> >(int, at::native",
+     "launches_per_step": 2.0,
+     "us_per_step": 1.9328000000012253
+    },
+    {
+     "name": "void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}:",
+     "launches_per_step": 1.0,
+     "us_per_step": 1.6448000000007597
+    },
+    {
+     "name": "void at::native::vectorized_elementwise_kernel<4, at::native::CUDAFunctor_add<float>, std::array<char*, 3ul> >(int, at::",
+     "launches_per_step": 1.0,
+     "us_per_step": 1.3951999999997498
+    },
+    {
+     "name": "void at::native::unrolled_elementwise_kernel<at::native::FillFunctor<int>, std::array<char*, 1ul>, 8, TrivialOffsetCalcu",
+     "launches_per_step": 1.0,
+     "us_per_step": 0.9536000000000058
+    },
+    {
+     "name": "void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<bool>, std::array<char*, 1ul> >(int, at::nativ",
+     "launches_per_step": 1.0,
+     "us_per_step": 0.9410000000003492
+    }
+   ]
+  },
+  "cudnn": {
+   "total_us_per_step": 6249.633399999997,
+   "kernels": [
+    {
+     "name": "void ampere_lstm_bp_largeB<1024>(params_t)",
+     "launches_per_step": 1.0,
+     "us_per_step": 2463.2945999999997
+    },
+    {
+     "name": "void ampere_lstm_tile16<64, 2>(params_t)",
+     "launches_per_step": 1.0,
+     "us_per_step": 1836.7474000000007
+    },
+    {
+     "name": "nvjet_hsh_128x256_64x4_2x1_v_badd_coopA_NTN",
+     "launches_per_step": 3.0,
+     "us_per_step": 641.3047999999999
+    },
+    {
+     "name": "void GENERIC_elementWise_bp2<__half, __half, float, 4, (cudnnRNNBiasMode_t)2>(int, int, __half*, __half*, cudnn::reduced",
+     "launches_per_step": 1.0,
+     "us_per_step": 270.7195999999993
+    },
+    {
+     "name": "nvjet_hsh_128x320_64x3_2x1_v_bz_coopB_TNN",
+     "launches_per_step": 1.0,
+     "us_per_step": 202.07359999999926
+    },
+    {
+     "name": "void at::native::elementwise_kernel<128, 4, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::T",
+     "launches_per_step": 4.0,
+     "us_per_step": 184.21740000000108
+    },
+    {
+     "name": "nvjet_hsh_256x128_64x4_1x2_h_bz_coopA_NNT",
+     "launches_per_step": 1.0,
+     "us_per_step": 182.7642
+    },
+    {
+     "name": "void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<float, float, f",
+     "launches_per_step": 2.0,
+     "us_per_step": 130.8545999999995
+    },
+    {
+     "name": "Memcpy DtoD (Device -> Device)",
+     "launches_per_step": 1.0,
+     "us_per_step": 86.97599999999966
+    },
+    {
+     "name": "void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}:",
+     "launches_per_step": 5.0,
+     "us_per_step": 85.0301999999987
+    },
+    {
+     "name": "void at::native::vectorized_elementwise_kernel<8, at::native::float16_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda",
+     "launches_per_step": 5.0,
+     "us_per_step": 56.58920000000207
+    },
+    {
+     "name": "RNN_init_128x4(uint4*, int, unsigned int)",
+     "launches_per_step": 1.0,
+     "us_per_step": 41.64479999999912
+    },
+    {
+     "name": "void at::native::reduce_kernel<512, 1, at::native::ReduceOp<float, at::native::func_wrapper_t<float, at::native::sum_fun",
+     "launches_per_step": 1.0,
+     "us_per_step": 31.96800000000003
+    },
+    {
+     "name": "void at::native::vectorized_elementwise_kernel<8, at::native::FillFunctor<c10::Half>, std::array<char*, 1ul> >(int, at::",
+     "launches_per_step": 6.0,
+     "us_per_step": 15.941799999999564
+    },
+    {
+     "name": "void persistRNN_init_negMax<__half>(__half*, int)",
+     "launches_per_step": 1.0,
+     "us_per_step": 10.515200000000368
+    },
+    {
+     "name": "Memset (Device)",
+     "launches_per_step": 3.0,
+     "us_per_step": 3.7505999999973936
+    },
+    {
+     "name": "RNN_copy_dhy(unsigned int*, __half const*, cudnn::reduced_divisor, int)",
+     "launches_per_step": 1.0,
+     "us_per_step": 2.777599999999984
+    },
+    {
+     "name": "RNN_copy_dhx(__half*, float const*, cudnn::reduced_divisor, int)",
+     "launches_per_step": 1.0,
+     "us_per_step": 1.5168000000005122
+    },
+    {
+     "name": "void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<float>, std::array<char*, 1ul> >(int, at::nati",
+     "launches_per_step": 1.0,
+     "us_per_step": 0.9469999999995707
+    }
+   ]
+  }
+ }
+}

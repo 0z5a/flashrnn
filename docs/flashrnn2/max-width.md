@@ -2503,3 +2503,73 @@ Smoke (one start each, 2 blocks, LSTM FP16 B = 16), in ms:
 | 768 | 3.17 | 2.83 | 4.16 | 8.47 | 4.91 |
 
 At D = 512, FlashRNN's fused kernel was faster than the frnn2 default in the smoke run.
+
+## 75. Results of "mid" (section 74, 2026-10-20): the headline D, the cuDNN kernel breakdown and the sLSTM capture failure
+
+**Run.** A rented on-demand 1x H100 80GB HBM3 (a different host from section 73), driver 615, torch 2.7.1,
+cuDNN 9.7.1. Source fcc46fb9, with the forward pinned as in the 74.1 amendment and the capture-patched FlashRNN base.
+All 36 claim starts and all 18 cuDNN runs completed with stable outputs. Evidence: `mid-claims-analysis.json`,
+`mid-cudnn-analysis.json` and `mid-diag/`. Report only.
+
+**FlashRNN baselines.** Other arm's time / FlashRNN-2 eager time, with 95% hierarchical bootstrap. "graph vs graph"
+is the graphed alternating kernel over graphed FlashRNN-2 (ratio of means).
+
+| shape | FR2 (ms) | fused | alt P (eager) | alt P graph | graph vs graph |
+| --- | --- | --- | --- | --- | --- |
+| LSTM D512 B16 | 2.77 | 1.03 [1.02, 1.05] | 2.82 | 1.48 | 1.61 |
+| LSTM D768 B16 | 3.05 | 1.19 | 2.60 | 1.58 | 1.73 |
+| LSTM D1024 B16 | 2.95 | 1.47 | 2.59 | 1.80 | 1.93 |
+| sLSTM D512 B16 | 2.82 | **0.99** [0.98, 1.01] | 2.22 | 1.34 | 1.43 |
+| sLSTM D768 B16 | 3.20 | 1.11 | 2.53 | 1.38 | 1.49 |
+| sLSTM D1024 B16 | 3.03 | 1.46 | 2.95 | 1.53 | 1.66 |
+| LSTM D512 B64 | 4.39 | 1.57 | 2.02 | 1.33 | 1.38 |
+| LSTM D768 B64 | 6.16 | 1.84 | 1.41 | 1.04 | 1.07 |
+| LSTM D1024 B64 | 5.76 | 3.12 | 1.51 | 1.26 | 1.29 |
+| sLSTM D512 B64 | 4.49 | 1.57 | 1.97 | 1.22 | 1.27 |
+| sLSTM D768 B64 | 6.45 | 1.78 | 1.55 | **0.97** [0.97, 0.97] | 1.01 |
+| sLSTM D1024 B64 | 5.94 | 2.88 | 1.56 | 1.17 | 1.21 |
+
+**cuDNN** (layer with input projection, LSTM FP16; cudnn time / frnn2 time):
+
+| D | B = 16 | B = 64 |
+| --- | --- | --- |
+| 512 | **0.663** [0.611, 0.751] | 1.026 [1.024, 1.029] |
+| 768 | **0.671** [0.636, 0.733] | **0.811** [0.810, 0.813] |
+| 1024 | **0.699** [0.697, 0.700] | **0.911** [0.829, 0.949] |
+
+**The section 74 rule: no D in {512, 768, 1024} beats all four baselines.** cuDNN is faster at B = 16 for every D
+(1.43-1.51x), and at B = 64 for D = 768 and 1024. The paper therefore headlines **D = 1024 against FlashRNN**, where
+FlashRNN-2 beats every FlashRNN baseline at both B and both cells:
+* fused: 1.46-3.12x;
+* graphed alternating: 1.17-1.80x against eager FlashRNN-2, or 1.21-1.93x with both graphed.
+
+It reports the cuDNN loss. D = 512 is not a clean headline: there FlashRNN's fused kernel ties FlashRNN-2 at B = 16
+(0.99-1.03x).
+
+**74.2(a) Kernel breakdown** (torch.profiler, µs per training step of one layer, LSTM FP16):
+
+| shape | frnn2 forward (TileLang) | frnn2 backward | cuDNN forward (`ampere_lstm_tile16`) | cuDNN backward (`ampere_lstm_bp_*`) | step: frnn2 / cuDNN |
+| --- | --- | --- | --- | --- | --- |
+| D1024 B16 | 941 | 1562 (2-D CUDA) | 484 | 1072 | 3035 / 2101 |
+| D1024 B64 | 2071 | 2524 (2-D CUDA) | 1837 | 2463 | 6268 / 6250 |
+| D512 B16 | 1035 | 1239 (Triton) | 385 | 877 | 2648 / 1523 |
+
+Reading:
+* cuDNN 9 has persistent, single-kernel LSTM passes of its own: one forward kernel and one backward kernel per call.
+  So "persistent R" alone is not FlashRNN-2's edge over cuDNN.
+* At B = 16 the per-step forward is the largest gap. At D = 1024, cuDNN takes 1.9 µs per step and frnn2 3.7 µs. At
+  D = 512 it is 1.5 against 4.0 µs, so frnn2's forward costs about the same at D = 512 as at 1024.
+* That is consistent with a fixed per-step cost (the grid barrier and exchange latency) dominating the small-D,
+  small-B forward. The section 71 hypothesis now points at the forward more than the backward.
+* At B = 64 the kernels are within 1-13% of each other.
+* The asynchronous forward (section 72.2) and a lighter per-step synchronization of the forward are the levers.
+  cuDNN's own kernel shows that 1.9 µs per step at D = 1024 is reachable on this GPU.
+
+**74.2(b) The sLSTM D = 2048, B = 64 capture failure.** `hybrid_fw2d.recurrence` calls
+`sequence_context.zero_normalizer.item()` for sLSTM, a device-to-host read that is illegal during capture. Only the
+sLSTM 2-D forward, used at D = 2048 and B ≥ 64, does this. The fix is to pass the flag to the kernel as a device
+pointer. It is not done yet.
+
+**Library issue found on the way.** Off the measured runtime, `training_forward` takes the TileLang forward of
+`TILELANG_TRAINING_FORWARD` (D ≤ 768) only when the packaged tables match. Otherwise it falls back to the untuned
+R-tiled forward. This is the same class of issue as PR #86's `select()` fix. It is not done yet.
