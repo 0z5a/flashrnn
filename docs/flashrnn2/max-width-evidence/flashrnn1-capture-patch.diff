@@ -1,0 +1,83 @@
+--- a/alternating/flashrnn.cc
++++ b/alternating/flashrnn.cc
+@@ -103,7 +103,7 @@
+       states[i][0] = s0[i];
+     }
+ 
+-    torch::cuda::synchronize();
++    // torch::cuda::synchronize();  // removed for CUDA-graph capture (FlashRNN2 max-width 72)
+     AT_DISPATCH_FLOATING_TYPES_AND_HALF2(
+         x.scalar_type(), "FlashRNNFunc.forward", ([&] {
+           fw.Set(training, batch_size, hidden_size, num_heads,
+@@ -119,7 +119,7 @@
+               reinterpret_cast<FLASHRNN_DTYPE_G *>(gate_cache_i.data_ptr()),
+               reinterpret_cast<FLASHRNN_DTYPE_G *>(tmp_Ry.data_ptr()));
+         }));
+-    torch::cuda::synchronize();
++    // torch::cuda::synchronize();  // removed for CUDA-graph capture (FlashRNN2 max-width 72)
+     // change for hin version
+     if (res != 0) {
+       TORCH_CHECK(0, "Errors during CUDA kernel calls forward.");
+@@ -186,7 +186,7 @@
+          hidden_size * (FLASHRNN_NUM_GATES_T - FLASHRNN_NUM_GATES_I)},
+         options.dtype(typeToTorchDtype<FLASHRNN_DTYPE_G>()));
+ #endif
+-    torch::cuda::synchronize();
++    // torch::cuda::synchronize();  // removed for CUDA-graph capture (FlashRNN2 max-width 72)
+ 
+     AT_DISPATCH_FLOATING_TYPES_AND_HALF2(
+         recurrent_kernel_t.scalar_type(), "FlashRNNFunc.backward", ([&] {
+@@ -210,7 +210,7 @@
+     if (res != 0) {
+       TORCH_CHECK(0, "Errors during CUDA kernel calls backward.");
+     }
+-    torch::cuda::synchronize();
++    // torch::cuda::synchronize();  // removed for CUDA-graph capture (FlashRNN2 max-width 72)
+ #if FLASHRNN_SIMPLE_AGG
+     return {gate_cache_r, ds, dR, db};
+ #else
+@@ -271,7 +271,7 @@
+          hidden_size * (FLASHRNN_NUM_GATES_T - FLASHRNN_NUM_GATES_I)},
+         options.dtype(typeToTorchDtype<FLASHRNN_DTYPE_G>()));
+ #endif
+-    torch::cuda::synchronize();
++    // torch::cuda::synchronize();  // removed for CUDA-graph capture (FlashRNN2 max-width 72)
+     AT_DISPATCH_FLOATING_TYPES_AND_HALF2(
+         recurrent_kernel_t.scalar_type(), "FlashRNNFunc.backward_cut", ([&] {
+           bwc.Set(batch_size, hidden_size, num_heads,
+@@ -291,7 +291,7 @@
+               reinterpret_cast<FLASHRNN_DTYPE_G *>(gate_cache_i.data_ptr()),
+               reinterpret_cast<FLASHRNN_DTYPE_G *>(gate_cache_bias.data_ptr()));
+         }));
+-    torch::cuda::synchronize();
++    // torch::cuda::synchronize();  // removed for CUDA-graph capture (FlashRNN2 max-width 72)
+     if (res != 0) {
+       TORCH_CHECK(0, "Errors during CUDA kernel calls backward cut.");
+     }
+--- a/alternating/flashrnn_backward.cu
++++ b/alternating/flashrnn_backward.cu
+@@ -369,6 +369,10 @@
+   }
+   const uint state_stride = (steps + 1) * BH;
+   cublasSetStream(blas_handle_R, stream_R);
++  // Capture patch (FlashRNN2 max-width 72): fork stream_R from the caller's stream; replaces the ordering the removed
++  // torch::cuda::synchronize() before this call provided.
++  cudaEventRecord(event_R, data_->main_stream);
++  cudaStreamWaitEvent(stream_R, event_R, 0);
+ 
+   for (int t = steps - 1; t >= 0; --t) {
+     res |= IterateInternal(
+@@ -418,6 +422,13 @@
+     fprintf(stderr, "Error during bias gradient kernel.\n");
+   }
+ 
++  // Capture patch (FlashRNN2 max-width 72): join stream_R (the dR GEMM) back into the caller's stream; replaces the
++  // ordering the removed torch::cuda::synchronize() after this call provided.
++  cudaEventRecord(event_R, stream_R);
++  if (use_input_stream) {
++    cudaStreamWaitEvent(save_stream, event_R, 0);
++  }
++  cudaStreamWaitEvent(data_->main_stream, event_R, 0);
+   for (uint j = 0; j < _NUM_BLAS_STREAMS; j++) {
+     cudaEventRecord(event_b[j], stream_b[j]);
+     if (use_input_stream) {

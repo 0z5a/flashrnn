@@ -2373,3 +2373,32 @@ sm_90 GPU for iteration.
 
 **Hardware note.** An RTX 5090 is sm_120. It has no WGMMA and does not run the sm_90a kernels (TileLang forward,
 `-arch=sm_90a` CUDA builds), so it cannot be used to develop or time these kernels. H100, H200 and GH200 can.
+
+**72.1 amendment (2026-10-20, before the measured run): FlashRNN cannot be captured as pinned.**
+Smoke runs on the rented H100 showed three things:
+* **FlashRNN-2's wrappers.** These first failed to capture: `err[3] = seed` writes a Python scalar into a CUDA tensor,
+  which is a synchronous host-to-device copy. Fixed with `fill_` (db8f7c1b). After that, the training step captures
+  and replays bitwise equal to eager.
+* **The pinned fused backend.** It creates its own streams and synchronizes them in every call, so it cannot be
+  captured. It is timed ungraphed only.
+* **The pinned alternating backend.** Its C++ wrapper calls `torch::cuda::synchronize()` before and after every
+  forward and backward pass (six calls). Its backward also never forks `stream_R` from the caller's stream or joins it
+  back; it relies on those device-wide synchronizes.
+
+**The patch.** The graphed alternating baseline therefore uses a capture-patched copy:
+* the six synchronizes are removed;
+* `BackwardPass::Run` gets the missing fork (at the start) and join (after the dR GEMM), which provides the ordering
+  the synchronizes provided.
+
+Kernels, streams and cuBLAS calls are unchanged. The diff is
+`max-width-evidence/flashrnn1-capture-patch.diff`, and the patched base has its own SHA manifest. In the smoke run
+the original, patched and patched+graphed alternating outputs had the same largest difference to FlashRNN-2 (D =
+1024, B = 16, LSTM FP16).
+
+**The batch** has two groups. Each group runs in its own processes, so the two FlashRNN builds never share an
+extension module:
+* **original base:** arms one, one_graph, v1, v1cuda;
+* **patched base:** arms one, one_graph, v1cuda (patched, eager), v1cuda_graph (patched, graphed).
+
+Each group covers the 12 shapes of 72.1, with 3 starts each. The paper must state that FlashRNN's alternating kernel
+needed this patch to run under CUDA graphs.
