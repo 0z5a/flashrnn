@@ -63,6 +63,13 @@ Nothing in this branch changes a default or a shipped kernel.
   so a fast peer's h_0 could be overwritten with zeros; step 0 then used a partial h_0 and the recurrence damped the
   error. The loop is removed (every element of both buffers is written by its owner before it is read; owners of rows
   beyond B publish zeros). `hybrid_fwc.cu` never had the loop.
+* **B300 run 2 (after the fix; GPU 5, sm_103a, nvcc 13.3 -gencode): the single-GPU kernel is correct.** All four
+  variants PASS against `hybrid_fwc` push (KSPLIT 2, exact math), T = 8: max abs difference LSTM FP16 D = 256 3.1e-5,
+  D = 512 2.4e-4; sLSTM BF16 D = 256 9.8e-4, D = 512 2.0e-3 (within the 1e-2 BF16 tolerance); the per-step error is
+  flat at the rounding level (LSTM D = 512: 1.5e-5 to 2.4e-4 per step), no longer decaying. memcheck 0 errors;
+  122 / 122 / 152 / 154 registers, no spills; the 16-CTA cluster is accepted (max active clusters 7). So the
+  descriptor bit layouts, the canonical layout, the M = 64 read-past trick, the TMEM read-out and the proxy fences
+  (unverified items 1-6 above) are all exercised and pass on sm_103a. Timing is still pending (shared GPUs).
 * **Build form.** `build()` now emits `-gencode=arch=compute_<N>a,code=sm_<N>a` instead of `-arch=sm_<N>a`: with nvcc
   13.3 the latter also embeds plain `compute_103` PTX, which cannot hold tcgen05 (63 ptxas errors).
 * The `extern "C"` entry gained trailing multi-GPU arguments (`mc_x, uc_x, mc_flag, uc_flag, rank, flag_base`); the
