@@ -2573,3 +2573,32 @@ pointer. It is not done yet.
 **Library issue found on the way.** Off the measured runtime, `training_forward` takes the TileLang forward of
 `TILELANG_TRAINING_FORWARD` (D ≤ 768) only when the packaged tables match. Otherwise it falls back to the untuned
 R-tiled forward. This is the same class of issue as PR #86's `select()` fix. It is not done yet.
+
+## 76. Toward a faster B = 16 forward, and two library fixes (development, 2026-10-20, report only)
+
+**Fixes (d3431f62), to validate on a GPU before a PR.**
+* The sLSTM 2-D forward reads its first-step flag on the device. The `.item()` cause of section 75 is gone.
+* `training_forward` takes the TileLang forward for D 192-768 whenever TileLang is installed.
+
+Gates:
+* `tools/fw2d_slstm_flag_check.py`: with the flag true and false, the output matches TileLang's within 5e-2 relative,
+  and the two cases differ;
+* the sLSTM D = 2048, B = 64 training step captures (`tools/slstm_capture_probe.py`);
+* the unit tests pass on the GPU host.
+
+**Forward variants (c7327fab; compile-time, the default builds unchanged).**
+* **Q = 1:** a 1-D grid with PC = D / 16, one grid barrier per step instead of two.
+* **`FRNN_FW_PREFETCH`:** B2 is split, with this step's Wx loads between the arrival and the wait.
+* **`FRNN_STAGES`:** a deeper cp.async pipeline for the h chunks.
+
+**Target.** cuDNN's forward takes 1.9 µs per step at D = 1024, B = 16, against TileLang's 3.7 µs (section 75).
+
+**Bench.** `tools/fw1d_bench.py` at D ∈ {512, 1024}, LSTM FP16 and sLSTM BF16, B = 16. It records:
+* the median time per call and the phase timers;
+* bitwise equality of the variants to their base;
+* the difference to the TileLang forward.
+
+**Use.** If a variant beats the TileLang forward at B = 16, it becomes a candidate for a pre-registered paired
+timing and default rule. Otherwise the negative result is recorded.
+
+**Default SASS gate.** The default fw2d builds at this source must be byte-identical to those at d3431f62.
