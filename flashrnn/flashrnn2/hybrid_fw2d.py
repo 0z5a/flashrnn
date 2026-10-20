@@ -34,7 +34,8 @@ def batch_tile(batch):
     return 16 if batch <= 16 else 32 if batch <= 32 else 64
 
 
-def build(width, bm, slstm, bf16, mode, snap32, verify=0, cache_dir=None, grid=None, prefetch=False, stages=2):
+def build(width, bm, slstm, bf16, mode, snap32, verify=0, cache_dir=None, grid=None, prefetch=False, stages=2,
+          bulk=False, flagbar=False, smempart=False):
     pc, q, cr = grid or CONFIGS[width]
     cuda_home = os.environ.get("FRNN_HYBRID_CUDA_HOME", os.environ.get("CUDA_HOME", "/usr/local/cuda"))
     flags = [f"-DFRNN_D={width}", f"-DFRNN_PC={pc}", f"-DFRNN_Q={q}", f"-DFRNN_CR={cr}", f"-DFRNN_BM={int(bm)}",
@@ -44,6 +45,12 @@ def build(width, bm, slstm, bf16, mode, snap32, verify=0, cache_dir=None, grid=N
         flags.append("-DFRNN_FW_PREFETCH=1")
     if stages != 2:  # cp.async staging depth (section 76)
         flags.append(f"-DFRNN_STAGES={int(stages)}")
+    if bulk:  # one bulk asynchronous copy per staged row (section 78)
+        flags.append("-DFRNN_FW_BULK=1")
+    if flagbar:  # flat per-CTA flag barrier as B2 (section 78)
+        flags.append("-DFRNN_FW_FLAGBAR=1")
+    if smempart:  # gate partials through shared memory, Q = 1 (section 78)
+        flags.append("-DFRNN_FW_SMEMPART=1")
     digest = hashlib.sha256(SOURCE.read_bytes() + " ".join(flags).encode()).hexdigest()[:16]
     cache = Path(cache_dir or os.environ.get("FRNN_HYBRID_CACHE",
                                              os.environ.get("TMPDIR", str(Path.home() / ".cache")) + "/frnn_hybrid_bw"))
@@ -58,11 +65,12 @@ def build(width, bm, slstm, bf16, mode, snap32, verify=0, cache_dir=None, grid=N
     return lib
 
 
-def _lib(width, bm, slstm, bf16, mode, snap32, verify=0, grid=None, prefetch=False, stages=2):
-    key = (width, bm, slstm, bf16, mode, snap32, verify, grid, prefetch, stages)
+def _lib(width, bm, slstm, bf16, mode, snap32, verify=0, grid=None, prefetch=False, stages=2, bulk=False,
+         flagbar=False, smempart=False):
+    key = (width, bm, slstm, bf16, mode, snap32, verify, grid, prefetch, stages, bulk, flagbar, smempart)
     if key not in _LIBS:
         lib = ctypes.CDLL(str(build(width, bm, slstm, bf16, mode, snap32, verify, grid=grid, prefetch=prefetch,
-                                    stages=stages)))
+                                    stages=stages, bulk=bulk, flagbar=flagbar, smempart=smempart)))
         lib.frnn_hybrid_fw2d.restype = ctypes.c_int
         lib.frnn_hybrid_fw2d.argtypes = [ctypes.c_void_p] * 10 + [ctypes.c_int] * 7 + [ctypes.c_void_p] * 2
         lib.frnn_hybrid_fw2d_smem.restype = ctypes.c_int
@@ -85,11 +93,13 @@ def verify_bits(verify):
 
 def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context, output_mode="full",
                snapshot_dtype=None, batch_rows=None, conc=False, prof=False, diagnostics=None, grid=None,
-               prefetch=False, stages=2, _verify=None):
+               prefetch=False, stages=2, bulk=False, flagbar=False, smempart=False, _verify=None):
     """Returns (output, FP32 compute carry). Whole logical calls only (sequence start).
 
     grid, prefetch, stages (experimental, section 76): a (PC, Q, CR) grid in place of CONFIGS (Q = 1: a 1-D split with
-    one grid barrier per step), the split-B2 Wx prefetch, and the cp.async staging depth."""
+    one grid barrier per step), the split-B2 Wx prefetch, and the cp.async staging depth.
+    bulk, flagbar, smempart (experimental, section 78): bulk-copy staging of the whole K block, the flat flag barrier
+    as B2, and gate partials through shared memory (Q = 1)."""
     from .state_contract import state_contract
 
     if cell not in ("lstm", "slstm"):
@@ -138,14 +148,17 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context, o
     final = torch.empty(initial.shape, device=device, dtype=torch.float32)
     xbuf = torch.empty((resident, bm, width), device=device, dtype=wx.dtype)
     part = torch.empty((resident, q, bm, 4 * width), device=device, dtype=torch.float32)
-    stamp = torch.zeros(resident * pc * q + (1 if prefetch else 0), device=device, dtype=torch.int32)
+    if smempart and q != 1:
+        raise ValueError("smempart needs a Q = 1 grid")
+    stamp = torch.zeros(resident * pc * q + (1 if prefetch else 0) + (ctas * resident if flagbar else 0),
+                        device=device, dtype=torch.int32)
     bits, seed = verify_bits(_verify)
     if _verify and output_mode == "last":
         raise ValueError("verification reads the stored history: output mode full or hidden")
     if prof:
         bits |= VERIFY_BITS["prof"]
     lib = _lib(width, bm, cell == "slstm", wx.dtype == torch.bfloat16, MODES[output_mode], snap == torch.float32,
-               bits, grid=grid, prefetch=prefetch, stages=stages)
+               bits, grid=grid, prefetch=prefetch, stages=stages, bulk=bulk, flagbar=flagbar, smempart=smempart)
     err = torch.zeros(12, device=device, dtype=torch.int32)
     err[3].fill_(seed)  # in place, no host copy: CUDA-graph safe
     # sLSTM: the kernel reads the device flag itself (no .item(): no host synchronization, CUDA-graph capturable).

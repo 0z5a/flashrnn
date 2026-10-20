@@ -33,6 +33,16 @@
 //   latency overlaps the wait and the GEMM. Same values and arithmetic: bitwise equal outputs.
 // * FRNN_STAGES = n > 2: the h K-block chunks are staged n deep (n - 1 cp.async groups in flight) instead of double
 //   buffered. Same staged values: bitwise equal outputs.
+// * FRNN_FW_BULK = 1 (section 78): the whole h K block is staged with one bulk asynchronous copy per row
+//   (cp.async.bulk, one mbarrier with the block's byte count) into a padded shared layout, instead of 64-column
+//   cp.async rounds. Same staged values: bitwise equal outputs.
+// * FRNN_FW_FLAGBAR = 1 (section 78): B2 is a flat flag barrier: every CTA publishes its step count with a release
+//   store to its own flag after the pointwise update, and every CTA's threads poll all flags with acquire loads in
+//   parallel (no single atomic counter). With FRNN_FW_PREFETCH the Wx loads sit between the publish and the poll.
+//   Same ordering guarantees as the grid barrier: every xbuf write precedes the flag, every staged read follows the
+//   acquire. The last step and the no-B2 verification variant behave as for the grid barrier.
+// * FRNN_FW_SMEMPART = 1 (section 78, Q = 1 only): the GEMM writes its gate partials to shared memory and the pointwise
+//   update reads them there (no global round trip); B1 is the CTA barrier it already is at Q = 1.
 #include <cooperative_groups.h>
 #include <cuda_bf16.h>
 #include <cuda_fp16.h>
@@ -81,6 +91,19 @@ constexpr int VERIFY = FRNN_VERIFY, MODE = FRNN_MODE;
 #endif
 constexpr int STAGES = FRNN_STAGES;
 static_assert(STAGES >= 2 && STAGES <= 8, "cp.async stages");
+#ifndef FRNN_FW_BULK
+#define FRNN_FW_BULK 0
+#endif
+#ifndef FRNN_FW_FLAGBAR
+#define FRNN_FW_FLAGBAR 0
+#endif
+#ifndef FRNN_FW_SMEMPART
+#define FRNN_FW_SMEMPART 0
+#endif
+constexpr bool BULK = FRNN_FW_BULK != 0, FLAGBAR = FRNN_FW_FLAGBAR != 0, SMEMPART = FRNN_FW_SMEMPART != 0;
+#if FRNN_FW_SMEMPART && FRNN_Q != 1
+#error "FRNN_FW_SMEMPART needs Q = 1"
+#endif
 constexpr int V_CHECK = 1, V_DELAY = 2, V_NO_B1 = 4, V_NO_B2 = 8, V_PROF = 16;
 constexpr int D = FRNN_D, PC = FRNN_PC, Q = FRNN_Q, BM = FRNN_BM, CR = FRNN_CR;
 constexpr bool SLSTM = FRNN_SLSTM != 0;
@@ -89,6 +112,11 @@ constexpr int THREADS = 256, WARPS = 8;
 constexpr int NU = D / PC, NC = 4 * NU, NCW = NC / WARPS, NTW = NCW / 8, KQ = D / Q, KS = KQ / 16, MT = BM / 16;
 constexpr int RPQ = BM / Q, PE = (RPQ * NU + THREADS - 1) / THREADS;
 constexpr int KC = 64, LDS = KC + 8, ROUNDS = KQ / KC, J = KC / 16, CSM = KS - CR;
+constexpr int LDSB = KQ + 8;  // FRNN_FW_BULK: padded row stride of the staged K block (elements)
+static_assert(!BULK || (KQ * 2) % 16 == 0, "bulk copies move multiples of 16 bytes");
+constexpr int SMEM_R = WARPS * CSM * NTW * 32 * 8;
+constexpr int SMEM_STAGE = BULK ? BM * LDSB * 2 : STAGES * BM * LDS * 2;
+constexpr int SMEM_PART = SMEMPART ? BM * NC * 4 : 0;
 static_assert(D % PC == 0 && NU % 16 == 0, "unit block must be a multiple of 16 (a warp's columns within one gate)");
 static_assert(D % Q == 0 && KQ % KC == 0, "K block must be a multiple of 64");
 static_assert(BM % Q == 0, "row ownership needs BM a multiple of Q");
@@ -146,6 +174,26 @@ __device__ __forceinline__ void grid_wait(unsigned old, unsigned* ctr) {
 }
 #endif
 
+#if FRNN_FW_BULK
+__device__ __forceinline__ unsigned smem_u32(const void* p) { return (unsigned)__cvta_generic_to_shared(p); }
+__device__ __forceinline__ void mbar_init(unsigned long long* bar, unsigned count) {
+  asm volatile("mbarrier.init.shared::cta.b64 [%0], %1;" ::"r"(smem_u32(bar)), "r"(count) : "memory");
+}
+__device__ __forceinline__ void mbar_expect(unsigned long long* bar, unsigned bytes) {
+  asm volatile("mbarrier.arrive.expect_tx.shared::cta.b64 _, [%0], %1;" ::"r"(smem_u32(bar)), "r"(bytes) : "memory");
+}
+__device__ __forceinline__ void mbar_wait(unsigned long long* bar, unsigned parity) {
+  asm volatile(
+      "{\n .reg .pred p;\n WAIT_%=:\n"
+      " mbarrier.try_wait.parity.shared::cta.b64 p, [%0], %1;\n"
+      " @!p bra WAIT_%=;\n}\n" ::"r"(smem_u32(bar)), "r"(parity) : "memory");
+}
+__device__ __forceinline__ void bulk_copy(void* dst, const void* src, unsigned bytes, unsigned long long* bar) {
+  asm volatile("cp.async.bulk.shared::cluster.global.mbarrier::complete_tx::bytes [%0], [%1], %2, [%3];"
+               ::"r"(smem_u32(dst)), "l"(src), "r"(bytes), "r"(smem_u32(bar)) : "memory");
+}
+#endif
+
 struct Args {
   const elem_t* wx;      // [B, T, 4, H, D]
   const elem_t* R;       // [4, H, D, D]: R[g, head, o, k]
@@ -155,7 +203,8 @@ struct Args {
   float* final;          // [S, B, 1, H, D] FP32 carry
   elem_t* xbuf;          // [RESIDENT, BM, D] exchanged round(h) (single buffer)
   float* part;           // [RESIDENT, Q, BM, 4D] FP32 partial gate preactivations (single buffer)
-  int* stamp;            // [RESIDENT, PC, Q] verification step stamps
+  int* stamp;            // [RESIDENT, PC, Q] verification step stamps (+ 1 B2 counter with FRNN_FW_PREFETCH,
+                         // + one flag per CTA with FRNN_FW_FLAGBAR)
   int* err;              // [12] verification counters / phase timers, [3] delay seed
   int B, T, H, groups, resident, slots, tiles;
   const bool* zero_first;  // sLSTM: device flag, normalizer state zero at the call's first step (nullptr: false)
@@ -169,7 +218,17 @@ __device__ __forceinline__ uint32_t r_pair(const elem_t* R, int H, int head, int
 __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fw2d_kernel(Args a) {
   extern __shared__ __align__(16) unsigned char smem[];
   uint2* sr = reinterpret_cast<uint2*>(smem);  // [WARPS][CSM][NTW][32] B fragments
-  elem_t* stage = reinterpret_cast<elem_t*>(smem + (size_t)WARPS * CSM * NTW * 32 * sizeof(uint2));  // [STAGES][BM][LDS]
+  elem_t* stage = reinterpret_cast<elem_t*>(smem + SMEM_R);  // [STAGES][BM][LDS], or [BM][LDSB] with FRNN_FW_BULK
+  float* spart = reinterpret_cast<float*>(smem + SMEM_R + SMEM_STAGE);  // FRNN_FW_SMEMPART: [BM][NC] gate partials
+#if FRNN_FW_BULK
+  __shared__ __align__(8) unsigned long long bulk_bar;
+  unsigned bulk_phase = 0;
+  if (threadIdx.x == 0) {
+    mbar_init(&bulk_bar, 1);
+    asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory");
+  }
+  __syncthreads();
+#endif
   cg::grid_group grid = cg::this_grid();
   const int tid = threadIdx.x, warp = tid >> 5, lane = tid & 31, fg = lane >> 2, ft = lane & 3;
   const int cb = blockIdx.x / Q, kb = blockIdx.x % Q, gy = blockIdx.y;
@@ -185,6 +244,11 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fw2d_kernel(Args a) {
   int* const stamps = a.stamp + ((size_t)gy * PC + cb) * Q;
 #if FRNN_FW_PREFETCH
   unsigned* const b2ctr = reinterpret_cast<unsigned*>(a.stamp + (size_t)a.resident * PC * Q);
+#endif
+#if FRNN_FW_FLAGBAR
+  // One flag per CTA of the whole grid, after the stamps (and the B2 counter, if any).
+  int* const flags = a.stamp + (size_t)a.resident * PC * Q + (FRNN_FW_PREFETCH ? 1 : 0);
+  const int nblocks = gridDim.x * gridDim.y, me = blockIdx.y * gridDim.x + blockIdx.x;
 #endif
   uint32_t rreg[CR > 0 ? CR : 1][NTW][2];
   int cnt = 0;  // steps so far over all slots (stamp value)
@@ -312,6 +376,45 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fw2d_kernel(Args a) {
         __syncthreads();  // round r + 1 staged, every warp done with round r's buffer
       };
       constexpr int RREG = (CR + J - 1) / J;  // rounds with at least one register k-step
+#if FRNN_FW_BULK
+      // Whole K block in one asynchronous bulk transaction: BM row copies of KQ elements into the padded layout, one
+      // mbarrier phase. Generic reads of the previous step ended before this step's B2 (bar.sync inside it).
+      asm volatile("fence.proxy.async.shared::cta;" ::: "memory");
+      if (tid == 0) mbar_expect(&bulk_bar, (unsigned)(BM * KQ * sizeof(elem_t)));
+      __syncthreads();
+      if (tid < BM) bulk_copy(stage + (size_t)tid * LDSB, xb + (size_t)tid * D + k0, KQ * sizeof(elem_t), &bulk_bar);
+      mbar_wait(&bulk_bar, bulk_phase);
+      bulk_phase ^= 1;
+#pragma unroll
+      for (int c = 0; c < KS; ++c) {
+        uint32_t b[NTW][2];
+#pragma unroll
+        for (int nt = 0; nt < NTW; ++nt) {
+          if (c < CR) {
+            b[nt][0] = rreg[c < CR ? c : 0][nt][0];
+            b[nt][1] = rreg[c < CR ? c : 0][nt][1];
+          } else {
+            uint2 x = sb[((size_t)(c - CR) * NTW + nt) * 32];
+            b[nt][0] = x.x;
+            b[nt][1] = x.y;
+          }
+        }
+#pragma unroll
+        for (int mt = 0; mt < MT; ++mt) {
+          const elem_t* r0 = stage + (size_t)(mt * 16 + fg) * LDSB + c * 16 + 2 * ft;
+          const elem_t* r8 = r0 + 8 * LDSB;
+          uint32_t a0 = *reinterpret_cast<const uint32_t*>(r0), a1 = *reinterpret_cast<const uint32_t*>(r8);
+          uint32_t a2 = *reinterpret_cast<const uint32_t*>(r0 + 8), a3 = *reinterpret_cast<const uint32_t*>(r8 + 8);
+          if ((VERIFY & V_CHECK) && MODE != 2) {
+            const int row0 = bt * BM + mt * 16 + fg, k = k0 + c * 16 + 2 * ft;
+            bad += check(a0, row0, k) + check(a1, row0 + 8, k) + check(a2, row0, k + 8) +
+                   check(a3, row0 + 8, k + 8);
+          }
+#pragma unroll
+          for (int nt = 0; nt < NTW; ++nt) mma(acc[mt][nt], a0, a1, a2, a3, b[nt][0], b[nt][1]);
+        }
+      }
+#else
       if constexpr (STAGES == 2) {
         load(0, 0);
         asm volatile("cp.async.wait_group 0;" ::: "memory");
@@ -328,16 +431,28 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fw2d_kernel(Args a) {
       for (int r = 0; r < RREG; ++r) round(r, std::true_type{});
 #pragma unroll 1
       for (int r = RREG; r < ROUNDS; ++r) round(r, std::false_type{});
+#endif
       // Partial gates of this K block for the warp's columns (gate g_warp, units o_warp ..), all BM rows.
-      float* dst = pt + (size_t)kb * BM * 4 * D + (size_t)g_warp * D;
+      if constexpr (SMEMPART) {  // [BM][NC]: column g_warp * NU + (o - cb * NU) = c_warp + nt * 8 + 2 ft
 #pragma unroll
-      for (int mt = 0; mt < MT; ++mt)
+        for (int mt = 0; mt < MT; ++mt)
 #pragma unroll
-        for (int nt = 0; nt < NTW; ++nt) {
-          const int r = mt * 16 + fg, o = o_warp + nt * 8 + 2 * ft;
-          *reinterpret_cast<float2*>(dst + (size_t)r * 4 * D + o) = make_float2(acc[mt][nt][0], acc[mt][nt][1]);
-          *reinterpret_cast<float2*>(dst + (size_t)(r + 8) * 4 * D + o) = make_float2(acc[mt][nt][2], acc[mt][nt][3]);
-        }
+          for (int nt = 0; nt < NTW; ++nt) {
+            const int r = mt * 16 + fg, c = c_warp + nt * 8 + 2 * ft;
+            *reinterpret_cast<float2*>(spart + (size_t)r * NC + c) = make_float2(acc[mt][nt][0], acc[mt][nt][1]);
+            *reinterpret_cast<float2*>(spart + (size_t)(r + 8) * NC + c) = make_float2(acc[mt][nt][2], acc[mt][nt][3]);
+          }
+      } else {
+        float* dst = pt + (size_t)kb * BM * 4 * D + (size_t)g_warp * D;
+#pragma unroll
+        for (int mt = 0; mt < MT; ++mt)
+#pragma unroll
+          for (int nt = 0; nt < NTW; ++nt) {
+            const int r = mt * 16 + fg, o = o_warp + nt * 8 + 2 * ft;
+            *reinterpret_cast<float2*>(dst + (size_t)r * 4 * D + o) = make_float2(acc[mt][nt][0], acc[mt][nt][1]);
+            *reinterpret_cast<float2*>(dst + (size_t)(r + 8) * 4 * D + o) = make_float2(acc[mt][nt][2], acc[mt][nt][3]);
+          }
+      }
       if (VERIFY & V_CHECK) {  // step stamp after the partial (release at GPU scope)
         __syncthreads();
         if (tid == 0) {
@@ -354,7 +469,38 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fw2d_kernel(Args a) {
     for (int t = 0; t < a.T; ++t) {
       const bool last = t == a.T - 1;
       unsigned long long t0 = (VERIFY & V_PROF) ? gtime() : 0;
+#if FRNN_FW_FLAGBAR
+      {
+        const bool b2 = !(VERIFY & V_NO_B2) || last;
+        __syncthreads();  // every thread's xbuf writes of the previous step
+        if (b2 && tid == 0) {
+          __threadfence();
+          asm volatile("st.release.gpu.global.b32 [%0], %1;" ::"l"(flags + me), "r"(cnt + 1) : "memory");
+        }
 #if FRNN_FW_PREFETCH
+#pragma unroll
+        for (int e = 0; e < PE; ++e) {
+          int lrow, o;
+          const bool own = elem(e, lrow, o);
+          const int row = bt * BM + lrow;
+          if (active && own && row < a.B) {
+            const size_t xo = (((size_t)row * a.T + t) * 4 * a.H + head) * D + o;
+#pragma unroll
+            for (int q = 0; q < 4; ++q) wxr[e][q] = a.wx[xo + (size_t)q * hd];
+          }
+        }
+#endif
+        if (b2) {
+          for (int i = tid; i < nblocks; i += THREADS) {
+            int v;
+            do {
+              asm volatile("ld.acquire.gpu.global.b32 %0, [%1];" : "=r"(v) : "l"(flags + i) : "memory");
+            } while (v < cnt + 1);
+          }
+          __syncthreads();  // B2: every CTA's round(h_{t-1}) complete in xbuf
+        }
+      }
+#elif FRNN_FW_PREFETCH
       {
         const bool b2 = !(VERIFY & V_NO_B2) || last;
         const unsigned old = b2 ? grid_arrive(b2ctr) : 0u;
@@ -409,7 +555,11 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fw2d_kernel(Args a) {
 #pragma unroll
           for (int q = 0; q < 4; ++q) {
             float sum = 0.f;
-            for (int jj = 0; jj < Q; ++jj) sum += __ldcg(pt + ((size_t)jj * BM + lrow) * 4 * D + (size_t)q * D + o);
+            if constexpr (SMEMPART) {
+              sum = spart[(size_t)lrow * NC + (size_t)q * NU + (o - cb * NU)];
+            } else {
+              for (int jj = 0; jj < Q; ++jj) sum += __ldcg(pt + ((size_t)jj * BM + lrow) * 4 * D + (size_t)q * D + o);
+            }
             gate[q] = sum;
           }
           float h = 0.f;
@@ -487,7 +637,7 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fw2d_kernel(Args a) {
 }
 
 extern "C" int frnn_hybrid_fw2d_smem() {
-  return WARPS * CSM * NTW * 32 * (int)sizeof(uint2) + STAGES * BM * LDS * (int)sizeof(elem_t);
+  return SMEM_R + SMEM_STAGE + SMEM_PART;
 }
 
 extern "C" int frnn_hybrid_fw2d_ctas() { return PC * Q; }

@@ -2644,3 +2644,31 @@ base; difference to TileLang ≤ 1.1e-5 in FP16 and 1.3e-4 in BF16, a different 
 
 **Decision.** No default changes. The variants stay compile-time options. The paper mentions the forward gap and this
 first step in its outlook only, without these preliminary numbers.
+
+## 78. Toward cuDNN's per-step time: bulk staging, a flat flag barrier, partials in shared memory (development, 2026-10-20, report only)
+
+**Why.** Section 77 put the best B = 16 CUDA forward at 4.05 µs per step against cuDNN's 1.5 (D = 512) and 1.9 µs
+(D = 1024). Its three phases were the grid barrier (1.1 µs), the staging of the h K block (1.7 µs for a product the
+tensor cores finish in well under 0.1 µs) and the pointwise update (0.8 µs, including a global round trip of the gate
+partials).
+
+**Changes (compile-time options of `hybrid_fw2d.cu`; the default builds are unchanged):**
+* `FRNN_FW_BULK`: one `cp.async.bulk` per staged row into a padded layout, one mbarrier for the block: one L2 round
+  trip instead of 8-16 chained chunk latencies.
+* `FRNN_FW_FLAGBAR`: B2 as a flat flag barrier. Every CTA publishes its step count with one release store; every
+  CTA's threads poll all flags in parallel with acquire loads. No atomic on a shared counter. The Wx prefetch sits
+  between publish and poll.
+* `FRNN_FW_SMEMPART` (Q = 1): the GEMM writes its partials to shared memory and the pointwise update reads them there.
+* Grids with 128-column CTAs (PC = D / 32) next to the 64-column ones, to halve the barrier's participants.
+
+**Bench.** `tools/fw1d_bench.py` with hidden output in the input dtype (what cuDNN returns), B = 16, T = 256,
+D ∈ {512, 1024}, LSTM FP16 and sLSTM BF16; arms: TileLang, cuDNN (`nn.LSTM`, total and recurrent kernel only via the
+profiler), fw2d default, and the fw1d grids × options. Bitwise equality of every variant to its grid's base; difference
+to TileLang.
+
+**Expectation.** Bulk staging takes the GEMM phase to about 0.8 µs; the flag barrier takes B2 to 0.5-0.7 µs; partials
+in shared memory take the pointwise phase to 0.3-0.4 µs. Together about 1.8 µs per step at D = 512: close to cuDNN's
+1.5, not below it. Any variant below cuDNN's kernel time at some shape is a candidate for the pre-registered paired
+protocol; any that is not is recorded.
+
+**Gate before anything else.** The default fw2d builds at this source must be byte-identical to a172469e's.
