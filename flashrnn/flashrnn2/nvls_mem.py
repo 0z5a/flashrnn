@@ -1,4 +1,4 @@
-"""NVSwitch multicast memory for the multi-GPU cluster forward (hybrid_fwc_tmem.cu with FRNN_P > 1; see
+"""NVSwitch multicast memory for the multi-GPU cluster forward (hybrid_fwc.cu and hybrid_fwc_tmem.cu with FRNN_P > 1; see
 docs/flashrnn2/tmem-beta-handoff.md, "Multi-GPU").
 
 A MulticastGroup owns one CUDA multicast object over P devices of one process (driver API through ctypes): every
@@ -52,10 +52,26 @@ _LIB = None
 
 
 def driver():
+    """libcuda with the versioned entry points. The unversioned exports of cuMemsetD8 / cuCtxPushCurrent /
+    cuCtxPopCurrent / cuDevicePrimaryCtxRelease are the legacy ABIs (32-bit device pointers, old context semantics);
+    the headers map the names to *_v2, which ctypes does not see — calling the legacy ones gave CUDA error 201."""
     global _LIB
     if _LIB is None:
         lib = ctypes.CDLL(os.environ.get("FRNN_LIBCUDA", "libcuda.so.1"))
         lib.cuGetErrorString.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.c_char_p)]
+        lib.cuMemsetD8_v2.argtypes = [ctypes.c_ulonglong, ctypes.c_ubyte, ctypes.c_size_t]
+        lib.cuCtxPushCurrent_v2.argtypes = [ctypes.c_void_p]
+        lib.cuCtxPopCurrent_v2.argtypes = [ctypes.POINTER(ctypes.c_void_p)]
+        lib.cuDevicePrimaryCtxRetain.argtypes = [ctypes.POINTER(ctypes.c_void_p), ctypes.c_int]
+        lib.cuDevicePrimaryCtxRelease_v2.argtypes = [ctypes.c_int]
+        lib.cuMemMap.argtypes = [ctypes.c_ulonglong, ctypes.c_size_t, ctypes.c_size_t, ctypes.c_ulonglong, ctypes.c_ulonglong]
+        lib.cuMemUnmap.argtypes = [ctypes.c_ulonglong, ctypes.c_size_t]
+        lib.cuMemAddressFree.argtypes = [ctypes.c_ulonglong, ctypes.c_size_t]
+        lib.cuMemRelease.argtypes = [ctypes.c_ulonglong]
+        lib.cuMulticastBindMem.argtypes = [ctypes.c_ulonglong, ctypes.c_size_t, ctypes.c_ulonglong, ctypes.c_size_t,
+                                           ctypes.c_size_t, ctypes.c_ulonglong]
+        lib.cuMulticastUnbind.argtypes = [ctypes.c_ulonglong, ctypes.c_int, ctypes.c_size_t, ctypes.c_size_t]
+        lib.cuMulticastAddDevice.argtypes = [ctypes.c_ulonglong, ctypes.c_int]
         _LIB = lib
     return _LIB
 
@@ -164,14 +180,14 @@ class MulticastGroup:
         for cd, p in zip(self.cudevs, self.uc_ptr):
             ctx = ctypes.c_void_p()
             check(lib.cuDevicePrimaryCtxRetain(ctypes.byref(ctx), cd), "cuDevicePrimaryCtxRetain")
-            check(lib.cuCtxPushCurrent(ctx), "cuCtxPushCurrent")
+            check(lib.cuCtxPushCurrent_v2(ctx), "cuCtxPushCurrent")
             try:
-                check(lib.cuMemsetD8(p, ctypes.c_ubyte(0), ctypes.c_size_t(self.size)), "cuMemsetD8")
+                check(lib.cuMemsetD8_v2(p, ctypes.c_ubyte(0), ctypes.c_size_t(self.size)), "cuMemsetD8")
                 check(lib.cuCtxSynchronize(), "cuCtxSynchronize")
             finally:
                 old = ctypes.c_void_p()
-                lib.cuCtxPopCurrent(ctypes.byref(old))
-                lib.cuDevicePrimaryCtxRelease(cd)
+                lib.cuCtxPopCurrent_v2(ctypes.byref(old))
+                lib.cuDevicePrimaryCtxRelease_v2(cd)
 
     def mc(self, offset=0):
         return self.mc_ptr.value + offset
