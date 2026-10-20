@@ -2438,7 +2438,7 @@ at B = 16 (±0.1-0.4).
 **Reading.**
 * **Graphs help FlashRNN's alternating kernel a lot.** The patched alternating kernel gains 1.18-1.96x from graphs,
   most at B = 16 and D = 1024, where its per-step launches dominate.
-* **Graphs help FlashRNN-2 by 3-13%.**
+* **Graphs help FlashRNN-2 by 4-13% in time (1.04-1.15x).**
 * **The original alternating kernel is slower than the patched one.** Its two device synchronizes per pass cost
   1.03-1.30x on this host. The alternating-baseline numbers of sections 49, 67 and 69 include them.
 * **Fair comparison, both graphed.**
