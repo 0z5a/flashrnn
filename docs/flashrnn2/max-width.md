@@ -2602,3 +2602,45 @@ Gates:
 timing and default rule. Otherwise the negative result is recorded.
 
 **Default SASS gate.** The default fw2d builds at this source must be byte-identical to those at d3431f62.
+
+## 77. Results of the development run (section 76, 2026-10-20)
+
+**Run.** A rented 1x H100 80GB HBM3 (driver 595), torch 2.7.1, Triton 3.6.0, TileLang 0.1.15, source a172469e.
+Report only. Evidence: `max-width-evidence/dev-fw/`.
+
+**Fixes: all gates pass → PR #87.**
+* Unit tests: 23 passed on the GPU host.
+* Default fw2d SASS: 32/32 builds byte-identical between d3431f62 (fixes only) and a172469e (fixes + variants). The
+  variant code changes nothing in the default builds.
+* sLSTM flag: with the normalizer zero and nonzero, the 2-D forward matches TileLang's to 6.0e-5 relative in both
+  cases, and the two cases differ.
+* The sLSTM D = 2048, B = 64 training step captures (`CAPTURE_OK`).
+
+**Forward variants** (B = 16, T = 256, median of 30 calls; phases in µs per step; every variant bitwise equal to its
+base; difference to TileLang ≤ 1.1e-5 in FP16 and 1.3e-4 in BF16, a different accumulation order):
+
+| D, cell | TileLang (ms) | fw1d base | + prefetch | + 4 stages | + both (cr16) | phases of the best (B2 / GEMM / pointwise) |
+| --- | --- | --- | --- | --- | --- | --- |
+| 512 LSTM | 1.141 | 1.339 | 1.271 | 1.085 | **1.038** | 1.11 / 1.77 / 0.84 |
+| 512 sLSTM | 1.119 | 1.339 | 1.283 | 1.102 | **1.050** | 1.18 / 1.73 / 0.78 |
+| 1024 LSTM | **1.036** | 2.085 | 1.933 | 1.578 | 1.457 | 1.14 / 3.34 / 0.84 |
+| 1024 sLSTM | **1.045** | 2.089 | 1.941 | 1.591 | 1.470 | 1.19 / 3.32 / 0.77 |
+
+(The fw2d default grid at D = 1024 takes 1.47 ms: B2 1.2, GEMM 1.7, B1 1.35, pointwise 1.1 µs.)
+
+**Reading.**
+* **Four-stage staging is the largest lever:** the GEMM phase falls from 2.7 to 1.7-1.9 µs at D = 512 and from 5.3
+  to 3.3-3.6 µs at D = 1024. The double-buffered 64-column chunks exposed each chunk's L2 latency. The phase is still
+  staging latency, not MMA: a 16 × 64 × 512 product per CTA cannot take 1.7 µs of tensor-core time.
+* **The split-B2 prefetch works as in the backward:** pointwise 1.2 → 0.8 µs, B2 + 0.1 µs, net about 0.3 µs per step.
+* **Q = 1 removes B1** as designed; the remaining grid barrier costs 1.0-1.2 µs per step, the floor seen everywhere.
+* **Against the TileLang forward:** the best variant is 1.07-1.10x faster at D = 512 and 0.70-0.71x at D = 1024
+  (K = 1024 per CTA: twice the staging). Against cuDNN's forward (1.5 µs per step at D = 512, 1.9 at D = 1024,
+  section 75) the best variant's 4.05 µs per step is 2.7x away. The barrier alone (1.1 µs) is 60% of cuDNN's whole
+  step.
+* **What would move it next:** stage the whole K block (16-32 KB) with one TMA bulk copy and one mbarrier instead of
+  8-16 cp.async rounds, and a barrier cheaper than the cooperative-groups grid barrier (the split arrival/wait in a
+  single counter is already that protocol). Neither is built.
+
+**Decision.** No default changes. The variants stay compile-time options. The paper mentions the forward gap and this
+first step in its outlook only, without these preliminary numbers.
