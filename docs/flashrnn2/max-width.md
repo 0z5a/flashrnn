@@ -2453,3 +2453,32 @@ at B = 16 (±0.1-0.4).
 * The B = 16 result stands at about 2x. At B = 64 the large-D advantage over a graphed alternating kernel is gone.
   This matches the advisor's framing: pick a D that clearly wins, and at D = 2048 state that FlashRNN-2 still runs
   and roughly matches the alternating kernel.
+
+## 74. Picking the headline D: D = 512 / 768 / 1024 against every baseline, and two diagnostics (pre-registration, 2026-10-20, before any run of it)
+
+**Why.** The advisor wants one size, where R no longer fits one SM, that is clearly faster, plus a statement that
+large D still works. At D = 1024, FlashRNN-2 beats both FlashRNN backends, graphed or not, but loses to cuDNN
+(section 71). D = 512 and 768 were never compared with any baseline. There, the library uses the tuned Triton
+backward, because the 2-D backward did not win (section 30).
+
+**74.1 Runs (batch "mid", one rented H100).**
+* **Shapes:** D ∈ {512, 768, 1024} × B ∈ {16, 64} × (LSTM FP16, sLSTM BF16), H = 1, T = 256.
+* **heads_bench, paired training step.** The forward is the library's selection, recorded per case. Arms:
+  * one and one_graph;
+  * v1, FlashRNN fused (eager);
+  * v1cuda and v1cuda_graph, the capture-patched alternating kernel (section 72.1), eager and graphed.
+
+  All arms load the capture-patched base, which leaves the fused kernel unchanged.
+* **e2e_bench layer mode.** frnn2 against cudnn, LSTM FP16, the same D × B. The input projection is included.
+* Protocol of section 3. Report only.
+
+**74.2 Diagnostics (report only).**
+* **(a) Kernel breakdown.** `torch.profiler` (CUPTI) records one layer's training step at D = 1024, B = 16, LSTM FP16
+  for cuDNN and frnn2: kernel names, counts and total time per step. This tests the section 71 hypothesis that
+  frnn2's two grid barriers per step decide the D = 1024 loss.
+* **(b) The sLSTM D = 2048, B = 64 capture failure (section 73).** Capture the training forward and the backward
+  separately, with the capture status after each step, to find the non-capturable call.
+
+**Use.** The headline D is the smallest D in {512, 768, 1024} where FlashRNN-2 beats all four baselines (FlashRNN
+fused, the graphed alternating kernel, the eager alternating kernel, cuDNN) at both B for LSTM FP16. If none
+qualifies, the paper headlines D = 1024 against FlashRNN and reports the cuDNN loss.
