@@ -73,9 +73,14 @@ class TrainingForward(unittest.TestCase):
             cfg, src = training.training_forward("slstm", self.torch.float16, 16, 256, 1, width, policy=self.policy)
             self.assertEqual((src, cfg.family, cfg.sync, cfg.slice_width), ("tilelang", "tilelang", sync, s))
 
+    def test_tilelang_without_matching_tables(self):
+        # A runtime whose identity differs from the packaged tables (empty policy) still gets the TileLang forward,
+        # as default_config does at D >= 1024 (max-width.md section 75).
+        cfg, src = training.training_forward("lstm", self.torch.float16, 16, 256, 1, 384, policy=_Policy({}))
+        self.assertEqual((src, cfg.family), ("tilelang", "tilelang"))
+
     def test_default_when_not_measured_or_not_installed(self):
-        cases = [(_Policy({}), 384, 1, True),          # runtime identity differs from the tables'
-                 (self.policy, 320, 1, True),          # width not measured
+        cases = [(self.policy, 320, 1, True),          # width not measured
                  (self.policy, 384, 2, True),          # H > 1 not measured
                  (self.policy, 384, 1, False)]         # TileLang not installed
         for policy, width, heads, installed in cases:
