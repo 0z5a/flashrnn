@@ -32,9 +32,14 @@ def min_register_ksteps(width, cluster):
     return None
 
 
+REGISTER_BUDGET = 160  # R fragment registers per thread (2 per k-step and n-tile) that leave room for the rest
+
+
 def supported(width, cluster=16):
-    return (width % cluster == 0 and (width // cluster) % 16 == 0 and 2 <= cluster <= 16
-            and min_register_ksteps(width, cluster) is not None)
+    if not (width % cluster == 0 and (width // cluster) % 16 == 0 and 2 <= cluster <= 16):
+        return False
+    cr = min_register_ksteps(width, cluster)
+    return cr is not None and cr * layout(width, cluster)["ntw"] * 2 <= REGISTER_BUDGET
 
 
 def build(width, cluster, cr, ksplit, slstm, bf16, mode, snap32, verify=0, pull=False, cache_dir=None):
