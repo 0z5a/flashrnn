@@ -11,6 +11,7 @@ module = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = module
 spec.loader.exec_module(module)
 KernelConfig, ExecutionPolicy, shape_key = module.KernelConfig, module.ExecutionPolicy, module.shape_key
+default_config = module.default_config
 
 
 class PolicyContract(unittest.TestCase):
@@ -79,6 +80,14 @@ class TileLangPolicyContract(unittest.TestCase):
                        dict(family="tilelang", slice_width=32, sync="cluster", pad_k=True), dict(sync="cluster")):
             with self.assertRaises(ValueError):
                 KernelConfig(**kwargs)
+
+    def test_empty_policy_uses_the_default_without_identity(self):
+        # A runtime that does not match the packaged tables gets an empty policy and no identity; the default must
+        # still be served (default_config checks the installed TileLang itself).
+        policy = ExecutionPolicy()
+        for width in (512, 1024, 2048):
+            self.assertEqual(policy.select("lstm", "float16", 16, 256, 1, width, identity=None),
+                             default_config(width, 16, 1))
 
     def test_tilelang_entry_requires_tilelang_in_identity(self):
         key = shape_key("lstm", "float16", 16, 1024, 1, 256)

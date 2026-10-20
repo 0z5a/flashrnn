@@ -406,7 +406,7 @@ def recurrence(
         raise ValueError("the race check reads the FP32 hidden output")
     err = torch.zeros((4 if verify else 1,), device=device, dtype=torch.int32)
     if verify:
-        err[3] = seed
+        err[3].fill_(seed)  # in place, no host copy: CUDA-graph safe
     mode = {"full": 0, "hidden": 1, "last": 2}[output_mode]
     start = sequence_context.step_offset == 0
     previous = initial

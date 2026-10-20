@@ -198,7 +198,11 @@ class ExecutionPolicy:
         if self.table and (not self.identity or identity != self.identity):
             raise ValueError("a measured table requires its matching execution identity")
         key = shape_key(cell, dtype, batch, steps, heads, width)
-        config = self.table.get(key, default_config(width, batch, heads))
+        if key not in self.table:
+            # The default checks the installed TileLang itself (default_config); an empty policy (a runtime that does
+            # not match the packaged tables) has no identity to check against.
+            return default_config(width, batch, heads)
+        config = self.table[key]
         if config.family == "tilelang" and not (identity or {}).get("tilelang"):
             # A table entry is chosen before the call; it never falls back to another backend.
             raise ValueError("the table selects the TileLang backend but this runtime has no TileLang")

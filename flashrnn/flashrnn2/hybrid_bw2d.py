@@ -191,7 +191,7 @@ def backward(wx, recurrent, bias, initial, history, d_history, d_final, cell, *,
     lib = _lib(width, bm, cell == "slstm", wx.dtype == torch.bfloat16, bits, rowown=rowown, asyncload=asyncload,
                dglp=dglp, honly=honly, flags=flags, grid=grid, prefetch=prefetch)
     err = torch.zeros(12, device=device, dtype=torch.int32)
-    err[3] = seed
+    err[3].fill_(seed)  # in place, no host copy: CUDA-graph safe
     tensors = [pre.contiguous(), history.contiguous(), initial.float().contiguous(),
                (d_hidden if honly else d_history).contiguous(), d_final.float().contiguous(), recurrent.contiguous(), dg, d_init, xbuf, part, stamp, err]
     rc = lib.frnn_hybrid_bw2d(*[ctypes.c_void_p(x.data_ptr()) for x in tensors], batch, steps, heads, groups, resident,
@@ -266,7 +266,7 @@ def backward_mg(wx, recurrent, bias, initial, history, d_history, d_final, cell,
                       part=torch.empty((lay["resident"], lay["q"], bm, width), device=dev, dtype=torch.float32),
                       stamp=torch.zeros(lay["resident"] * lay["q"], device=dev, dtype=torch.int32),
                       err=torch.zeros(12, device=dev, dtype=torch.int32))
-        per[d]["err"][3] = seed
+        per[d]["err"][3].fill_(seed)  # in place, no host copy: CUDA-graph safe
     xbytes = lay["resident"] * bm * 4 * width * wx.element_size()
     if alloc == "uva":
         for d in devices:

@@ -143,7 +143,7 @@ def backward(wx, recurrent, bias, initial, history, d_history, d_final, cell, *,
         resident = min(resident, fit)
         slots = (groups + resident - 1) // resident
     err = torch.zeros(12, device=device, dtype=torch.int32)
-    err[3] = seed
+    err[3].fill_(seed)  # in place, no host copy: CUDA-graph safe
     tensors = [pre.contiguous(), history.contiguous(), init32, d_history.contiguous(), d_final.float().contiguous(),
                recurrent.contiguous(), dg, d_init, xbuf, err]
     rc = lib.frnn_hybrid_bw(*[ctypes.c_void_p(x.data_ptr()) for x in tensors], batch, steps, heads, groups, resident,
@@ -226,7 +226,7 @@ def backward_mg(wx, recurrent, bias, initial, history, d_history, d_final, cell,
                       err=torch.zeros(12, device=dev, dtype=torch.int32))
     bits, seed = verify_bits(_verify)
     for d in devices:
-        per[d]["err"][3] = seed
+        per[d]["err"][3].fill_(seed)  # in place, no host copy: CUDA-graph safe
     xbytes = lay["resident"] * 2 * bm * 4 * width * wx.element_size()
     if alloc == "uva":
         for d in devices:
