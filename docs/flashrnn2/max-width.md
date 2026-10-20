@@ -2334,3 +2334,42 @@ Report only.
 * **Why D = 1024 loses (hypothesis; cuDNN was not profiled).** frnn2's two grid barriers per step (sections 46 and
   67) are a fixed cost that matters most where the step is short, that is small D and B = 16. That is where the loss
   is largest. Profiling cuDNN's kernels at this shape would test it.
+
+## 72. Next batch: graphed baselines and an asynchronous forward input prefetch (pre-registration, 2026-10-20, before any run of it)
+
+**Why (advisor, 2026-10-20).**
+1. FlashRNN's alternating kernel has never been compared with CUDA graphs. Its per-step launches (one GEMM and one
+   pointwise kernel per step, forward and backward) may cost much of its time, and a graph removes that host
+   overhead.
+2. The most promising remaining lever is asynchronous memory handling with a producer/consumer overlap. An example is
+   loading Wx of step t + 1 while step t computes.
+
+**72.1 Graphed baselines (tool ready: `heads_bench.py` arms `one_graph`, `v1_graph`, `v1cuda_graph`, 86243205).**
+Each arm captures the whole training step (forward and backward) into one CUDA graph after three warm-up calls on a
+side stream, then replays it. A capture failure is recorded as that arm's error.
+* Shapes: H = 1, T = 256, B ∈ {16, 64}, D ∈ {1024, 1536, 2048} × (LSTM FP16, sLSTM BF16).
+* Arms: one, one_graph, v1, v1cuda, v1cuda_graph (and v1_graph).
+* Protocol of section 3.
+
+Reported ratios:
+* v1cuda_graph / one: the alternating baseline the paper should quote;
+* one_graph / one: what a graph does for FlashRNN-2;
+* v1cuda / v1cuda_graph, derived: the graph's gain for the alternating kernel.
+
+Expectation: graphs help the alternating kernel most at B = 16, where each step's kernels are short. FlashRNN-2
+gains little, because it launches a few persistent kernels per call. If v1cuda_graph beats FlashRNN-2 at some shape,
+that is a reported loss and goes into the paper.
+
+**72.2 Asynchronous forward input prefetch (design; not built).** The forward's input-projection prefetch of
+hc-rounds round 3 loaded the next step's Wx into registers before the grid barrier, and was 1.25x slower. Section 67
+showed why the backward version works: issue the loads after the barrier's release arrival. For the TileLang grid
+forward this needs one of two things:
+* a split grid barrier, which TileLang's `T.sync_grid` does not expose; or
+* a producer/consumer arrangement in which Wx of step t + 1 is copied asynchronously into shared memory (`cp.async`
+  or TMA, waited on at the next epilogue) while step t's GEMM runs.
+
+Gates as in section 66.2: bitwise equal outputs, no spills, a race check, then paired timing. Building it needs an
+sm_90 GPU for iteration.
+
+**Hardware note.** An RTX 5090 is sm_120. It has no WGMMA and does not run the sm_90a kernels (TileLang forward,
+`-arch=sm_90a` CUDA builds), so it cannot be used to develop or time these kernels. H100, H200 and GH200 can.
