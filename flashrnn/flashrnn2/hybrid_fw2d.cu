@@ -117,7 +117,8 @@ struct Args {
   float* part;           // [RESIDENT, Q, BM, 4D] FP32 partial gate preactivations (single buffer)
   int* stamp;            // [RESIDENT, PC, Q] verification step stamps
   int* err;              // [12] verification counters / phase timers, [3] delay seed
-  int B, T, H, groups, resident, slots, tiles, zero_first;
+  int B, T, H, groups, resident, slots, tiles;
+  const bool* zero_first;  // sLSTM: device flag, normalizer state zero at the call's first step (nullptr: false)
 };
 
 // B fragment register for k (even) and k + 1, output column (g, o): R[g, head, o, k .. k + 1] (contiguous).
@@ -132,6 +133,8 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fw2d_kernel(Args a) {
   cg::grid_group grid = cg::this_grid();
   const int tid = threadIdx.x, warp = tid >> 5, lane = tid & 31, fg = lane >> 2, ft = lane & 3;
   const int cb = blockIdx.x / Q, kb = blockIdx.x % Q, gy = blockIdx.y;
+  // Read on the device, so the caller never synchronizes on it (CUDA-graph capturable).
+  const bool zero_first = SLSTM && a.zero_first != nullptr && *a.zero_first;
   const int c_warp = warp * NCW;     // first local output column of this warp's MMA tile
   const int g_warp = c_warp / NU;    // its gate
   const int o_warp = cb * NU + c_warp % NU;  // its first unit
@@ -332,7 +335,7 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fw2d_kernel(Args a) {
             const float z = 2.0f * sigmoid(2.0f * gz) - 1.0f;
             if (SLSTM) {
               const float logf_ = fminf(gf, 0.0f) - logf(1.0f + expf(-fabsf(gf))) + ms[e];
-              const float m_new = (t == 0 && a.zero_first) ? gi : fmaxf(gi, logf_);
+              const float m_new = (t == 0 && zero_first) ? gi : fmaxf(gi, logf_);
               const float igate = expf(gi - m_new), fgate = expf(logf_ - m_new);
               cs[e] = fgate * cs[e] + igate * z;
               ns[e] = fmaxf(fgate * ns[e] + igate, 1.0f);
@@ -400,10 +403,12 @@ extern "C" int frnn_hybrid_fw2d_ctas() { return PC * Q; }
 
 extern "C" int frnn_hybrid_fw2d(const void* wx, const void* R, const void* bias, const float* initial, void* out,
                                 float* final, void* xbuf, float* part, int* stamp, int* err, int B, int T, int H,
-                                int groups, int resident, int slots, int tiles, int zero_first, void* stream) {
+                                int groups, int resident, int slots, int tiles, const void* zero_first,
+                                void* stream) {
   Args a{reinterpret_cast<const elem_t*>(wx), reinterpret_cast<const elem_t*>(R),
          reinterpret_cast<const elem_t*>(bias), initial, reinterpret_cast<snap_t*>(out), final,
-         reinterpret_cast<elem_t*>(xbuf), part, stamp, err, B, T, H, groups, resident, slots, tiles, zero_first};
+         reinterpret_cast<elem_t*>(xbuf), part, stamp, err, B, T, H, groups, resident, slots, tiles,
+         reinterpret_cast<const bool*>(zero_first)};
   int smem = frnn_hybrid_fw2d_smem();
   cudaError_t e = cudaFuncSetAttribute(frnn_hybrid_fw2d_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem);
   if (e != cudaSuccess) return (int)e;

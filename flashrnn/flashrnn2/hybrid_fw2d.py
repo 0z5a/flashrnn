@@ -59,7 +59,7 @@ def _lib(width, bm, slstm, bf16, mode, snap32, verify=0, grid=None):
     if key not in _LIBS:
         lib = ctypes.CDLL(str(build(width, bm, slstm, bf16, mode, snap32, verify, grid=grid)))
         lib.frnn_hybrid_fw2d.restype = ctypes.c_int
-        lib.frnn_hybrid_fw2d.argtypes = [ctypes.c_void_p] * 10 + [ctypes.c_int] * 8 + [ctypes.c_void_p]
+        lib.frnn_hybrid_fw2d.argtypes = [ctypes.c_void_p] * 10 + [ctypes.c_int] * 7 + [ctypes.c_void_p] * 2
         lib.frnn_hybrid_fw2d_smem.restype = ctypes.c_int
         lib.frnn_hybrid_fw2d_ctas.restype = ctypes.c_int
         _LIBS[key] = lib
@@ -139,7 +139,10 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context, o
                bits, grid=grid)
     err = torch.zeros(12, device=device, dtype=torch.int32)
     err[3].fill_(seed)  # in place, no host copy: CUDA-graph safe
-    zero_first = int(bool(sequence_context.zero_normalizer.item())) if cell == "slstm" else 0
+    # sLSTM: the kernel reads the device flag itself (no .item(): no host synchronization, CUDA-graph capturable).
+    zero_flag = (sequence_context.zero_normalizer.to(device=device, dtype=torch.bool).contiguous()
+                 if cell == "slstm" else None)
+    zero_first = ctypes.c_void_p(zero_flag.data_ptr()) if zero_flag is not None else ctypes.c_void_p(0)
     tensors = [wx.contiguous(), recurrent.contiguous(), bias.contiguous(), initial.float().contiguous(), output, final,
                xbuf, part, stamp, err]
     rc = lib.frnn_hybrid_fw2d(*[ctypes.c_void_p(x.data_ptr()) for x in tensors], batch, steps, heads, groups,

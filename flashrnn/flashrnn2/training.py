@@ -46,9 +46,11 @@ def backward_defaults(width, user=None, batch=None):
 
 
 # Forward for training calls whose shape is not in the packaged tables: the TileLang configuration the gate-batched
-# batch selected at B = 16 (H = 1), used when TileLang is installed and the runtime matches the tables' measured
-# identity; otherwise the table default (Triton). With the Triton forward the B = 16 training step stays behind
-# FlashRNN1 (0.88-1.04x), with these TileLang forwards it is faster at every D = 192-768.
+# batch selected at B = 16 (H = 1), used whenever TileLang is installed (as default_config does at D >= 1024);
+# otherwise the table default (Triton). With the Triton forward the B = 16 training step stays behind FlashRNN1
+# (0.88-1.04x), with these TileLang forwards it is faster at every D = 192-768. It used to require the runtime to match
+# the packaged tables' identity, which sent every other runtime (another torch / Triton build) to the untuned Triton
+# forward (max-width.md section 75).
 TILELANG_TRAINING_FORWARD = {192: ("cluster", 16), 256: ("cluster", 16), 384: ("cluster", 32), 512: ("cluster", 32),
                              768: ("grid", 16)}
 
@@ -65,8 +67,7 @@ def training_forward(cell, dtype, batch, steps, heads, width, *, policy=None):
     config, source = dispatch.select_config(cell, dtype, batch, steps, heads, width, policy=policy)
     if source == "table":
         return config, source
-    measured = (dispatch.default_policy() if policy is None else policy).table
-    if measured and heads == 1 and width in TILELANG_TRAINING_FORWARD and _tilelang_installed():
+    if heads == 1 and width in TILELANG_TRAINING_FORWARD and _tilelang_installed():
         sync, slice_width = TILELANG_TRAINING_FORWARD[width]
         return KernelConfig(family="tilelang", slice_width=slice_width, sync=sync), "tilelang"
     return config, source
