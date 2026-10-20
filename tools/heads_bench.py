@@ -11,6 +11,11 @@ Arms (case JSON "arms")
   v1cuda      the same pinned FlashRNN1 with backend "cuda" (alternating: one recurrent GEMM and one pointwise kernel
               per step, any D)
   alt         FlashRNN2 with a second pinned configuration (case "alt_config")
+  one_graph, v1_graph, v1cuda_graph
+              the arm without the suffix captured into one CUDA graph (forward or the whole training step, backward
+              included) after three warm-up calls on a side stream, then replayed: removes host launch overhead, the
+              per-step launches of the alternating backend above all (max-width.md section 72); a capture failure is
+              recorded as the arm's error
 A case may pin the FlashRNN2 configuration ("config": KernelConfig dict) instead of the library selection.
 Kinds: "forward" (no grad, hidden output) and "train" (forward + backward of <cot_h, h history>).
 
@@ -144,7 +149,28 @@ def make_arm(name, case, leaves, cot_h, cfg):
                 states, _ = v1["flashrnn"](*xs, config=config)
                 return torch.autograd.grad((states[0].float() * cot_h).sum(), xs)[0]
         return run
+    if name in ("one_graph", "v1_graph", "v1cuda_graph"):
+        return graphed(make_arm(name[:-len("_graph")], case, leaves, cot_h, cfg))
     raise ValueError(name)
+
+
+def graphed(fn):
+    """fn captured into a CUDA graph (static inputs; outputs are the captured tensors, overwritten by every replay)."""
+    side = torch.cuda.Stream()
+    side.wait_stream(torch.cuda.current_stream())
+    with torch.cuda.stream(side):
+        for _ in range(3):
+            fn()
+    torch.cuda.current_stream().wait_stream(side)
+    torch.cuda.synchronize()
+    graph = torch.cuda.CUDAGraph()
+    with torch.cuda.graph(graph):
+        static = fn()
+
+    def replay():
+        graph.replay()
+        return static
+    return replay
 
 
 def event_ms(fn, calls):
@@ -266,7 +292,8 @@ def mode_paired(args):
             for name in case["arms"]:
                 try:
                     fns[name] = make_arm(name, case, leaves, cot_h, cfg)
-                    firsts[name] = fns[name]()
+                    # A copy: a graphed arm returns the same captured tensor on every replay.
+                    firsts[name] = fns[name]().clone()
                     torch.cuda.synchronize()
                 except Exception:
                     errors[name] = traceback.format_exc()[-3000:]
