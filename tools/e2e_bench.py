@@ -2,6 +2,7 @@
 
 Usage: e2e_bench.py --case JSON --out FILE --start N [--blocks 20] [--warmup-blocks 1]
 Case: {"mode": "layer" | "lm", "cell", "dtype", "width", "batch", "steps", "arms": ["frnn2", "v1", "v1cuda", "cudnn"],
+       "config": optional pinned KernelConfig fields for frnn2's forward (default: training.training_forward),
        "calls": steps per block entry, "layers": 4 (lm), "vocab": 4096 (lm), "check_steps": 20 (lm)}
 Arms (same function, same initial weights):
   frnn2   FlashRNN2 library default (training.recurrence, configuration from training.training_forward)
@@ -139,7 +140,11 @@ class LM:
 def contexts(case, arms):
     ctx = {}
     dt = DT[case["dtype"]]
-    cfg, source = training.training_forward(case["cell"], dt, case["batch"], case["steps"], 1, case["width"])
+    if case.get("config"):  # a pinned forward configuration (KernelConfig fields)
+        from flashrnn.flashrnn2.execution_policy import KernelConfig
+        cfg, source = KernelConfig(**case["config"]), "pinned"
+    else:
+        cfg, source = training.training_forward(case["cell"], dt, case["batch"], case["steps"], 1, case["width"])
     ctx["cfg"], ctx["cfg_source"] = cfg, source
     if any(a in arms for a in ("v1", "v1cuda")):
         import rtiled_m4

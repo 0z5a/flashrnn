@@ -9,8 +9,12 @@ from torch.profiler import ProfilerActivity, profile
 
 import e2e_bench
 
+# The forward FlashRNN2 selects on its measured runtime (training.TILELANG_TRAINING_FORWARD), pinned so that a
+# runtime without the packaged tables does not fall back to the untuned R-tiled default.
+FWD = {512: dict(family="tilelang", slice_width=32, sync="cluster"), 768: dict(family="tilelang", slice_width=16,
+       sync="grid"), 1024: dict(family="tilelang", slice_width=16, sync="grid")}
 case = dict(mode="layer", cell="lstm", dtype="float16", width=int(sys.argv[2]), batch=int(sys.argv[3]), steps=256,
-            arms=["frnn2", "cudnn"], calls=3)
+            arms=["frnn2", "cudnn"], calls=3, config=FWD[int(sys.argv[2])])
 ctx = e2e_bench.contexts(case, case["arms"])
 state = e2e_bench.build(case, case["arms"], 4242)
 out = dict(case=case, config=ctx["cfg"].as_dict(), arms={})
