@@ -33,13 +33,17 @@ TL = {512: dict(family="tilelang", slice_width=32, sync="cluster"),
 # (PC, CR) grids per D: PC = D / 16 (64-column CTAs) and D / 32 (128-column CTAs; register k-steps where R does not
 # fit shared memory next to the staged block).
 GRIDS = {512: [(32, 0), (16, 0)], 768: [(48, 0), (24, 8)], 1024: [(64, 0), (32, 24)]}
-VARIANTS = {"pf-st4": dict(prefetch=True, stages=4),
+VARIANTS = {"pf-st3": dict(prefetch=True, stages=3),
+            "pf-st4": dict(prefetch=True, stages=4),
+            "pf-st6": dict(prefetch=True, stages=6),
+            "pf-st8": dict(prefetch=True, stages=8),
             "bulk": dict(bulk=True),
             "bulk-pf": dict(bulk=True, prefetch=True),
             "bulk-flag": dict(bulk=True, flagbar=True),
             "bulk-flag-sp": dict(bulk=True, flagbar=True, smempart=True),
             "bulk-flag-pf-sp": dict(bulk=True, flagbar=True, prefetch=True, smempart=True),
-            "flag-pf-sp-st4": dict(flagbar=True, prefetch=True, smempart=True, stages=4)}
+            "flag-pf-sp-st4": dict(flagbar=True, prefetch=True, smempart=True, stages=4),
+            "flag-pf-sp-st8": dict(flagbar=True, prefetch=True, smempart=True, stages=8)}
 
 
 def median_ms(fn, calls):
