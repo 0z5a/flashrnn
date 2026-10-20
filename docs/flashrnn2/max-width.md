@@ -2482,3 +2482,24 @@ backward, because the 2-D backward did not win (section 30).
 **Use.** The headline D is the smallest D in {512, 768, 1024} where FlashRNN-2 beats all four baselines (FlashRNN
 fused, the graphed alternating kernel, the eager alternating kernel, cuDNN) at both B for LSTM FP16. If none
 qualifies, the paper headlines D = 1024 against FlashRNN and reports the cuDNN loss.
+
+**74.1 amendment (before the measured run).** On the rented host, the library's training forward at D = 512 and 768
+falls back to the untuned R-tiled default (Triton, S = 32). The reason is that `training_forward` takes the measured
+TileLang forward (`TILELANG_TRAINING_FORWARD`) only when the packaged tables match the runtime, and this runtime is a
+different torch build. The run therefore pins the forward to what the library selects on its measured runtime:
+* D = 512: TileLang cluster, S = 32;
+* D = 768: TileLang grid, S = 16;
+* D = 1024: TileLang grid, S = 16.
+
+This applies to the heads_bench claims, the cuDNN layer runs (new `config` field of `e2e_bench`, fcc46fb9) and the
+profile. The gating itself is the same class of off-runtime fallback that section 73 and PR #86 fixed for
+`select()`, and it is a library issue to fix separately.
+
+Smoke (one start each, 2 blocks, LSTM FP16 B = 16), in ms:
+
+| D | frnn2 | frnn2 graphed | fused | alternating, patched | alternating, patched + graph |
+| --- | --- | --- | --- | --- | --- |
+| 512 | 2.97 | 2.60 | 2.80 | 10.65 | 4.18 |
+| 768 | 3.17 | 2.83 | 4.16 | 8.47 | 4.91 |
+
+At D = 512, FlashRNN's fused kernel was faster than the frnn2 default in the smoke run.
