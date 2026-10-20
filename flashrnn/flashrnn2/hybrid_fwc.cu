@@ -20,6 +20,16 @@
 // memory; FRNN_FWC_PULL = 1 -- symmetric buffers: the owner stores only into its own buffer, and the GEMM's A fragments
 // for hidden indices of unit block c are read from CTA c's shared memory through distributed shared memory.
 //
+// FRNN_FWC_BULKX = 1 (bulk exchange, section 82): the exchange buffers are unit-block-major ([2 parities][C blocks]
+// [BM rows][NUP = NU + 8 padded columns]); the owner writes round(h_t) into its own block locally, and one thread then
+// issues one bulk asynchronous copy of that block (cp.async.bulk shared::cta -> shared::cluster) to every peer, each
+// completing on the peer's mbarrier of the target parity (expect_tx = C blocks per step). The per-step cluster
+// barrier is replaced by the mbarrier wait: a CTA's GEMM of step t + 1 starts only when every peer's round(h_t) has
+// landed, and every peer wrote round(h_t) only after its GEMM of step t, the last reader of the buffer the next
+// writes go to, so one buffer per parity is race-free without a barrier. Phase timers are finer in this mode:
+// err[4] wait (and the Wx loads), err[5] MMA chain, err[6] partial store + CTA barrier, err[7] pointwise + outputs,
+// err[8] exchange (local stores + copy issue).
+//
 // Build flags: FRNN_D, FRNN_C (cluster size; 16 is non-portable and needs the launch attribute), FRNN_CR (k-steps of
 // R in registers per warp), FRNN_KSPLIT, FRNN_SLSTM, FRNN_BF16, FRNN_MODE (0 full / 1 hidden / 2 last), FRNN_SNAP32,
 // FRNN_VERIFY (bit 16: phase timers; globaltimer, thread 0, units of 64 ns: err[4] barrier, err[5] GEMM, err[6]
@@ -60,6 +70,13 @@ __device__ __forceinline__ float from_elem(elem_t x) { return __half2float(x); }
 #define FRNN_FWC_PULL 0
 #endif
 constexpr bool PULL = FRNN_FWC_PULL != 0;
+#ifndef FRNN_FWC_BULKX
+#define FRNN_FWC_BULKX 0
+#endif
+constexpr bool BULKX = FRNN_FWC_BULKX != 0;
+#if FRNN_FWC_BULKX && FRNN_FWC_PULL
+#error "FRNN_FWC_BULKX excludes FRNN_FWC_PULL"
+#endif
 #if FRNN_SNAP32
 typedef float snap_t;
 __device__ __forceinline__ snap_t to_snap(float x) { return x; }
@@ -74,8 +91,12 @@ constexpr int S = SLSTM ? 4 : 2;
 constexpr int THREADS = 256, WARPS = 8, BM = 16;
 constexpr int NU = D / C, NC = 4 * NU, NCW = NC / WARPS, NTW = NCW / 8, KS = D / 16, CSM = KS - CR;
 constexpr int LDH = D + 8;  // padded row stride of the hidden-state buffers (elements)
+constexpr int NUP = NU + 8;  // FRNN_FWC_BULKX: padded columns of one unit block
+constexpr int XBLK = BM * NUP;  // elements of one exchanged block
 constexpr int PE = (BM * NU + THREADS - 1) / THREADS;
-constexpr int SMEM_R = WARPS * CSM * NTW * 32 * 8, SMEM_H = 2 * BM * LDH * 2, SMEM_P = BM * NC * 4;
+constexpr int SMEM_R = WARPS * CSM * NTW * 32 * 8, SMEM_P = BM * NC * 4;
+constexpr int SMEM_H = BULKX ? 2 * C * XBLK * 2 : 2 * BM * LDH * 2;
+static_assert(!BULKX || (XBLK * 2) % 16 == 0, "bulk copies move multiples of 16 bytes");
 static_assert(D % C == 0 && NU % 16 == 0, "a warp's columns must lie within one gate (NU a multiple of 16)");
 static_assert(NU % NCW == 0, "a warp's columns must not cross a gate");
 static_assert(!PULL || NU % 16 == 0, "pull mode reads one owner per 16-wide k-step");
@@ -110,6 +131,33 @@ __device__ __forceinline__ uint32_t r_pair(const elem_t* R, int H, int head, int
   return pack(R[base], R[base + 1]);
 }
 
+#if FRNN_FWC_BULKX
+__device__ __forceinline__ unsigned smem_u32(const void* p) { return (unsigned)__cvta_generic_to_shared(p); }
+__device__ __forceinline__ void mbar_init(unsigned long long* bar, unsigned count) {
+  asm volatile("mbarrier.init.shared::cta.b64 [%0], %1;" ::"r"(smem_u32(bar)), "r"(count) : "memory");
+}
+__device__ __forceinline__ void mbar_expect(unsigned long long* bar, unsigned bytes) {
+  asm volatile("mbarrier.arrive.expect_tx.shared::cta.b64 _, [%0], %1;" ::"r"(smem_u32(bar)), "r"(bytes) : "memory");
+}
+__device__ __forceinline__ void mbar_wait(unsigned long long* bar, unsigned parity) {
+  asm volatile(
+      "{\n .reg .pred p;\n WAIT_%=:\n"
+      " mbarrier.try_wait.parity.shared::cta.b64 p, [%0], %1;\n"
+      " @!p bra WAIT_%=;\n}\n" ::"r"(smem_u32(bar)), "r"(parity) : "memory");
+}
+// Bulk copy of a local shared block into the same offset of peer CTA's shared memory, completing on the peer's copy
+// of the given local mbarrier (both addresses mapped with mapa).
+__device__ __forceinline__ void bulk_to_peer(const void* local_src, unsigned bytes, unsigned long long* local_bar,
+                                             int peer) {
+  const unsigned src = smem_u32(local_src), bar = smem_u32(local_bar);
+  unsigned rdst, rbar;
+  asm volatile("mapa.shared::cluster.u32 %0, %1, %2;" : "=r"(rdst) : "r"(src), "r"(peer));
+  asm volatile("mapa.shared::cluster.u32 %0, %1, %2;" : "=r"(rbar) : "r"(bar), "r"(peer));
+  asm volatile("cp.async.bulk.shared::cluster.shared::cta.mbarrier::complete_tx::bytes [%0], [%1], %2, [%3];"
+               ::"r"(rdst), "r"(src), "r"(bytes), "r"(rbar) : "memory");
+}
+#endif
+
 __device__ __forceinline__ void cluster_arrive() { asm volatile("barrier.cluster.arrive.release.aligned;" ::: "memory"); }
 __device__ __forceinline__ void cluster_wait() { asm volatile("barrier.cluster.wait.acquire.aligned;" ::: "memory"); }
 
@@ -131,6 +179,16 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
   elem_t* hbuf = reinterpret_cast<elem_t*>(smem + SMEM_R);                 // [2][BM][LDH] round(h), by step parity
   float* spart = reinterpret_cast<float*>(smem + SMEM_R + SMEM_H);         // [BM][NC] gate preactivations
   cg::cluster_group cluster = cg::this_cluster();
+#if FRNN_FWC_BULKX
+  __shared__ __align__(8) unsigned long long xbar[2];  // one per buffer parity
+  unsigned xphase[2] = {0u, 0u};
+  if (threadIdx.x == 0) {
+    mbar_init(&xbar[0], 1);
+    mbar_init(&xbar[1], 1);
+    asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory");
+  }
+  cluster.sync();  // barriers initialized in every CTA before any peer's copy can target them
+#endif
   const int tid = threadIdx.x, warp = tid >> 5, lane = tid & 31, fg = lane >> 2, ft = lane & 3;
   const int cb = (int)cluster.block_rank();  // unit block of this CTA
   const int g = blockIdx.y;                  // group: (head, batch tile)
@@ -182,9 +240,11 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
     ms[e] = (SLSTM && valid) ? a.initial[3 * state_stride + unit] : 0.f;
 #pragma unroll
     for (int q = 0; q < 4; ++q) bias[e][q] = own ? from_elem(a.bias[((size_t)q * a.H + head) * D + o]) : 0.f;
-    if (own) {  // round(h_0) into buffer 0 (of every peer, or only the own buffer in pull mode); rows >= B: zeros
+    if (own) {  // round(h_0) into buffer 0 (of every peer, or only the own buffer in pull / bulk mode); rows >= B: 0
       const elem_t v = to_elem(hs[e]);
-      if (PULL) {
+      if (BULKX) {
+        hbuf[(size_t)cb * XBLK + (size_t)lrow * NUP + u] = v;
+      } else if (PULL) {
         hbuf[(size_t)lrow * LDH + o] = v;
       } else {
 #pragma unroll
@@ -192,11 +252,18 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
       }
     }
   }
+#if FRNN_FWC_BULKX
+  // Prologue exchange: my block of round(h_0) to every peer's parity-0 buffer; arm my parity-0 barrier.
+  __syncthreads();
+  asm volatile("fence.proxy.async.shared::cta;" ::: "memory");
+  if (tid == 0) mbar_expect(&xbar[0], (unsigned)(C * XBLK * sizeof(elem_t)));
+  if (tid < C) bulk_to_peer(hbuf + (size_t)cb * XBLK, XBLK * sizeof(elem_t), &xbar[0], tid);
+#endif
 
   for (int t = 0; t < a.T; ++t) {
     const bool last = t == a.T - 1;
     unsigned long long t0 = (VERIFY & V_PROF) ? gtime() : 0;
-    cluster_arrive();  // my round(h_{t-1}) stores (and the prologue's h_0) are released to the cluster
+    if (!BULKX) cluster_arrive();  // my round(h_{t-1}) stores (and the prologue's h_0) are released to the cluster
 #pragma unroll
     for (int e = 0; e < PE; ++e) {  // this step's input projections, loaded while the cluster arrives
       int lrow, u;
@@ -208,12 +275,17 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
         for (int q = 0; q < 4; ++q) wxr[e][q] = a.wx[xo + (size_t)q * hd];
       }
     }
+#if FRNN_FWC_BULKX
+    mbar_wait(&xbar[t & 1], xphase[t & 1]);  // every peer's block of round(h_{t-1}) landed in parity t % 2
+    xphase[t & 1] ^= 1u;
+#else
     cluster_wait();  // every peer's round(h_{t-1}) is in hbuf[t % 2]
+#endif
     unsigned long long t1 = (VERIFY & V_PROF) ? gtime() : 0;
 
     // GEMM: hbuf[t % 2] (A, 16 x D) times the resident R block (B) -> gate preactivations of the warp's columns.
     {
-      const elem_t* hb = hbuf + (size_t)(t & 1) * BM * LDH;
+      const elem_t* hb = hbuf + (BULKX ? (size_t)(t & 1) * C * XBLK : (size_t)(t & 1) * BM * LDH);
       const size_t par = (size_t)(t & 1) * BM * LDH;
       float acc[KSPLIT][NTW][4];
 #pragma unroll
@@ -226,9 +298,16 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
 #pragma unroll
       for (int c = 0; c < KS; ++c) {
         // A fragment rows fg / fg + 8, hidden indices c * 16 + 2 ft (+ 8): local, or the owner's buffer (pull mode).
-        const elem_t* src = PULL ? peer[(c * 16) / NU] + par : hb;
-        const elem_t* r0 = src + (size_t)fg * LDH + c * 16 + 2 * ft;
-        const elem_t* r8 = r0 + 8 * LDH;
+        const elem_t* r0;
+        const elem_t* r8;
+        if (BULKX) {  // block (c * 16) / NU of the unit-block-major buffer, column (c * 16) % NU + 2 ft
+          r0 = hb + (size_t)((c * 16) / NU) * XBLK + (size_t)fg * NUP + (c * 16) % NU + 2 * ft;
+          r8 = r0 + 8 * NUP;
+        } else {
+          const elem_t* src = PULL ? peer[(c * 16) / NU] + par : hb;
+          r0 = src + (size_t)fg * LDH + c * 16 + 2 * ft;
+          r8 = r0 + 8 * LDH;
+        }
         const uint32_t a0 = *reinterpret_cast<const uint32_t*>(r0), a1 = *reinterpret_cast<const uint32_t*>(r8);
         const uint32_t a2 = *reinterpret_cast<const uint32_t*>(r0 + 8), a3 = *reinterpret_cast<const uint32_t*>(r8 + 8);
 #pragma unroll
@@ -245,6 +324,7 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
           mma(acc[c % KSPLIT][nt], a0, a1, a2, a3, b0, b1);
         }
       }
+      if ((VERIFY & V_PROF) && tid == 0) atomicAdd(a.err + 5, (int)((gtime() - t1) >> 6));  // MMA chain
 #pragma unroll
       for (int nt = 0; nt < NTW; ++nt) {
 #pragma unroll
@@ -260,8 +340,9 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
     unsigned long long t2 = (VERIFY & V_PROF) ? gtime() : 0;
 
     // Pointwise update of the owned elements; round(h_t) into every peer's next-parity buffer.
-    elem_t* nb_off = hbuf + (size_t)((t + 1) & 1) * BM * LDH;
-    const size_t nb_delta = (size_t)(nb_off - hbuf);
+    const size_t nb_delta = BULKX ? (size_t)((t + 1) & 1) * C * XBLK + (size_t)cb * XBLK
+                                  : (size_t)((t + 1) & 1) * BM * LDH;
+    elem_t hv[PE];
 #pragma unroll
     for (int e = 0; e < PE; ++e) {
       int lrow, u;
@@ -302,21 +383,37 @@ __global__ void __launch_bounds__(THREADS, 1) frnn_hybrid_fwc_kernel(Args a) {
           a.out[((size_t)row * a.H + head) * D + o] = to_snap(h);
         }
       }
-      if (!last) {  // rows beyond B publish zeros
-        const elem_t v = to_elem(h);
-        if (PULL) {
-          hbuf[nb_delta + (size_t)lrow * LDH + o] = v;
+      hv[e] = to_elem(h);
+    }
+    unsigned long long t3a = (VERIFY & V_PROF) ? gtime() : 0;
+    if (!last) {  // round(h_t) to the peers; rows beyond B publish zeros
+#pragma unroll
+      for (int e = 0; e < PE; ++e) {
+        int lrow, u;
+        if (!elem(e, lrow, u)) continue;
+        const int o = cb * NU + u;
+        if (BULKX) {
+          hbuf[nb_delta + (size_t)lrow * NUP + u] = hv[e];
+        } else if (PULL) {
+          hbuf[nb_delta + (size_t)lrow * LDH + o] = hv[e];
         } else {
 #pragma unroll
-          for (int r = 0; r < C; ++r) peer[r][nb_delta + (size_t)lrow * LDH + o] = v;
+          for (int r = 0; r < C; ++r) peer[r][nb_delta + (size_t)lrow * LDH + o] = hv[e];
         }
       }
+#if FRNN_FWC_BULKX
+      __syncthreads();  // the block is complete in local shared memory
+      asm volatile("fence.proxy.async.shared::cta;" ::: "memory");  // generic stores before the async-proxy copy
+      if (tid == 0) mbar_expect(&xbar[(t + 1) & 1], (unsigned)(C * XBLK * sizeof(elem_t)));
+      if (tid < C) bulk_to_peer(hbuf + nb_delta, XBLK * sizeof(elem_t), &xbar[(t + 1) & 1], tid);
+#endif
     }
     if ((VERIFY & V_PROF) && tid == 0) {
       const unsigned long long t3 = gtime();
-      atomicAdd(a.err + 4, (int)((t1 - t0) >> 6));
-      atomicAdd(a.err + 5, (int)((t2 - t1) >> 6));
-      atomicAdd(a.err + 6, (int)((t3 - t2) >> 6));
+      atomicAdd(a.err + 4, (int)((t1 - t0) >> 6));   // wait (with the Wx loads)
+      atomicAdd(a.err + 6, (int)((t2 - t1) >> 6));   // MMA chain + partial store + CTA barrier (err[5]: chain alone)
+      atomicAdd(a.err + 7, (int)((t3a - t2) >> 6));  // pointwise math + outputs
+      atomicAdd(a.err + 8, (int)((t3 - t3a) >> 6));  // exchange
       atomicAdd(a.err + 9, 1);
     }
   }

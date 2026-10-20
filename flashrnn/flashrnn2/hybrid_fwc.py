@@ -26,8 +26,9 @@ def layout(width, cluster):
 def min_register_ksteps(width, cluster):
     """Smallest CR with which R, the two h buffers and the partials fit shared memory (None: never)."""
     lay = layout(width, cluster)
+    smem_h = max(lay["smem_h"], 2 * cluster * 16 * (lay["nu"] + 8) * 2)  # the larger of the two exchange layouts
     for cr in range(0, lay["ks"] + 1):
-        if 8 * (lay["ks"] - cr) * lay["ntw"] * 256 + lay["smem_h"] + lay["smem_p"] <= SMEM_LIMIT:
+        if 8 * (lay["ks"] - cr) * lay["ntw"] * 256 + smem_h + lay["smem_p"] <= SMEM_LIMIT:
             return cr
     return None
 
@@ -42,11 +43,12 @@ def supported(width, cluster=16):
     return cr is not None and cr * layout(width, cluster)["ntw"] * 2 <= REGISTER_BUDGET
 
 
-def build(width, cluster, cr, ksplit, slstm, bf16, mode, snap32, verify=0, pull=False, cache_dir=None):
+def build(width, cluster, cr, ksplit, slstm, bf16, mode, snap32, verify=0, pull=False, bulkx=False, cache_dir=None):
     cuda_home = os.environ.get("FRNN_HYBRID_CUDA_HOME", os.environ.get("CUDA_HOME", "/usr/local/cuda"))
     flags = [f"-DFRNN_D={width}", f"-DFRNN_C={cluster}", f"-DFRNN_CR={cr}", f"-DFRNN_KSPLIT={ksplit}",
              f"-DFRNN_SLSTM={int(slstm)}", f"-DFRNN_BF16={int(bf16)}", f"-DFRNN_MODE={int(mode)}",
-             f"-DFRNN_SNAP32={int(snap32)}", f"-DFRNN_VERIFY={int(verify)}", f"-DFRNN_FWC_PULL={int(pull)}"]
+             f"-DFRNN_SNAP32={int(snap32)}", f"-DFRNN_VERIFY={int(verify)}", f"-DFRNN_FWC_PULL={int(pull)}",
+             f"-DFRNN_FWC_BULKX={int(bulkx)}"]
     digest = hashlib.sha256(SOURCE.read_bytes() + " ".join(flags).encode()).hexdigest()[:16]
     cache = Path(cache_dir or os.environ.get("FRNN_HYBRID_CACHE",
                                              os.environ.get("TMPDIR", str(Path.home() / ".cache")) + "/frnn_hybrid_bw"))
@@ -72,7 +74,8 @@ def _lib(*key):
 
 
 def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context, output_mode="hidden",
-               snapshot_dtype=None, cluster=16, cr=None, ksplit=2, pull=False, prof=False, diagnostics=None):
+               snapshot_dtype=None, cluster=16, cr=None, ksplit=2, pull=False, bulkx=False, prof=False,
+               diagnostics=None):
     """Returns (output, FP32 compute carry). Whole logical calls only (sequence start)."""
     from .state_contract import state_contract
 
@@ -108,7 +111,7 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context, o
     final = torch.empty(initial.shape, device=device, dtype=torch.float32)
     err = torch.zeros(12, device=device, dtype=torch.int32)
     lib = _lib(width, cluster, cr, ksplit, cell == "slstm", wx.dtype == torch.bfloat16, MODES[output_mode],
-               snap == torch.float32, 16 if prof else 0, pull)
+               snap == torch.float32, 16 if prof else 0, pull, bulkx)
     zero_flag = (sequence_context.zero_normalizer.to(device=device, dtype=torch.bool).contiguous()
                  if cell == "slstm" else None)
     tensors = [wx.contiguous(), recurrent.contiguous(), bias.contiguous(), initial.float().contiguous(), output, final,
@@ -122,9 +125,10 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context, o
     if prof and diagnostics is not None:
         c = err.tolist()
         n = max(c[9], 1)
-        diagnostics["phases_us_per_step"] = dict(barrier=c[4] * 64 / 1000 / n, gemm=c[5] * 64 / 1000 / n,
-                                                 pointwise=c[6] * 64 / 1000 / n, cta_steps=c[9])
+        diagnostics["phases_us_per_step"] = dict(barrier=c[4] * 64 / 1000 / n, mma=c[5] * 64 / 1000 / n,
+                                                 gemm=c[6] * 64 / 1000 / n, pointwise=c[7] * 64 / 1000 / n,
+                                                 exchange=c[8] * 64 / 1000 / n, cta_steps=c[9])
     if diagnostics is not None:
-        diagnostics.update(cluster=cluster, cr=cr, ksplit=ksplit, pull=pull, groups=groups,
+        diagnostics.update(cluster=cluster, cr=cr, ksplit=ksplit, pull=pull, bulkx=bulkx, groups=groups,
                            shared_bytes=lib.frnn_hybrid_fwc_smem())
     return output, final

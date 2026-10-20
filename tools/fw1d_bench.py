@@ -94,6 +94,7 @@ def main():
     ap.add_argument("--widths", default="512,768,1024")
     ap.add_argument("--cells", default="lstm:float16,slstm:bfloat16")
     ap.add_argument("--calls", type=int, default=30)
+    ap.add_argument("--only", default="", help="comma-separated arm-name prefixes to run (default: all)")
     a = ap.parse_args()
     rec = dict(started=time.time(), gpu=torch.cuda.get_device_name(), cudnn=torch.backends.cudnn.version(), rows=[])
     for cd in a.cells.split(","):
@@ -119,13 +120,17 @@ def main():
                 cr0 = hybrid_fwc.min_register_ksteps(width, cl)
                 for ks in (1, 2, 4):
                     arms[f"fwc-c{cl}-cr{cr0}-k{ks}"] = (dict(cluster=cl, cr=cr0, ksplit=ks), "fwc")
+                    arms[f"fwc-c{cl}-cr{cr0}-k{ks}-bx"] = (dict(cluster=cl, cr=cr0, ksplit=ks, bulkx=True), "fwc")
                 arms[f"fwc-c{cl}-cr{cr0}-k2-pull"] = (dict(cluster=cl, cr=cr0, ksplit=2, pull=True), "fwc")
                 if cr0 + 8 <= width // 16:
                     arms[f"fwc-c{cl}-cr{cr0 + 8}-k2"] = (dict(cluster=cl, cr=cr0 + 8, ksplit=2), "fwc")
+                    arms[f"fwc-c{cl}-cr{cr0 + 8}-k2-bx"] = (dict(cluster=cl, cr=cr0 + 8, ksplit=2, bulkx=True), "fwc")
             for pc, cr in GRIDS[width]:
                 arms[f"fw1d-p{pc}-cr{cr}"] = (dict(grid=(pc, 1, cr)), "cuda")
                 for name, opts in VARIANTS.items():
                     arms[f"fw1d-p{pc}-cr{cr}-{name}"] = (dict(grid=(pc, 1, cr), **opts), "cuda")
+            if a.only:
+                arms = {k: v for k, v in arms.items() if any(k.startswith(pfx) for pfx in a.only.split(","))}
             outs, row = {}, dict(cell=cell, dtype=dtype, width=width, batch=16, arms={})
             for name, (spec, kind) in arms.items():
                 ent = {}
@@ -173,7 +178,8 @@ def main():
             for k, v in row["arms"].items():
                 ph = v.get("phases_us_per_step") or {}
                 print(f"{cell} D{width} {k:28s} {v.get('us_per_step', 0):6.2f} us/step  B2 {ph.get('barrier_b2', ph.get('barrier', 0)):.2f} "
-                      f"gemm {ph.get('gemm', 0):.2f} pw {ph.get('pointwise', 0):.2f}  "
+                      f"mma {ph.get('mma', 0):.2f} gemm {ph.get('gemm', 0):.2f} pw {ph.get('pointwise', 0):.2f} "
+                      f"xch {ph.get('exchange', 0):.2f}  "
                       f"ker {v.get('recurrent_kernel_us_per_step', 0):.2f}  bw={v.get('bitwise_vs_fw1d_base')} "
                       f"err={(v.get('error') or '')[-160:]}", flush=True)
     rec["finished"] = time.time()
