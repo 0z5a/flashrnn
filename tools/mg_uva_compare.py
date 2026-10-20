@@ -47,7 +47,7 @@ def main():
                     continue
                 ent = dict(cell=cell, dtype=dtype, width=width, peers=P)
                 try:
-                    devs = [torch.device(f"cuda:{d}") for d in devices[:P]]
+                    devs = devices[:P]  # multi_gpu takes CUDA ordinals
 
                     def fn():
                         return multi_gpu.recurrence(wx, r, b, init, cell, devices=devs, output_mode="hidden")[0]

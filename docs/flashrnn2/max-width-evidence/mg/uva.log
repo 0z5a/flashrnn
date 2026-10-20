@@ -1,0 +1,32 @@
+[W1020 17:24:05.251464898 CUDAEvent.h:57] Warning: CUDA warning: an illegal memory access was encountered (function ~CUDAEvent)
+[W1020 17:24:05.251497317 CUDAEvent.h:57] Warning: CUDA warning: an illegal memory access was encountered (function ~CUDAEvent)
+[W1020 17:24:05.251502184 CUDAEvent.h:57] Warning: CUDA warning: an illegal memory access was encountered (function ~CUDAEvent)
+[W1020 17:24:05.251505529 CUDAEvent.h:57] Warning: CUDA warning: an illegal memory access was encountered (function ~CUDAEvent)
+lstm D512 uva-p2    0.00 us/step rel_fro nan repeat=None err=reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+
+
+lstm D512 uva-p4    0.00 us/step rel_fro nan repeat=None err=reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+
+
+Traceback (most recent call last):
+  File "/root/frnn/source/tools/mg_uva_compare.py", line 84, in <module>
+    main()
+  File "/root/frnn/source/tools/mg_uva_compare.py", line 42, in main
+    leaves, _, _ = bw_qualify.inputs(case, 7300 + width)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/frnn/source/tools/bw_qualify.py", line 70, in inputs
+    leaves = [x.to(DT[dtype]).cuda() for x in (wx, r, bias, init)]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/frnn/source/tools/bw_qualify.py", line 70, in <listcomp>
+    leaves = [x.to(DT[dtype]).cuda() for x in (wx, r, bias, init)]
+              ^^^^^^^^^^^^^^^^^^^^^^
+torch.AcceleratorError: CUDA error: an illegal memory access was encountered
+Search for `cudaErrorIllegalAddress' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+

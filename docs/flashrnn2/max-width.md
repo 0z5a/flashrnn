@@ -3007,3 +3007,90 @@ for wgmma) make a GPU's slice contiguous in shared memory and in the buffer alik
 $53 per hour — H200 is sm_90, so the same binaries). Builds with `-Xptxas -v`, the probe at P = 2 / 4 / 8, `fwc_mg_bench`
 at D = 512 / 1024 (B = 16, T = 256, 20 calls), the single-GPU FP64 gate as a regression check of the FRNN_P = 1 build.
 Evidence: `max-width-evidence/mg/`. The instance is destroyed when the run ends. Report only; nothing is a default.
+
+## 85. Results of section 84: multi-GPU cluster forward over NVSwitch multicast (2026-10-20)
+
+**Run.** vast 4× **H200** (HGX, every GPU pair NV18 = NVSwitch; driver 595.91.07; CUDA 12.8 toolkit; H200 is sm_90, so
+the H100 binaries), one process, B = 16, T = 256. Source e59d865b (691b14ac + the nvls_mem ABI fix). Evidence:
+`max-width-evidence/mg/`. Report only; nothing is a default. Instance destroyed after the run.
+
+**A bug on the way, worth recording.** The first run (and the B300 session's first multi-GPU run on the TMEM branch)
+failed in the multicast group's memset with CUDA error 201. Cause: ctypes resolves the **unversioned** libcuda symbols
+`cuMemsetD8`, `cuCtxPushCurrent`, `cuCtxPopCurrent`, `cuDevicePrimaryCtxRelease`, which are the legacy ABIs (32-bit
+device pointers / old context semantics); the headers map those names to `*_v2`. `nvls_mem.py` now calls the `_v2`
+entry points with explicit argtypes. The multicast object itself (`cuMulticastCreate` / `AddDevice` / `BindMem`, one
+multicast VA mapped with access for all devices of one process, unicast copies per device) worked from the start.
+
+### 85.1 P1 / P2: the probe (`tools/nvls_probe.py`, 8 KB blocks, 2000 iterations)
+
+| P | multicast store + multicast flag | unicast fan-out (P stores + P flags) | ratio | mismatches / timeouts |
+| --- | --- | --- | --- | --- |
+| 2 | 3.47 µs per all-gather step | 4.30 µs | 1.24 | 0 / 0 |
+| 4 | 4.49 µs | 7.60 µs | 1.69 | 0 / 0 |
+
+* **P1 holds**: `MULTICAST_SUPPORTED` on all four GPUs, granularity 2 MB, and the data-then-flag protocol (plain
+  `st.global` to the multicast VA, `__syncthreads`, `__threadfence_system`, `st.release.sys` flag through the multicast
+  mapping; `ld.acquire.sys` poll on the local copy) delivered **0 mismatched words** at P = 2 and 4. Nothing was tried
+  at P = 8 (no 8-GPU host was available; the 8× H200 offers were $43-53 per hour).
+* **P2 holds** in direction: the unicast fan-out grows with P (4.3 → 7.6 µs), the multicast step much less (3.5 → 4.5).
+  The absolute multicast step, 3.5-4.5 µs, is above the predicted 1-3 µs: one all-gather round (store → switch →
+  every GPU's memory → fence acknowledgement → flag → acquire poll) costs about 3.5 µs even at P = 2.
+
+### 85.2 P3: correctness of the multi-GPU kernel — pass
+
+Every `mg-*` arm (D = 512 with P = 2 / 4, D = 1024 with P = 2 / 4, mma.sync and wgmma GEMMs, LSTM FP16 and sLSTM BF16)
+has **the same rel_fro to the FP64 oracle as the single-GPU kernels** (2.10e-4 / 2.09e-4 FP16, 1.68e-3 BF16), and repeat
+calls are bitwise. The single-GPU FP64 gate (`fwc_fp64_gate`, 18 checks) passes on the FRNN_P = 1 build of the same
+source: the refactor did not change the single-GPU kernel.
+
+### 85.3 P4 / P5: time — the all-gather floor dominates
+
+µs per step (wall clock over 20 calls; the multi-GPU call synchronizes every device), phases of rank 0 / slowest rank.
+
+| cell, D | single GPU (this host) | mg P = 2 | mg P = 4 | remote phase (rank range) | exchange phase |
+| --- | --- | --- | --- | --- | --- |
+| LSTM D = 512 | TileLang 4.11; fwc bulk 2.75; **fwc wgmma + mcast 2.03**; cuDNN kernel 1.45 | bulk 6.72; wgmma 5.53 | bulk 7.45; wgmma 7.08 | 1.0-2.5 | 1.7-2.3 |
+| sLSTM D = 512 | TileLang 3.80; fwc wgmma + mcast 2.15 | 6.88; 5.72 | 8.06; 7.47 | 0.9-4.4 | 1.7-2.3 |
+| LSTM D = 1024 | TileLang 3.90; fw2d 5.52; (no single-GPU cluster forward) | 8.28; 8.06 | 10.27; 8.78 | 1.6-3.3 | 1.8-2.6 |
+| sLSTM D = 1024 | TileLang 3.79; fw2d 5.50 | 8.74; 8.27 | 10.80; 9.46 | 1.6-3.3 | 1.8-2.4 |
+
+* **P4 first half holds, second half fails.** At D = 512 the P = 2 step is 2.7× the single-GPU cluster forward (5.53
+  vs 2.03). At D = 1024 — the "reach" case, where no single-GPU cluster forward exists — the P = 2 wgmma step is **2.1×
+  the single-GPU TileLang forward** (8.06 vs 3.90) and 1.5× fw2d; the predicted "within 1.5× of TileLang" is
+  falsified. P = 4 is slower than P = 2 at the same D (predicted). The step time is the probe's floor plus the compute:
+  at D = 512, 5.53 ≈ 2.0 (compute) + 3.5 (one multicast all-gather round, probe P = 2).
+* **Where the time goes** (phase timers): the **exchange phase** is 1.7-2.6 µs — on a single GPU it is 0.1-0.6. It
+  contains the multicast stores and the `__threadfence_system` before the flag, i.e. the wait for the multicast
+  writes to be acknowledged by the switch; and the **remote phase** (flag poll + bulk pull of the remote slices) is
+  1-4.4 µs, spread across ranks (the last publisher's peers wait longest). Compute (MMA 0.5-2.0, pointwise 0.3-0.6)
+  is unchanged. So the kernel sits at the fabric's latency floor, not at an implementation inefficiency of its own:
+  the probe measures the same 3.5-4.5 µs with nothing but stores and flags.
+* **P5 holds**: wgmma beats mma.sync in every multi-GPU pair (D = 512 P = 2: 5.53 vs 6.72; D = 1024 P = 4: 8.78 vs
+  10.27), by about the MMA-phase difference, as in section 83. (The mma.sync multi-GPU arms ran with the minimal CR
+  that fits shared memory — 0, 1 or 30 — not a tuned CR.)
+* **Single-GPU references on H200** (`fw1d.json`, CUDA events, 30 calls): cuDNN recurrent kernel 1.45 µs (total forward
+  1.86), TileLang 4.11, fwc bulk + fast math 2.75, + multicast 2.42, wgmma 2.34, **wgmma + multicast 2.03** — 1.40×
+  slower than cuDNN's kernel, the same ratio as on H100 PCIe (section 83.4). The intra-cluster TMA multicast gains
+  0.3 µs here too (2.34 → 2.03, 2.75 → 2.42).
+
+### 85.4 Reading
+
+NVSwitch multicast does what it promises for the exchange — one store per element instead of P − 1, 1.24× / 1.69×
+faster than unicast fan-out at P = 2 / 4 in the probe, and the kernel protocol built on it is correct — but FlashRNN2's
+per-step critical path cannot hide a cross-GPU all-gather: every step needs every GPU's round(h) before its GEMM, and
+one such round costs 3.5-4.5 µs on this fabric, more than the whole single-GPU step (2.0 µs). Reaching D = 1024 with
+the cluster forward through P GPUs therefore costs 2× the single-GPU TileLang forward at that D. The levers that are
+left are protocol ones, each worth a fraction of a microsecond, not the 3 µs gap: (a) an LL-style protocol (data and
+flag in one 16-byte store, no `__threadfence_system`, receivers poll the data) would remove the acknowledgement wait
+from the exchange phase; (b) reading the remote slices for the GEMM directly from the local copy in L2 instead of
+pulling them into shared memory would remove the bulk-copy latency from the remote phase (at the cost of the GEMM's
+operand loads); (c) `multimem.st` / `multimem.red` instead of plain stores (what NCCL's NVLS kernels use). None of
+them changes the one-round latency itself. The result for the paper: multi-GPU multicast is a reach mechanism (D
+beyond one GPU's shared memory), not a speed-up; at D = 1024 the single-GPU TileLang path remains the faster choice.
+
+**UVA comparison not obtained.** The existing Triton multi-GPU forward (`multi_gpu.recurrence`, peer stores through
+UVA, qualified on MN5 H100 in section 9 of the scale-out plan) faulted with an illegal memory access on this host
+(Triton 3.6.0, H200, torch 2.7.1) at every (cell, D, P) tried (`tools/mg_uva_compare.py`, `uva.log`); not investigated
+here, since it is not the question of this section. The same-host comparison between the Triton peer-store exchange
+and the multicast exchange is therefore open; the probe's unicast-fan-out arm (4.3 / 7.6 µs at P = 2 / 4) is the
+closest stand-in.
