@@ -2672,3 +2672,49 @@ in shared memory take the pointwise phase to 0.3-0.4 µs. Together about 1.8 µs
 protocol; any that is not is recorded.
 
 **Gate before anything else.** The default fw2d builds at this source must be byte-identical to a172469e's.
+
+## 79. Results of the section 78 development run (2026-10-20)
+
+**Run.** A rented 1x H100 80GB HBM3 (driver 595), source 9e9e9023. Default fw2d SASS 32/32 byte-identical to
+a172469e. 192/192 variant builds compiled; every variant is bitwise equal to its grid's base. Hidden output in the
+input dtype, B = 16, T = 256, medians of 30 calls. Evidence: `max-width-evidence/dev-fw/fw1d-78.json`. Report only.
+
+**µs per step** (phases B2 / GEMM / pointwise of the best CUDA variant per grid):
+
+| D, cell | TileLang | cuDNN total / recurrent kernel | fw1d best (grid) | its phases |
+| --- | --- | --- | --- | --- |
+| 512 LSTM | 4.24 | 2.15 / **1.61** | 3.74 (p32, bulk + prefetch) | 0.91 / 1.59 / 0.76 |
+| 512 sLSTM | 4.07 | — | 3.74 (p32, bulk + prefetch) | 0.93 / 1.58 / 0.69 |
+| 1024 LSTM | **4.06** | 3.00 / **2.13** | 4.84 (p64, bulk + prefetch) | 1.11 / 2.50 / 0.72 |
+| 1024 sLSTM | **4.02** | — | 4.75 (p64, bulk + prefetch) | 1.10 / 2.47 / 0.64 |
+
+**Per lever.**
+* **Bulk staging works:** GEMM phase 2.8 → 1.6 µs at D = 512 and 5.3 → 2.5 µs at D = 1024, better than any cp.async
+  depth. The remaining 1.6-2.5 µs is one L2 round trip plus the dependent `mma.sync` chain (32-64 k-steps on one
+  accumulator per n-tile, roughly 0.5-1.0 µs), not bandwidth.
+* **Pipeline depth (the user's question):** 4 stages is the best cp.async depth (D = 512: st3 2.00, st4 1.82, st6 1.98,
+  st8 1.84 µs; D = 1024: 3.87 / 3.46 / 3.80 / 3.82). Deeper pipelines do not help, because the chunks' latencies, not
+  their count in flight, bound the phase. Bulk staging beats all of them.
+* **The flat flag barrier is slower than `grid.sync`:** B2 0.92 → 1.4-1.5 µs with 32 CTAs and 1.1 → 2.0-2.3 µs with
+  64. Polling N flags from N CTAs costs more than one atomic counter. Negative; the cooperative-groups barrier stays.
+* **Partials in shared memory:** pointwise 0.76 → 0.56-0.64 µs with prefetch. Small but real.
+* **128-column CTAs (PC = D / 32):** a cheaper barrier (0.76-0.80 vs 0.92 µs) but a 1.4-2.0 µs pointwise phase (two
+  owned elements per thread, serial), a net loss.
+
+**Where this leaves the B = 16 forward.** The best CUDA variant is 1.13x faster than the TileLang forward at D = 512
+and 0.85x at D = 1024. Against cuDNN's recurrent kernel it is 2.3x (D = 512) and 2.2x (D = 1024) slower. The floor
+of this design is a chain of L2 round trips per step: publish h and make it visible (inside B2), signal and poll (B2),
+copy h back (GEMM phase), store partials, and the dependent MMA chain. That is about 2.5-3 µs with every lever above,
+still above cuDNN's 1.6-2.1 µs.
+
+**What could go below cuDNN, and where.** The L2 round trips disappear only if the exchange stays on chip: a
+thread-block cluster whose CTAs write their h slices straight into every peer's shared memory (DSMEM) and synchronize
+with the cluster barrier (hundreds of ns instead of ~1 µs). That holds R for D ≤ 768 in a 16-CTA cluster (D = 768:
+288 KB per CTA across registers and shared memory; D = 1024 would need 512 KB per CTA and does not fit). The TileLang
+cluster forward at D = 512 takes 4.24 µs, so TileLang's version of this idea does not realize it; a hand-written CUDA
+cluster kernel with the MMA chain split over interleaved accumulators and the bias hoisted out of the step loop is the
+candidate. The earlier DSMEM result (section 19) was for the backward at B = 64, a different regime. D = 1024 and
+above stay on the grid path, where cuDNN's 2.1 µs is out of reach by this analysis.
+
+**Decision.** No default changes. Bulk staging and the smem partials are kept as options; the flag barrier is kept
+only as a recorded negative.
