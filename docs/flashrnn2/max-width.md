@@ -2440,7 +2440,7 @@ at B = 16 (±0.1-0.4).
   most at B = 16 and D = 1024, where its per-step launches dominate.
 * **Graphs help FlashRNN-2 by 3-13%.**
 * **The original alternating kernel is slower than the patched one.** Its two device synchronizes per pass cost
-  1.03-1.32x on this host. The alternating-baseline numbers of sections 49, 67 and 69 include them.
+  1.03-1.30x on this host. The alternating-baseline numbers of sections 49, 67 and 69 include them.
 * **Fair comparison, both graphed.**
   * At B = 16, FlashRNN-2 is 1.70-2.04x faster at every D and both cells.
   * At B = 64 it is 1.27-1.35x faster at D = 1024 and 1.06-1.08x at D = 1536.
