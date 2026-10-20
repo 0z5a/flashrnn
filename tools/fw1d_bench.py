@@ -118,13 +118,15 @@ def main():
                 if not hybrid_fwc.supported(width, cl):
                     continue
                 cr0 = hybrid_fwc.min_register_ksteps(width, cl)
-                for ks in (1, 2, 4):
-                    arms[f"fwc-c{cl}-cr{cr0}-k{ks}"] = (dict(cluster=cl, cr=cr0, ksplit=ks), "fwc")
-                    arms[f"fwc-c{cl}-cr{cr0}-k{ks}-bx"] = (dict(cluster=cl, cr=cr0, ksplit=ks, bulkx=True), "fwc")
-                arms[f"fwc-c{cl}-cr{cr0}-k2-pull"] = (dict(cluster=cl, cr=cr0, ksplit=2, pull=True), "fwc")
-                if cr0 + 8 <= width // 16:
-                    arms[f"fwc-c{cl}-cr{cr0 + 8}-k2"] = (dict(cluster=cl, cr=cr0 + 8, ksplit=2), "fwc")
-                    arms[f"fwc-c{cl}-cr{cr0 + 8}-k2-bx"] = (dict(cluster=cl, cr=cr0 + 8, ksplit=2, bulkx=True), "fwc")
+                crs = [cr0] + ([cr0 + 8] if cr0 + 8 <= width // 16 else [])
+                for cr in crs:
+                    base = dict(cluster=cl, cr=cr, ksplit=2)
+                    arms[f"fwc-c{cl}-cr{cr}-k2"] = (dict(base), "fwc")
+                    arms[f"fwc-c{cl}-cr{cr}-k2-bx"] = (dict(base, bulkx=True), "fwc")
+                    arms[f"fwc-c{cl}-cr{cr}-k2-bx-fm"] = (dict(base, bulkx=True, fastmath=True), "fwc")
+                    arms[f"fwc-c{cl}-cr{cr}-k2-sa"] = (dict(base, stasync=True), "fwc")
+                    arms[f"fwc-c{cl}-cr{cr}-k2-sa-fm"] = (dict(base, stasync=True, fastmath=True), "fwc")
+                    arms[f"fwc-c{cl}-cr{cr}-k1-sa-fm"] = (dict(base, ksplit=1, stasync=True, fastmath=True), "fwc")
             for pc, cr in GRIDS[width]:
                 arms[f"fw1d-p{pc}-cr{cr}"] = (dict(grid=(pc, 1, cr)), "cuda")
                 for name, opts in VARIANTS.items():
