@@ -138,7 +138,7 @@ def recurrence(wx, recurrent, bias, initial, cell="lstm", *, sequence_context, o
     lib = _lib(width, bm, cell == "slstm", wx.dtype == torch.bfloat16, MODES[output_mode], snap == torch.float32,
                bits, grid=grid)
     err = torch.zeros(12, device=device, dtype=torch.int32)
-    err[3] = seed
+    err[3].fill_(seed)  # in place, no host copy: CUDA-graph safe
     zero_first = int(bool(sequence_context.zero_normalizer.item())) if cell == "slstm" else 0
     tensors = [wx.contiguous(), recurrent.contiguous(), bias.contiguous(), initial.float().contiguous(), output, final,
                xbuf, part, stamp, err]

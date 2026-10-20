@@ -772,7 +772,7 @@ def backward(
     err = torch.zeros((32 + 8 * splits * slots if profile_steps else 4 if verify else 1,), device=device,
                       dtype=torch.int32)
     if verify:
-        err[3] = seed
+        err[3].fill_(seed)  # in place, no host copy: CUDA-graph safe
     kernel = None
     for index in range(launches):
         if sync == "grid":
